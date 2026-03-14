@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import userRoutes from "./routes/userRoutes";
 
 const app = express();
 
@@ -14,6 +15,7 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || [
 
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json());
+app.use("/api/users", userRoutes);
 
 async function startServer(): Promise<void> {
   try {
