@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import userRoutes from "./routes/userRoutes";
+import { initializeProfilePhotoBucket } from "./lib/gridfs";
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use("/api/users", userRoutes);
 async function startServer(): Promise<void> {
   try {
     await mongoose.connect(MONGO_URI);
+    initializeProfilePhotoBucket();
     console.log("User Service - Connected to MongoDB");
 
     app.listen(PORT, () => {

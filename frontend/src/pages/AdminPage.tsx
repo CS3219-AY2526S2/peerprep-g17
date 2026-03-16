@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "react-router-dom";
+import { useAuth, USER_API_URL } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 
@@ -19,7 +20,7 @@ export default function AdminPage() {
 
   async function fetchUsers() {
     try {
-      const res = await fetch("http://localhost:8081/api/users", {
+      const res = await fetch(USER_API_URL, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -46,7 +47,7 @@ export default function AdminPage() {
     setError("");
     try {
       const res = await fetch(
-        `http://localhost:8081/api/users/${userId}/role`,
+        `${USER_API_URL}/${userId}/role`,
         {
           method: "PATCH",
           headers: {
@@ -127,7 +128,14 @@ export default function AdminPage() {
                     key={u._id}
                     className="border-b border-border/30 last:border-0 hover:bg-muted/20"
                   >
-                    <td className="px-4 py-3 font-medium">{u.username}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link
+                        to={`/users/${u._id}`}
+                        className="underline-offset-4 hover:underline"
+                      >
+                        {u.username}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {u.email}
                     </td>
