@@ -35,14 +35,14 @@ export default function Navbar() {
         <div className="ml-auto flex items-center gap-3">
           {isAuthenticated ? (
             <>
+              <span className="text-sm text-muted-foreground">
+                {user?.username}
+              </span>
               <Link to="/profile">
                 <Button variant="ghost" size="sm">
                   Profile
                 </Button>
               </Link>
-              <span className="text-sm text-muted-foreground">
-                {user?.username}
-              </span>
               <Button variant="ghost" size="sm" onClick={logout}>
                 Log out
               </Button>
