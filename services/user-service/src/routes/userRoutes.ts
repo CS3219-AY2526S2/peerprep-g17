@@ -6,6 +6,7 @@ import {
   getAllUsers,
   getUser,
   updateUser,
+  updateUserRole,
   deleteUser,
 } from "../controllers/userController";
 
@@ -21,6 +22,7 @@ router.patch("/:id", verifyToken, updateUser);
 
 // Admin-only routes
 router.get("/", verifyToken, verifyAdmin, getAllUsers);
+router.patch("/:id/role", verifyToken, verifyAdmin, updateUserRole);
 router.delete("/:id", verifyToken, verifyAdmin, deleteUser);
 
 export default router;

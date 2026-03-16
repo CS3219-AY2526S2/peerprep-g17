@@ -1,15 +1,26 @@
 import { Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
+import User, { Role } from "../models/User";
 import { AuthRequest } from "../middleware/authMiddleware";
 
 const JWT_SECRET =
   process.env.JWT_SECRET || "you-should-change-this-in-production";
 const SALT_ROUNDS = 10;
+const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
 
 function generateToken(id: string, role: string): string {
-  return jwt.sign({ id, role }, JWT_SECRET, { expiresIn: "24h" });
+  return jwt.sign({ id, role }, JWT_SECRET, { expiresIn: "72h" });
+}
+
+function validatePassword(password: string): string | null {
+  if (password.length < 8) {
+    return "Password must be at least 8 characters.";
+  }
+  if (!PASSWORD_REGEX.test(password)) {
+    return "Password must include at least 1 letter and 1 digit.";
+  }
+  return null;
 }
 
 // ── POST /api/users/register
@@ -26,6 +37,12 @@ export async function registerUser(
     return;
   }
 
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    res.status(400).json({ error: passwordError });
+    return;
+  }
+
   const existingUser = await User.findOne({ $or: [{ email }, { username }] });
   if (existingUser) {
     res.status(409).json({ error: "Username or email already exists." });
@@ -33,7 +50,17 @@ export async function registerUser(
   }
 
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-  const user = await User.create({ username, email, password: hashedPassword });
+
+  // First registered user automatically becomes admin
+  const userCount = await User.countDocuments();
+  const assignedRole = userCount === 0 ? Role.ADMIN : Role.USER;
+
+  const user = await User.create({
+    username,
+    email,
+    password: hashedPassword,
+    role: assignedRole,
+  });
 
   const token = generateToken(user.id, user.role);
   res.status(201).json({
@@ -52,22 +79,28 @@ export async function loginUser(
   req: AuthRequest,
   res: Response,
 ): Promise<void> {
-  const { email, password } = req.body;
+  const { identifier, password } = req.body;
 
-  if (!email || !password) {
-    res.status(400).json({ error: "Email and password are required." });
+  if (!identifier || !password) {
+    res
+      .status(400)
+      .json({ error: "Email/username and password are required." });
     return;
   }
 
-  const user = await User.findOne({ email });
+  // Determine whether the identifier is an email or username
+  const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
+  const query = isEmail ? { email: identifier } : { username: identifier };
+
+  const user = await User.findOne(query);
   if (!user) {
-    res.status(401).json({ error: "Invalid email or password." });
+    res.status(401).json({ error: "Invalid credentials." });
     return;
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) {
-    res.status(401).json({ error: "Invalid email or password." });
+    res.status(401).json({ error: "Invalid credentials." });
     return;
   }
 
@@ -123,8 +156,14 @@ export async function updateUser(
 
   if (username) updateFields.username = username;
   if (email) updateFields.email = email;
-  if (password)
+  if (password) {
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      res.status(400).json({ error: passwordError });
+      return;
+    }
     updateFields.password = await bcrypt.hash(password, SALT_ROUNDS);
+  }
 
   const updatedUser = await User.findByIdAndUpdate(id, updateFields, {
     new: true,
@@ -153,4 +192,39 @@ export async function deleteUser(
   }
 
   res.status(200).json({ data: { message: "User deleted successfully." } });
+}
+
+// ── PATCH /api/users/:id/role
+export async function updateUserRole(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  if (!role || !Object.values(Role).includes(role)) {
+    res.status(400).json({
+      error: `Invalid role. Must be one of: ${Object.values(Role).join(", ")}`,
+    });
+    return;
+  }
+
+  // Prevent admins from demoting themselves
+  if (req.userId === id && role !== Role.ADMIN) {
+    res.status(400).json({ error: "You cannot demote yourself." });
+    return;
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    id,
+    { role },
+    { new: true, runValidators: true },
+  ).select("-password");
+
+  if (!updatedUser) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+
+  res.status(200).json({ data: updatedUser });
 }
