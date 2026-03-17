@@ -1,22 +1,12 @@
 import "dotenv/config";
-import express from "express";
-import cors from "cors";
 import mongoose from "mongoose";
-import userRoutes from "./routes/userRoutes";
 import { initializeProfilePhotoBucket } from "./lib/gridfs";
-
-const app = express();
+import { createApp } from "./app";
 
 const PORT = process.env.PORT || 8081;
 const MONGO_URI =
   process.env.MONGO_URI || "mongodb://localhost:27017/user-service";
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(",") || [
-  "http://localhost:5173",
-];
-
-app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
-app.use(express.json());
-app.use("/api/users", userRoutes);
+const app = createApp();
 
 async function startServer(): Promise<void> {
   try {

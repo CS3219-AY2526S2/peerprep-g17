@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, USER_API_URL } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,8 +33,46 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [adminRequestLoading, setAdminRequestLoading] = useState(true);
+  const [adminRequestSubmitting, setAdminRequestSubmitting] = useState(false);
+  const [adminRequestReason, setAdminRequestReason] = useState("");
+  const [adminRequests, setAdminRequests] = useState<
+    {
+      id: string;
+      reason: string;
+      status: "pending" | "approved" | "rejected";
+      reviewedAt: string | null;
+      createdAt: string;
+    }[]
+  >([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  async function fetchMyAdminRequests() {
+    if (!token) {
+      return;
+    }
+
+    setAdminRequestLoading(true);
+    try {
+      const res = await fetch(`${USER_API_URL}/admin-requests/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to load admin requests");
+      }
+
+      setAdminRequests(json.data || []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to load admin requests",
+      );
+    } finally {
+      setAdminRequestLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +97,10 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, [refreshProfile]);
+
+  useEffect(() => {
+    fetchMyAdminRequests();
+  }, [token]);
 
   useEffect(() => {
     if (!user) {
@@ -163,6 +205,49 @@ export default function ProfilePage() {
       setUploading(false);
     }
   }
+
+  async function handleAdminRequestSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    if (!token) {
+      setError("Not authenticated");
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setAdminRequestSubmitting(true);
+
+    try {
+      const res = await fetch(`${USER_API_URL}/admin-requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: adminRequestReason }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to submit admin request");
+      }
+
+      setAdminRequestReason("");
+      setSuccess("Admin privilege request submitted.");
+      await fetchMyAdminRequests();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to submit admin request",
+      );
+    } finally {
+      setAdminRequestSubmitting(false);
+    }
+  }
+
+  const hasPendingAdminRequest = adminRequests.some(
+    (request) => request.status === "pending",
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -269,6 +354,93 @@ export default function ProfilePage() {
               </form>
             </section>
           </div>
+        )}
+
+        {user?.role !== "admin" && (
+          <section className="mt-8 rounded-xl border border-border/50 p-5">
+            <h2 className="text-lg font-semibold tracking-tight">
+              Request Admin Privileges
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Submit a short reason for why you should be granted admin access.
+            </p>
+
+            <form onSubmit={handleAdminRequestSubmit} className="mt-4 space-y-3">
+              <textarea
+                value={adminRequestReason}
+                onChange={(event) => setAdminRequestReason(event.target.value)}
+                rows={4}
+                maxLength={500}
+                required
+                className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder="Describe your responsibilities and why you need admin access."
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{adminRequestReason.length}/500</span>
+                {hasPendingAdminRequest && (
+                  <span>You already have a pending request.</span>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                disabled={
+                  adminRequestSubmitting ||
+                  hasPendingAdminRequest ||
+                  !adminRequestReason.trim()
+                }
+              >
+                {adminRequestSubmitting ? "Submitting..." : "Submit Request"}
+              </Button>
+            </form>
+
+            <div className="mt-6">
+              <h3 className="text-sm font-medium">Request History</h3>
+              {adminRequestLoading ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Loading requests...
+                </p>
+              ) : adminRequests.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No admin requests submitted yet.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {adminRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="rounded-lg border border-border/50 p-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(request.createdAt).toLocaleString()}
+                        </span>
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                            request.status === "approved"
+                              ? "bg-emerald-500/10 text-emerald-700"
+                              : request.status === "rejected"
+                                ? "bg-destructive/10 text-destructive"
+                                : "bg-primary/10 text-primary"
+                          }`}
+                        >
+                          {request.status}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {request.reason}
+                      </p>
+                      {request.reviewedAt && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Reviewed: {new Date(request.reviewedAt).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         )}
       </main>
     </div>
