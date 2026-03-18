@@ -30,7 +30,7 @@ const router = Router();
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes 
-  limit: 15, // 20 times 
+  limit: 15, // 15 times 
   keyGenerator: (requirement) => {
     return requirement.body.identifier || requirement.body.email || requirement.ip
   },  message: { error: "Too many login attempts, please try again later." }
