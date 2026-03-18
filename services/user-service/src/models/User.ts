@@ -60,6 +60,11 @@ const userSchema = new Schema<IUser>(
       type: Schema.Types.ObjectId,
       default: null,
     },
+    googleId: {
+      type: String, 
+      default: null, 
+      sparse: true
+    }
   },
   {
     // Automatically handles createdAt and updatedAt fields
