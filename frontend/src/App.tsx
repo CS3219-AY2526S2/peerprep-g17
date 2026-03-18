@@ -5,6 +5,8 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import DashboardPage from "@/pages/DashboardPage";
 import AdminPage from "@/pages/AdminPage";
+import ProfilePage from "@/pages/ProfilePage";
+import UserProfilePage from "@/pages/UserProfilePage";
 import QuestionPage from "@/pages/QuestionPage";
 
 function App() {
@@ -28,6 +30,22 @@ function App() {
             <RequireAdmin>
               <AdminPage />
             </RequireAdmin>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth>
+              <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/users/:id"
+          element={
+            <RequireAuth>
+              <UserProfilePage />
+            </RequireAuth>
           }
         />
         <Route

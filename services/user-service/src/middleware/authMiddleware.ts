@@ -1,13 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { Role } from "../models/User";
+import User, { Role } from "../models/User";
 
 const JWT_SECRET =
   process.env.JWT_SECRET || "you-should-change-this-in-production";
 
 /**
  * Extends the Express Request type so we can attach the decoded
- * token payload (userId and role) after verification.
+ * auth context (userId and current role) after verification.
  */
 
 export interface AuthRequest extends Request {
@@ -17,14 +17,14 @@ export interface AuthRequest extends Request {
 
 /**
  * Verifies the JWT from the Authorization header.
- * Attaches userId and role to the request object for downstream use.
+ * Attaches userId and DB-fresh role to the request object for downstream use.
  */
 
-export function verifyToken(
+export async function verifyToken(
   req: AuthRequest,
   res: Response,
   next: NextFunction,
-) {
+): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "Access denied. No token provided." });
@@ -33,9 +33,20 @@ export function verifyToken(
 
   const token = authHeader.split(" ")[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; role: Role };
-    req.userId = decoded.id;
-    req.role = decoded.role;
+    const decoded = jwt.verify(token, JWT_SECRET) as { id?: string };
+    if (!decoded.id) {
+      res.status(401).json({ error: "Invalid token payload." });
+      return;
+    }
+
+    const user = await User.findById(decoded.id).select("_id role");
+    if (!user) {
+      res.status(401).json({ error: "Invalid token user." });
+      return;
+    }
+
+    req.userId = String(user._id);
+    req.role = user.role;
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token." });

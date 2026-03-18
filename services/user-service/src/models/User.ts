@@ -10,6 +10,9 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: Role;
+  university: string;
+  bio: string;
+  profilePhotoFileId: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +42,22 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: Object.values(Role),
       default: Role.USER,
+    },
+    university: {
+      type: String,
+      trim: true,
+      maxlength: [120, "University must be at most 120 characters."],
+      default: "",
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: [500, "Bio must be at most 500 characters."],
+      default: "",
+    },
+    profilePhotoFileId: {
+      type: Schema.Types.ObjectId,
+      default: null,
     },
   },
   {

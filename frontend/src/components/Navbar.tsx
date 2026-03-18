@@ -45,6 +45,11 @@ export default function Navbar() {
               <span className="text-sm text-muted-foreground">
                 {user?.username}
               </span>
+              <Link to="/profile">
+                <Button variant="ghost" size="sm">
+                  Profile
+                </Button>
+              </Link>
               <Button variant="ghost" size="sm" onClick={logout}>
                 Log out
               </Button>
