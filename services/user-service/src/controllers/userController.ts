@@ -10,6 +10,7 @@ import AdminRequest, {
 } from "../models/AdminRequest";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getProfilePhotoBucket } from "../lib/gridfs";
+import { loggingTheAction } from "../utils/auditLogger";
 
 const JWT_SECRET =
   process.env.JWT_SECRET || "you-should-change-this-in-production";
@@ -661,7 +662,7 @@ export async function reviewAdminRequest(
   request.reviewedBy = new mongoose.Types.ObjectId(req.userId);
   request.reviewedAt = new Date();
   await request.save();
-
+  await loggingTheAction(req.userId!, `ADMIN_REQUEST_${status.toUpperCase()}`, String(request.userId));
   res.status(200).json({ data: toAdminRequestResponse(request) });
 }
 
@@ -850,11 +851,12 @@ export async function deleteUser(
   }
 
   if (user.role === Role.ADMIN && (await isLastAdmin(id))) {
-    res.status(409).json({ error: "Cannot delete the last admin." });
+    res.status(409).json({ error: "Unable to delete the last admin." });
     return;
   }
 
   await User.findByIdAndDelete(id);
+  await loggingTheAction(req.userId!, "DELETE_THE_USER", id);
   await AdminRequest.deleteMany({ userId: id });
 
   res.status(200).json({ data: { message: "User deleted successfully." } });
@@ -897,6 +899,28 @@ export async function updateUserRole(
 
   user.role = nextRole as Role;
   await user.save();
+  await loggingTheAction(req.userId!, `ROLE_CHANGE_TO_${nextRole.toUpperCase()}`, id)
 
   res.status(200).json({ data: toSafeUser(user) });
+}
+
+// ── DELETE /api/users/me
+export async function deleteMyself(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }  
+    if (await isLastAdmin(req.userId)) { 
+      res.status(409).json({ error: "Cannot delete the last admin account." });
+      return;
+    }
+    await User.findByIdAndDelete(req.userId);
+    await AdminRequest.deleteMany({ userId: req.userId });
+    await loggingTheAction(req.userId!, "DELETE_THE_USER", req.userId);
+
+
+    res.status(200).json({ data: { message: "Account deleted successfully." } });
 }
