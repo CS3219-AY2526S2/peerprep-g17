@@ -5,6 +5,7 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import DashboardPage from "@/pages/DashboardPage";
 import AdminPage from "@/pages/AdminPage";
+import QuestionPage from "@/pages/QuestionPage";
 
 function App() {
   return (
@@ -26,6 +27,14 @@ function App() {
           element={
             <RequireAdmin>
               <AdminPage />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/questions"
+          element={
+            <RequireAdmin>
+              <QuestionPage />
             </RequireAdmin>
           }
         />
