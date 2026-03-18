@@ -4,12 +4,17 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import User, { Role, type IUser } from "../models/User";
+import AdminRequest, {
+  AdminRequestStatus,
+  type IAdminRequest,
+} from "../models/AdminRequest";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getProfilePhotoBucket } from "../lib/gridfs";
 
 const JWT_SECRET =
   process.env.JWT_SECRET || "you-should-change-this-in-production";
-const USER_SERVICE_BASE_URL = process.env.USER_SERVICE_BASE_URL || "http://localhost:8081";
+const USER_SERVICE_BASE_URL =
+  process.env.USER_SERVICE_BASE_URL || "http://localhost:8081";
 const SALT_ROUNDS = 10;
 const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
 
@@ -31,8 +36,19 @@ interface PublicProfile {
   profilePhotoUrl: string | null;
 }
 
-function generateToken(id: string, role: string): string {
-  return jwt.sign({ id, role }, JWT_SECRET, { expiresIn: "72h" });
+interface AdminRequestResponse {
+  id: string;
+  userId: string;
+  reason: string;
+  status: AdminRequestStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function generateToken(id: string): string {
+  return jwt.sign({ id }, JWT_SECRET, { expiresIn: "72h" });
 }
 
 function validatePassword(password: string): string | null {
@@ -57,7 +73,7 @@ function isValidObjectId(id: string): boolean {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-function getParamAsString(value: string | string[] | undefined): string | null {
+function getParamAsString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -67,6 +83,10 @@ function getParamAsString(value: string | string[] | undefined): string | null {
 
 function getUserId(user: IUser): string {
   return String(user._id);
+}
+
+function getRequestId(request: IAdminRequest): string {
+  return String(request._id);
 }
 
 function buildProfilePhotoUrl(userId: string, hasPhoto: boolean): string | null {
@@ -103,22 +123,23 @@ function toPublicProfile(user: IUser): PublicProfile {
   };
 }
 
-async function findUserByIdOrRespond(
-  id: string,
-  res: Response,
-): Promise<IUser | null> {
-  if (!isValidObjectId(id)) {
-    res.status(400).json({ error: "Invalid user id." });
-    return null;
-  }
+function toSafeUser(user: IUser): Omit<IUser, "password"> & { _id: mongoose.Types.ObjectId } {
+  const obj = user.toObject();
+  delete (obj as Record<string, unknown>).password;
+  return obj as Omit<IUser, "password"> & { _id: mongoose.Types.ObjectId };
+}
 
-  const user = await User.findById(id);
-  if (!user) {
-    res.status(404).json({ error: "User not found." });
-    return null;
-  }
-
-  return user;
+function toAdminRequestResponse(request: IAdminRequest): AdminRequestResponse {
+  return {
+    id: getRequestId(request),
+    userId: String(request.userId),
+    reason: request.reason,
+    status: request.status,
+    reviewedBy: request.reviewedBy ? String(request.reviewedBy) : null,
+    reviewedAt: request.reviewedAt ? request.reviewedAt.toISOString() : null,
+    createdAt: request.createdAt.toISOString(),
+    updatedAt: request.updatedAt.toISOString(),
+  };
 }
 
 function validateProfileFields(payload: {
@@ -157,6 +178,79 @@ function validateProfileFields(payload: {
   return null;
 }
 
+async function findUserByIdOrRespond(
+  id: string,
+  res: Response,
+): Promise<IUser | null> {
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid user id." });
+    return null;
+  }
+
+  const user = await User.findById(id);
+  if (!user) {
+    res.status(404).json({ error: "User not found." });
+    return null;
+  }
+
+  return user;
+}
+
+async function ensureUniqueUsername(
+  username: string,
+  currentUserId: string,
+): Promise<boolean> {
+  const existingUser = await User.findOne({
+    username,
+    _id: { $ne: currentUserId },
+  });
+
+  return !existingUser;
+}
+
+async function applyProfileUpdates(
+  user: IUser,
+  payload: { username?: unknown; university?: unknown; bio?: unknown },
+): Promise<string | null> {
+  const validationError = validateProfileFields(payload);
+  if (validationError) {
+    return validationError;
+  }
+
+  const { username, university, bio } = payload;
+
+  if (typeof username === "string") {
+    const trimmed = username.trim();
+    if (trimmed !== user.username) {
+      const isUnique = await ensureUniqueUsername(trimmed, getUserId(user));
+      if (!isUnique) {
+        return "Username already exists.";
+      }
+    }
+    user.username = trimmed;
+  }
+
+  if (typeof university === "string") {
+    user.university = university;
+  }
+
+  if (typeof bio === "string") {
+    user.bio = bio;
+  }
+
+  return null;
+}
+
+async function isLastAdmin(targetUserId: string): Promise<boolean> {
+  const adminCount = await User.countDocuments({ role: Role.ADMIN });
+  if (adminCount > 1) {
+    return false;
+  }
+
+  const target = await User.findById(targetUserId).select("role");
+  return !!target && target.role === Role.ADMIN;
+}
+
 async function removePreviousPhotoIfAny(user: IUser): Promise<void> {
   if (!user.profilePhotoFileId) {
     return;
@@ -167,11 +261,14 @@ async function removePreviousPhotoIfAny(user: IUser): Promise<void> {
   try {
     await bucket.delete(user.profilePhotoFileId);
   } catch {
-    // If the prior file doesn't exist anymore, continue and replace the reference.
+    // If the previous file no longer exists, continue and overwrite reference.
   }
 }
 
-async function uploadPhotoToGridFS(file: Express.Multer.File, userId: string): Promise<mongoose.Types.ObjectId> {
+async function uploadPhotoToGridFS(
+  file: Express.Multer.File,
+  userId: string,
+): Promise<mongoose.Types.ObjectId> {
   const bucket = getProfilePhotoBucket();
   const filename = `profile-${userId}-${Date.now()}`;
 
@@ -187,6 +284,66 @@ async function uploadPhotoToGridFS(file: Express.Multer.File, userId: string): P
   });
 
   return uploadStream.id as mongoose.Types.ObjectId;
+}
+
+function mapAdminRequestWithUsers(doc: mongoose.Document & {
+  _id: mongoose.Types.ObjectId;
+  userId:
+    | mongoose.Types.ObjectId
+    | {
+        _id: mongoose.Types.ObjectId;
+        username: string;
+        email: string;
+        role: string;
+      };
+  reason: string;
+  status: AdminRequestStatus;
+  reviewedBy:
+    | mongoose.Types.ObjectId
+    | {
+        _id: mongoose.Types.ObjectId;
+        username: string;
+        email: string;
+      }
+    | null;
+  reviewedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const requester =
+    typeof doc.userId === "object" && "username" in doc.userId
+      ? {
+          id: String(doc.userId._id),
+          username: doc.userId.username,
+          email: doc.userId.email,
+          role: doc.userId.role,
+        }
+      : {
+          id: String(doc.userId),
+          username: "",
+          email: "",
+          role: "",
+        };
+
+  const reviewer =
+    doc.reviewedBy && typeof doc.reviewedBy === "object" && "username" in doc.reviewedBy
+      ? {
+          id: String(doc.reviewedBy._id),
+          username: doc.reviewedBy.username,
+          email: doc.reviewedBy.email,
+        }
+      : null;
+
+  return {
+    id: String(doc._id),
+    reason: doc.reason,
+    status: doc.status,
+    requester,
+    reviewer,
+    reviewedAt: doc.reviewedAt ? doc.reviewedAt.toISOString() : null,
+    createdAt: doc.createdAt.toISOString(),
+    updatedAt: doc.updatedAt.toISOString(),
+  };
 }
 
 // ── POST /api/users/register
@@ -217,18 +374,14 @@ export async function registerUser(
 
   const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // First registered user automatically becomes admin
-  const userCount = await User.countDocuments();
-  const assignedRole = userCount === 0 ? Role.ADMIN : Role.USER;
-
   const user = await User.create({
     username,
     email,
     password: hashedPassword,
-    role: assignedRole,
+    role: Role.USER,
   });
 
-  const token = generateToken(getUserId(user), user.role);
+  const token = generateToken(getUserId(user));
   res.status(201).json({
     data: {
       ...toSelfProfile(user),
@@ -251,9 +404,10 @@ export async function loginUser(
     return;
   }
 
-  // Determine whether the identifier is an email or username
   const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
-  const normalizedIdentifier = isEmail ? String(identifier).toLowerCase() : identifier;
+  const normalizedIdentifier = isEmail
+    ? String(identifier).toLowerCase()
+    : identifier;
   const query = isEmail
     ? { email: normalizedIdentifier }
     : { username: normalizedIdentifier };
@@ -270,7 +424,7 @@ export async function loginUser(
     return;
   }
 
-  const token = generateToken(getUserId(user), user.role);
+  const token = generateToken(getUserId(user));
   res.status(200).json({
     data: {
       ...toSelfProfile(user),
@@ -310,61 +464,24 @@ export async function updateMe(req: AuthRequest, res: Response): Promise<void> {
     return;
   }
 
-  const { username, university, bio } = req.body as {
-    username?: unknown;
-    university?: unknown;
-    bio?: unknown;
-  };
-
-  const validationError = validateProfileFields({ username, university, bio });
-  if (validationError) {
-    res.status(400).json({ error: validationError });
-    return;
-  }
-
   const user = await findUserByIdOrRespond(req.userId, res);
   if (!user) {
     return;
   }
 
-  if (typeof username === "string") {
-    const trimmedUsername = username.trim();
+  const updateError = await applyProfileUpdates(user, {
+    username: req.body.username,
+    university: req.body.university,
+    bio: req.body.bio,
+  });
 
-    if (trimmedUsername !== user.username) {
-      const existingUsername = await User.findOne({
-        username: trimmedUsername,
-        _id: { $ne: user._id },
-      });
-
-      if (existingUsername) {
-        res.status(409).json({ error: "Username already exists." });
-        return;
-      }
-    }
-
-    user.username = trimmedUsername;
-  }
-
-  if (typeof university === "string") {
-    user.university = university;
-  }
-
-  if (typeof bio === "string") {
-    user.bio = bio;
-  }
-
-  try {
-    await user.save();
-  } catch (error) {
-    if ((error as { code?: number }).code === 11000) {
-      res.status(409).json({ error: "Username already exists." });
-      return;
-    }
-
-    res.status(500).json({ error: "Failed to update profile." });
+  if (updateError) {
+    const statusCode = updateError.includes("already exists") ? 409 : 400;
+    res.status(statusCode).json({ error: updateError });
     return;
   }
 
+  await user.save();
   res.status(200).json({ data: toSelfProfile(user) });
 }
 
@@ -397,6 +514,157 @@ export async function uploadMePhoto(
   res.status(200).json({ data: toSelfProfile(user) });
 }
 
+// ── POST /api/users/admin-requests
+export async function createAdminRequest(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.userId || !req.role) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+
+  if (req.role === Role.ADMIN) {
+    res.status(400).json({ error: "Admins cannot request admin privileges." });
+    return;
+  }
+
+  const reason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
+  if (!reason) {
+    res.status(400).json({ error: "Request reason is required." });
+    return;
+  }
+
+  if (reason.length > 500) {
+    res.status(400).json({ error: "Reason must be at most 500 characters." });
+    return;
+  }
+
+  const existingPending = await AdminRequest.findOne({
+    userId: req.userId,
+    status: AdminRequestStatus.PENDING,
+  });
+  if (existingPending) {
+    res.status(409).json({ error: "You already have a pending admin request." });
+    return;
+  }
+
+  try {
+    const request = await AdminRequest.create({
+      userId: req.userId,
+      reason,
+    });
+
+    res.status(201).json({ data: toAdminRequestResponse(request) });
+  } catch (error) {
+    if ((error as { code?: number }).code === 11000) {
+      res.status(409).json({ error: "You already have a pending admin request." });
+      return;
+    }
+
+    res.status(500).json({ error: "Failed to create admin request." });
+  }
+}
+
+// ── GET /api/users/admin-requests/me
+export async function getMyAdminRequests(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+
+  const requests = await AdminRequest.find({ userId: req.userId }).sort({
+    createdAt: -1,
+  });
+
+  res.status(200).json({ data: requests.map(toAdminRequestResponse) });
+}
+
+// ── GET /api/users/admin-requests
+export async function getAdminRequests(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  const queryStatus = getParamAsString(req.query.status);
+
+  let filter: { status?: AdminRequestStatus } = {};
+  if (queryStatus) {
+    if (!Object.values(AdminRequestStatus).includes(queryStatus as AdminRequestStatus)) {
+      res.status(400).json({ error: "Invalid status filter." });
+      return;
+    }
+
+    filter = { status: queryStatus as AdminRequestStatus };
+  }
+
+  const requests = await AdminRequest.find(filter)
+    .populate("userId", "username email role")
+    .populate("reviewedBy", "username email")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    data: requests.map((doc) => mapAdminRequestWithUsers(doc as never)),
+  });
+}
+
+// ── PATCH /api/users/admin-requests/:id
+export async function reviewAdminRequest(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+
+  const id = getParamAsString(req.params.id);
+  if (!id || !isValidObjectId(id)) {
+    res.status(400).json({ error: "Invalid admin request id." });
+    return;
+  }
+
+  const status = getParamAsString(req.body.status);
+  if (
+    status !== AdminRequestStatus.APPROVED &&
+    status !== AdminRequestStatus.REJECTED
+  ) {
+    res.status(400).json({ error: "Status must be approved or rejected." });
+    return;
+  }
+
+  const request = await AdminRequest.findById(id);
+  if (!request) {
+    res.status(404).json({ error: "Admin request not found." });
+    return;
+  }
+
+  if (request.status !== AdminRequestStatus.PENDING) {
+    res.status(400).json({ error: "Only pending requests can be reviewed." });
+    return;
+  }
+
+  const targetUser = await User.findById(request.userId);
+  if (!targetUser) {
+    res.status(404).json({ error: "Request user not found." });
+    return;
+  }
+
+  if (status === AdminRequestStatus.APPROVED && targetUser.role !== Role.ADMIN) {
+    targetUser.role = Role.ADMIN;
+    await targetUser.save();
+  }
+
+  request.status = status;
+  request.reviewedBy = new mongoose.Types.ObjectId(req.userId);
+  request.reviewedAt = new Date();
+  await request.save();
+
+  res.status(200).json({ data: toAdminRequestResponse(request) });
+}
+
 // ── GET /api/users/:id/photo
 export async function getUserPhoto(
   req: AuthRequest,
@@ -427,7 +695,10 @@ export async function getUserPhoto(
   }
 
   const metadata = fileDoc.metadata as { contentType?: string } | undefined;
-  res.setHeader("Content-Type", metadata?.contentType || "application/octet-stream");
+  res.setHeader(
+    "Content-Type",
+    metadata?.contentType || "application/octet-stream",
+  );
   bucket
     .openDownloadStream(user.profilePhotoFileId)
     .on("error", () => {
@@ -470,18 +741,12 @@ export async function getUser(req: AuthRequest, res: Response): Promise<void> {
     return;
   }
 
-  if (!isValidObjectId(id)) {
-    res.status(400).json({ error: "Invalid user id." });
-    return;
-  }
-
-  const user = await User.findById(id).select("-password");
+  const user = await findUserByIdOrRespond(id, res);
   if (!user) {
-    res.status(404).json({ error: "User not found." });
     return;
   }
 
-  res.status(200).json({ data: user });
+  res.status(200).json({ data: toSafeUser(user) });
 }
 
 // ── PATCH /api/users/:id
@@ -495,43 +760,66 @@ export async function updateUser(
     return;
   }
 
-  // Regular users can only update their own profile
-  if (req.role !== "admin" && req.userId !== id) {
+  if (!isAdmin(req) && !isOwner(req, id)) {
     res.status(403).json({ error: "You can only update your own profile." });
     return;
   }
 
-  if (!isValidObjectId(id)) {
-    res.status(400).json({ error: "Invalid user id." });
+  const user = await findUserByIdOrRespond(id, res);
+  if (!user) {
     return;
   }
 
-  const { username, email, password } = req.body;
-  const updateFields: Record<string, string> = {};
+  const isRequestingAdmin = isAdmin(req);
+  const { username, university, bio, email, password } = req.body as {
+    username?: unknown;
+    university?: unknown;
+    bio?: unknown;
+    email?: unknown;
+    password?: unknown;
+  };
 
-  if (username) updateFields.username = username;
-  if (email) updateFields.email = email;
-  if (password) {
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      res.status(400).json({ error: passwordError });
-      return;
+  if (!isRequestingAdmin && (email !== undefined || password !== undefined)) {
+    res.status(403).json({
+      error: "Only admins can update email or password on this route.",
+    });
+    return;
+  }
+
+  const profileError = await applyProfileUpdates(user, { username, university, bio });
+  if (profileError) {
+    const statusCode = profileError.includes("already exists") ? 409 : 400;
+    res.status(statusCode).json({ error: profileError });
+    return;
+  }
+
+  if (isRequestingAdmin) {
+    if (email !== undefined) {
+      if (typeof email !== "string" || !email.trim()) {
+        res.status(400).json({ error: "Email must be a non-empty string." });
+        return;
+      }
+      user.email = email.toLowerCase().trim();
     }
-    updateFields.password = await bcrypt.hash(password, SALT_ROUNDS);
+
+    if (password !== undefined) {
+      if (typeof password !== "string") {
+        res.status(400).json({ error: "Password must be a string." });
+        return;
+      }
+
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        res.status(400).json({ error: passwordError });
+        return;
+      }
+
+      user.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
   }
 
   try {
-    const updatedUser = await User.findByIdAndUpdate(id, updateFields, {
-      new: true,
-      runValidators: true,
-    }).select("-password");
-
-    if (!updatedUser) {
-      res.status(404).json({ error: "User not found." });
-      return;
-    }
-
-    res.status(200).json({ data: updatedUser });
+    await user.save();
   } catch (error) {
     if ((error as { code?: number }).code === 11000) {
       res.status(409).json({ error: "Username or email already exists." });
@@ -539,7 +827,10 @@ export async function updateUser(
     }
 
     res.status(500).json({ error: "Failed to update user." });
+    return;
   }
+
+  res.status(200).json({ data: toSafeUser(user) });
 }
 
 // ── DELETE /api/users/:id
@@ -553,16 +844,18 @@ export async function deleteUser(
     return;
   }
 
-  if (!isValidObjectId(id)) {
-    res.status(400).json({ error: "Invalid user id." });
+  const user = await findUserByIdOrRespond(id, res);
+  if (!user) {
     return;
   }
 
-  const deletedUser = await User.findByIdAndDelete(id);
-  if (!deletedUser) {
-    res.status(404).json({ error: "User not found." });
+  if (user.role === Role.ADMIN && (await isLastAdmin(id))) {
+    res.status(409).json({ error: "Cannot delete the last admin." });
     return;
   }
+
+  await User.findByIdAndDelete(id);
+  await AdminRequest.deleteMany({ userId: id });
 
   res.status(200).json({ data: { message: "User deleted successfully." } });
 }
@@ -577,36 +870,33 @@ export async function updateUserRole(
     res.status(400).json({ error: "Invalid user id." });
     return;
   }
-  const { role } = req.body;
 
-  if (!role || !Object.values(Role).includes(role)) {
+  const nextRole = getParamAsString(req.body.role);
+  if (!nextRole || !Object.values(Role).includes(nextRole as Role)) {
     res.status(400).json({
       error: `Invalid role. Must be one of: ${Object.values(Role).join(", ")}`,
     });
     return;
   }
 
-  if (!isValidObjectId(id)) {
-    res.status(400).json({ error: "Invalid user id." });
+  const user = await findUserByIdOrRespond(id, res);
+  if (!user) {
     return;
   }
 
-  // Prevent admins from demoting themselves
-  if (req.userId === id && role !== Role.ADMIN) {
+  const isDemotion = user.role === Role.ADMIN && nextRole === Role.USER;
+  if (isDemotion && req.userId === id) {
     res.status(400).json({ error: "You cannot demote yourself." });
     return;
   }
 
-  const updatedUser = await User.findByIdAndUpdate(
-    id,
-    { role },
-    { new: true, runValidators: true },
-  ).select("-password");
-
-  if (!updatedUser) {
-    res.status(404).json({ error: "User not found." });
+  if (isDemotion && (await isLastAdmin(id))) {
+    res.status(409).json({ error: "Cannot demote the last admin." });
     return;
   }
 
-  res.status(200).json({ data: updatedUser });
+  user.role = nextRole as Role;
+  await user.save();
+
+  res.status(200).json({ data: toSafeUser(user) });
 }

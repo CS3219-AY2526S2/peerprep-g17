@@ -31,3 +31,18 @@ If you also want to remove MongoDB data volume:
 ```bash
 make clean
 ```
+
+## User Service Admin Bootstrap
+
+Newly registered users are created with role `user` by default.
+To bootstrap the first admin in a fresh environment:
+
+```bash
+cd services/user-service
+npm run bootstrap-admin -- --email <existing-user-email>
+```
+
+Notes:
+- The target account must already exist.
+- The command promotes the specified account to `admin`.
+- If the user is not found, the command exits with a non-zero status.

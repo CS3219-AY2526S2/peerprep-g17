@@ -12,9 +12,30 @@ interface UserRecord {
   createdAt: string;
 }
 
+interface AdminPrivilegeRequest {
+  id: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requester: {
+    id: string;
+    username: string;
+    email: string;
+    role: string;
+  };
+  reviewer: {
+    id: string;
+    username: string;
+    email: string;
+  } | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
 export default function AdminPage() {
   const { token, user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [adminRequests, setAdminRequests] = useState<AdminPrivilegeRequest[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -39,8 +60,31 @@ export default function AdminPage() {
     }
   }
 
+  async function fetchAdminRequests() {
+    setLoadingRequests(true);
+    try {
+      const res = await fetch(`${USER_API_URL}/admin-requests?status=pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Failed to fetch admin requests");
+        return;
+      }
+
+      setAdminRequests(json.data || []);
+    } catch {
+      setError("Could not connect to User Service");
+    } finally {
+      setLoadingRequests(false);
+    }
+  }
+
   useEffect(() => {
     fetchUsers();
+    fetchAdminRequests();
   }, [token]);
 
   async function handleRoleChange(userId: string, newRole: string) {
@@ -67,6 +111,35 @@ export default function AdminPage() {
 
       // Refresh user list to reflect the change
       await fetchUsers();
+    } catch {
+      setError("Could not connect to User Service");
+    }
+  }
+
+  async function handleAdminRequestReview(
+    requestId: string,
+    status: "approved" | "rejected",
+  ) {
+    setError("");
+
+    try {
+      const res = await fetch(`${USER_API_URL}/admin-requests/${requestId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Failed to review request");
+        return;
+      }
+
+      await Promise.all([fetchAdminRequests(), fetchUsers()]);
     } catch {
       setError("Could not connect to User Service");
     }
@@ -182,6 +255,71 @@ export default function AdminPage() {
             </table>
           </div>
         )}
+
+        <section className="mt-10 rounded-xl border border-border/50 p-5">
+          <h2 className="text-lg font-semibold tracking-tight">
+            Pending Admin Requests
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Review user requests for admin privileges.
+          </p>
+
+          {loadingRequests ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Loading requests...
+            </p>
+          ) : adminRequests.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              No pending admin requests.
+            </p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {adminRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-lg border border-border/50 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{request.requester.username}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {request.requester.email}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(request.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {request.reason}
+                  </p>
+
+                  <div className="mt-4 flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        handleAdminRequestReview(request.id, "approved")
+                      }
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        handleAdminRequestReview(request.id, "rejected")
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );
