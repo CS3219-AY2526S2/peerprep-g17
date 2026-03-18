@@ -30,3 +30,7 @@ jobs:
       - name: Build
         working-directory: services/question-service
         run: npm run build
+
+      - name: Scan Security
+        working-directory: services/question-service
+        run: npm audit --audit-level=high
