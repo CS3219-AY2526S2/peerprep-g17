@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useNavigate } from "react-router-dom";
 
 async function createProtectedImageUrl(
   photoUrl: string,
@@ -47,6 +48,27 @@ export default function ProfilePage() {
   >([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+    const navigation = useNavigate();
+    const [deleteError, setDeleteError] = useState("")
+  
+    async function handleDeletionOfAccount() {
+      if (!confirm("Are you sure you want to delete your account? This cannot be undone.")) {
+        return;
+      }
+      const res = await fetch(`${USER_API_URL}/me`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  
+    if (res.ok) {
+      navigation("/login")
+    } else {
+      const json = await res.json()
+      setDeleteError(json.error || "Failed to delete account.")
+    }
+  }
+  
 
   async function fetchMyAdminRequests() {
     if (!token) {
@@ -249,6 +271,7 @@ export default function ProfilePage() {
     (request) => request.status === "pending",
   );
 
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
@@ -442,6 +465,22 @@ export default function ProfilePage() {
             </div>
           </section>
         )}
+          <section className="mt-8 rounded-xl border border-destructive/30 p-5">
+            <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Permanently delete your account. Note that this cannot be undone.
+              </p>
+          <Button
+              variant="destructive"
+              className="mt-4"
+              onClick={handleDeletionOfAccount}
+          >
+            Delete Account
+          </Button>
+          {deleteError && (
+            <p className="mt-2 text-sm text-destructive">{deleteError}</p>
+          )}
+          </section>
       </main>
     </div>
   );

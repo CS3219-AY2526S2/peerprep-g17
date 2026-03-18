@@ -115,7 +115,6 @@ export default function UserProfilePage() {
   }, [profile?.profilePhotoUrl, token]);
 
   const isCurrentUser = !!profile && profile.id === currentUser?.id;
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />

@@ -48,6 +48,7 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   updateProfile: (payload: ProfileUpdatePayload) => Promise<void>;
   uploadProfilePhoto: (file: File) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>; 
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -218,6 +219,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const loginWithToken = useCallback(async(token: string): Promise<void> => {
+    setToken(token)
+    const res = await fetch(`${USER_API_URL}/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || "Failed to fetch profile")
+    }
+    setUser(normalizeUser(json.data))
+    }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -230,6 +243,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshProfile,
         updateProfile,
         uploadProfilePhoto,
+        loginWithToken
       }}
     >
       {children}

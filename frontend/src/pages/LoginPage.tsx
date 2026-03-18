@@ -93,9 +93,24 @@ export default function LoginPage() {
           </Button>
         </form>
 
+        <div className="mt-4 flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-4 w-full"
+          size="lg"
+          onClick={() => window.location.href = "http://localhost:8081/api/users/auth/google"}>
+            Continue with Google
+          </Button>
+
         {/* Footer */}
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{" "}
+          Don't have an account?{" "}
           <Link
             to="/signup"
             className="font-medium text-foreground underline-offset-4 hover:underline"
