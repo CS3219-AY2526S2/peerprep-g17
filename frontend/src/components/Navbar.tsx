@@ -28,6 +28,13 @@ export default function Navbar() {
                 </Button>
               </Link>
             )}
+            {user?.role === "admin" && (
+              <Link to="/questions">
+                <Button variant="ghost" size="sm">
+                  Questions
+                </Button>
+              </Link>
+            )}
           </div>
         )}
 

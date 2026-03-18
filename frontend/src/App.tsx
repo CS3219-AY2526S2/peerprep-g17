@@ -7,6 +7,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import AdminPage from "@/pages/AdminPage";
 import ProfilePage from "@/pages/ProfilePage";
 import UserProfilePage from "@/pages/UserProfilePage";
+import QuestionPage from "@/pages/QuestionPage";
 
 function App() {
   return (
@@ -45,6 +46,14 @@ function App() {
             <RequireAuth>
               <UserProfilePage />
             </RequireAuth>
+          }
+        />
+        <Route
+          path="/questions"
+          element={
+            <RequireAdmin>
+              <QuestionPage />
+            </RequireAdmin>
           }
         />
       </Routes>
