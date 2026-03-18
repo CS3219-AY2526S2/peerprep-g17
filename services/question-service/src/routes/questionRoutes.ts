@@ -3,27 +3,22 @@ import { verifyToken, verifyAdmin } from "../middleware/authMiddleware";
 import {
   createQuestion,
   getAllQuestions,
+  getQuestionById,
   updateQuestion,
-  deleteQuestion
+  deleteQuestion,
+  seedQuestions,
 } from "../controllers/questionController";
 
 const router = Router();
 
-// CREATE
-router.post("/create", verifyToken, verifyAdmin, createQuestion);
+// ── Read routes (any authenticated user) ────────────
+router.get("/", verifyToken, getAllQuestions);
+router.get("/:id", verifyToken, getQuestionById);
 
-// READ
-router.get("/", verifyToken, verifyAdmin, getAllQuestions);
-
-// UPDATE
+// ── Write routes (admin only) ───────────────────────
+router.post("/", verifyToken, verifyAdmin, createQuestion);
+router.post("/seed", verifyToken, verifyAdmin, seedQuestions);
 router.patch("/:id", verifyToken, verifyAdmin, updateQuestion);
-
-// DELETE
 router.delete("/:id", verifyToken, verifyAdmin, deleteQuestion);
-
-/*
-// READ (can be implemented in the future)
-router.get("/:id", retrieveQuestion);
-*/
 
 export default router;

@@ -1,25 +1,13 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { useAuth, USER_API_URL } from "@/contexts/AuthContext";
+import { useRef, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { USER_API_URL } from "@/config";
+import { createProtectedImageUrl } from "@/lib/image";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-async function createProtectedImageUrl(
-  photoUrl: string,
-  token: string,
-): Promise<string> {
-  const res = await fetch(photoUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
 
-  if (!res.ok) {
-    throw new Error("Failed to load photo");
-  }
-
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
 
 export default function ProfilePage() {
   const { user, token, refreshProfile, updateProfile, uploadProfilePhoto } = useAuth();
@@ -28,7 +16,7 @@ export default function ProfilePage() {
   const [university, setUniversity] = useState("");
   const [bio, setBio] = useState("");
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -138,9 +126,7 @@ export default function ProfilePage() {
       }
     }
 
-    if (!selectedFile) {
-      loadProtectedPhoto();
-    }
+    loadProtectedPhoto();
 
     return () => {
       cancelled = true;
@@ -148,25 +134,38 @@ export default function ProfilePage() {
         URL.revokeObjectURL(objectUrlToRevoke);
       }
     };
-  }, [token, user?.profilePhotoUrl, selectedFile]);
+  }, [token, user?.profilePhotoUrl]);
 
-  function handlePhotoSelection(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] || null;
-    setSelectedFile(file);
+  /**
+   * Immediately uploads the selected photo when the user picks a file.
+   * Shows a local preview optimistically while uploading.
+   */
+  async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Reset the input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!file) return;
+
     setError("");
     setSuccess("");
 
-    if (!file) {
-      return;
-    }
-
+    // Show optimistic preview
     const objectUrl = URL.createObjectURL(file);
     setPhotoPreview((prev) => {
-      if (prev && prev.startsWith("blob:")) {
-        URL.revokeObjectURL(prev);
-      }
+      if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
       return objectUrl;
     });
+
+    // Upload immediately
+    setUploading(true);
+    try {
+      await uploadProfilePhoto(file);
+      setSuccess("Profile photo updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleProfileSave(event: FormEvent) {
@@ -182,27 +181,6 @@ export default function ProfilePage() {
       setError(err instanceof Error ? err.message : "Failed to save profile");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handlePhotoUpload() {
-    if (!selectedFile) {
-      setError("Please choose a photo first.");
-      return;
-    }
-
-    setError("");
-    setSuccess("");
-    setUploading(true);
-
-    try {
-      await uploadProfilePhoto(selectedFile);
-      setSelectedFile(null);
-      setSuccess("Profile photo updated.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload photo");
-    } finally {
-      setUploading(false);
     }
   }
 
@@ -278,36 +256,56 @@ export default function ProfilePage() {
             <section className="rounded-xl border border-border/50 p-5">
               <h2 className="text-sm font-medium">Profile Photo</h2>
 
-              <div className="mt-4 flex flex-col items-center gap-4">
-                <div className="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-3xl font-semibold text-muted-foreground">
+              <div className="mt-4 flex flex-col items-center gap-3">
+                {/* Clickable avatar — opens file picker */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="group relative flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-3xl font-semibold text-muted-foreground transition-opacity focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   {photoPreview ? (
                     <img
                       src={photoPreview}
                       alt={`${user?.username || "User"} profile`}
-                      className="h-full w-full object-cover"
+                      className={`h-full w-full object-cover ${uploading ? "opacity-50" : ""}`}
                     />
                   ) : (
                     <span>{user?.username?.[0]?.toUpperCase() || "?"}</span>
                   )}
-                </div>
 
-                <Input
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+                      <circle cx="12" cy="13" r="3"/>
+                    </svg>
+                    <span className="mt-1 text-xs font-medium">Change</span>
+                  </div>
+
+                  {/* Uploading spinner overlay */}
+                  {uploading && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  onChange={handlePhotoSelection}
+                  onChange={handlePhotoChange}
+                  className="hidden"
                 />
+
                 <p className="text-xs text-muted-foreground">
+                  {uploading ? "Uploading…" : "Click photo to change"}
+                </p>
+                <p className="text-[11px] text-muted-foreground/60">
                   JPEG, PNG, or WEBP up to 5MB
                 </p>
-
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={handlePhotoUpload}
-                  disabled={uploading || !selectedFile}
-                >
-                  {uploading ? "Uploading..." : "Upload Photo"}
-                </Button>
               </div>
             </section>
 

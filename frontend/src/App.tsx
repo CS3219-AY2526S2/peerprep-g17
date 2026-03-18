@@ -51,9 +51,9 @@ function App() {
         <Route
           path="/questions"
           element={
-            <RequireAdmin>
+            <RequireAuth>
               <QuestionPage />
-            </RequireAdmin>
+            </RequireAuth>
           }
         />
       </Routes>

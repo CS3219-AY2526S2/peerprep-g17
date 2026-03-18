@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { useAuth, USER_API_URL } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { USER_API_URL } from "@/config";
+import { createProtectedImageUrl } from "@/lib/image";
 
 interface PublicProfile {
   id: string;
@@ -12,21 +14,7 @@ interface PublicProfile {
   profilePhotoUrl: string | null;
 }
 
-async function createProtectedImageUrl(
-  photoUrl: string,
-  token: string,
-): Promise<string> {
-  const res = await fetch(photoUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
 
-  if (!res.ok) {
-    throw new Error("Failed to load photo");
-  }
-
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
 
 export default function UserProfilePage() {
   const { id } = useParams();

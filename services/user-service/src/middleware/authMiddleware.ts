@@ -1,9 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import User, { Role } from "../models/User";
-
-const JWT_SECRET =
-  process.env.JWT_SECRET || "you-should-change-this-in-production";
+import { config } from "../config";
 
 /**
  * Extends the Express Request type so we can attach the decoded
@@ -33,7 +31,7 @@ export async function verifyToken(
 
   const token = authHeader.split(" ")[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id?: string };
+    const decoded = jwt.verify(token, config.jwtSecret) as { id?: string };
     if (!decoded.id) {
       res.status(401).json({ error: "Invalid token payload." });
       return;
