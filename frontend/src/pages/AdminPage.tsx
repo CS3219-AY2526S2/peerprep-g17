@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { useAuth, USER_API_URL } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { USER_API_URL } from "@/config";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 

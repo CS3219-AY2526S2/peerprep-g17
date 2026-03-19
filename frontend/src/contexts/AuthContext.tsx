@@ -6,8 +6,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-
-export const USER_API_URL = "http://localhost:8081/api/users";
+import { USER_API_URL } from "@/config";
+import type { User } from "@/types";
 
 function decodeToken(token: string) {
   try {
@@ -22,15 +22,7 @@ function decodeToken(token: string) {
   }
 }
 
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-  university: string;
-  bio: string;
-  profilePhotoUrl: string | null;
-}
+// User type is imported from @/types
 
 interface ProfileUpdatePayload {
   username?: string;
@@ -145,73 +137,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(normalizeUser(json.data));
   }, []);
 
-  const signup = useCallback(async (username: string, email: string, password: string) => {
-    const res = await fetch(`${USER_API_URL}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, email, password }),
-    });
+  const signup = useCallback(
+    async (username: string, email: string, password: string) => {
+      const res = await fetch(`${USER_API_URL}/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, email, password }),
+      });
 
-    const json = await res.json();
+      const json = await res.json();
 
-    if (!res.ok) {
-      throw new Error(json.error || "Signup failed");
-    }
+      if (!res.ok) {
+        throw new Error(json.error || "Signup failed");
+      }
 
-    setToken(json.data.token);
+      setToken(json.data.token);
 
-    console.log("[Auth] Signup successful", decodeToken(json.data.token));
+      console.log("[Auth] Signup successful", decodeToken(json.data.token));
 
-    setUser(normalizeUser(json.data));
-  }, []);
+      setUser(normalizeUser(json.data));
+    },
+    [],
+  );
 
-  const updateProfile = useCallback(async (payload: ProfileUpdatePayload): Promise<void> => {
-    if (!token) {
-      throw new Error("Not authenticated");
-    }
+  const updateProfile = useCallback(
+    async (payload: ProfileUpdatePayload): Promise<void> => {
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
 
-    const res = await fetch(`${USER_API_URL}/me`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
+      const res = await fetch(`${USER_API_URL}/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-    const json = await res.json();
+      const json = await res.json();
 
-    if (!res.ok) {
-      throw new Error(json.error || "Failed to update profile");
-    }
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to update profile");
+      }
 
-    setUser(normalizeUser(json.data));
-  }, [token]);
+      setUser(normalizeUser(json.data));
+    },
+    [token],
+  );
 
-  const uploadProfilePhoto = useCallback(async (file: File): Promise<void> => {
-    if (!token) {
-      throw new Error("Not authenticated");
-    }
+  const uploadProfilePhoto = useCallback(
+    async (file: File): Promise<void> => {
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
 
-    const formData = new FormData();
-    formData.append("photo", file);
+      const formData = new FormData();
+      formData.append("photo", file);
 
-    const res = await fetch(`${USER_API_URL}/me/photo`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
+      const res = await fetch(`${USER_API_URL}/me/photo`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
 
-    const json = await res.json();
+      const json = await res.json();
 
-    if (!res.ok) {
-      throw new Error(json.error || "Failed to upload profile photo");
-    }
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to upload profile photo");
+      }
 
-    setUser(normalizeUser(json.data));
-  }, [token]);
+      setUser(normalizeUser(json.data));
+    },
+    [token],
+  );
 
   const logout = useCallback(() => {
     console.log("[Auth] Logout — token cleared");

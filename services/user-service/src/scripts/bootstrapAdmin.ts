@@ -1,6 +1,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import User, { Role } from "../models/User";
+import { config } from "../config";
 
 function getArgValue(flag: string): string | null {
   const index = process.argv.indexOf(flag);
@@ -18,10 +19,7 @@ async function run(): Promise<void> {
     process.exit(1);
   }
 
-  const mongoUri =
-    process.env.MONGO_URI || "mongodb://localhost:27017/user-service";
-
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(config.mongoUri);
 
   try {
     const user = await User.findOne({ email: email.toLowerCase().trim() });

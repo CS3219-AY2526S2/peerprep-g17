@@ -2,20 +2,18 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import { initializeProfilePhotoBucket } from "./lib/gridfs";
 import { createApp } from "./app";
+import { config } from "./config";
 
-const PORT = process.env.PORT || 8081;
-const MONGO_URI =
-  process.env.MONGO_URI || "mongodb://localhost:27017/user-service";
 const app = createApp();
 
 async function startServer(): Promise<void> {
   try {
-    await mongoose.connect(MONGO_URI);
+    await mongoose.connect(config.mongoUri);
     initializeProfilePhotoBucket();
     console.log("User Service - Connected to MongoDB");
 
-    app.listen(PORT, () => {
-      console.log(`User Service listening on PORT ${PORT}`);
+    app.listen(config.port, () => {
+      console.log(`User Service listening on PORT ${config.port}`);
     });
   } catch (error) {
     console.error(error);
