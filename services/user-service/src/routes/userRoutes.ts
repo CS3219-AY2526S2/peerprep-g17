@@ -1,4 +1,6 @@
-import { Router } from "express";
+import { Router, Request } from "express";
+import { rateLimit } from "express-rate-limit";
+import jwt from "jsonwebtoken";
 import { verifyToken, verifyAdmin } from "../middleware/authMiddleware";
 import { parseProfilePhotoUpload } from "../middleware/photoUploadMiddleware";
 import { registerUser, loginUser } from "../controllers/authController";
@@ -8,6 +10,7 @@ import {
   uploadMePhoto,
   getUserPhoto,
   getUserPublicProfile,
+  deleteMyself,
 } from "../controllers/profileController";
 import {
   getAllUsers,
@@ -20,17 +23,31 @@ import {
   getAdminRequests,
   reviewAdminRequest,
 } from "../controllers/adminController";
+import passportConfig from "../config/passport";
+import AuditLogs from "../models/AuditLogs";
+import { config } from "../config";
 
 const router = Router();
 
+// ── Rate limiter for auth endpoints ─────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 15, // 15 attempts
+  keyGenerator: (req: Request) => {
+    return req.body.identifier || req.body.email || req.ip;
+  },
+  message: { error: "Too many login attempts, please try again later." },
+});
+
 // ── Public routes ───────────────────────────────────
-router.post("/register", registerUser);
-router.post("/login", loginUser);
+router.post("/register", authLimiter, registerUser);
+router.post("/login", authLimiter, loginUser);
 
 // ── Authenticated "me" routes ──────────────────────
 router.get("/me", verifyToken, getMe);
 router.patch("/me", verifyToken, updateMe);
 router.post("/me/photo", verifyToken, parseProfilePhotoUpload, uploadMePhoto);
+router.delete("/me", verifyToken, deleteMyself);
 
 // ── Admin request routes (authenticated) ───────────
 router.post("/admin-requests", verifyToken, createAdminRequest);
@@ -42,6 +59,16 @@ router.patch(
   verifyAdmin,
   reviewAdminRequest,
 );
+
+// ── Audit logs (admin only) ─────────────────────────
+router.get("/audit/logs", verifyToken, verifyAdmin, async (_req, res) => {
+  const logs = await AuditLogs.find()
+    .populate("performedBy", "email username")
+    .populate("targetUser", "email username")
+    .sort({ timeStamp: -1 })
+    .limit(30);
+  res.json({ data: logs });
+});
 
 // ── Admin-only: user list ───────────────────────────
 router.get("/", verifyToken, verifyAdmin, getAllUsers);
@@ -55,5 +82,29 @@ router.patch("/:id", verifyToken, updateUser);
 // ── Admin-only: user management ─────────────────────
 router.patch("/:id/role", verifyToken, verifyAdmin, updateUserRole);
 router.delete("/:id", verifyToken, verifyAdmin, deleteUser);
+
+// ── Google OAuth ────────────────────────────────────
+router.get(
+  "/auth/google",
+  passportConfig.authenticate("google", {
+    scope: ["profile", "email"],
+    session: false,
+  }),
+);
+
+router.get(
+  "/auth/google/callback",
+  passportConfig.authenticate("google", {
+    failureRedirect: "http://localhost:5173/login",
+    session: false,
+  }),
+  (req, res) => {
+    const user = req.user as { _id: string };
+    const token = jwt.sign({ id: user._id }, config.jwtSecret, {
+      expiresIn: "48h",
+    });
+    res.redirect(`http://localhost:5173/oauth-callback?token=${token}`);
+  },
+);
 
 export default router;

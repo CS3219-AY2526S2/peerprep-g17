@@ -146,6 +146,31 @@ export default function AdminPage() {
     }
   }
 
+  // Deleting other accounts
+  async function handleDeleteUser(userId: string) {
+  if (!confirm("Are you sure you want to delete this user? Note that this cannot be undone.")) {
+    return;
+  }
+
+  setError("");
+    try {
+      const res = await fetch(`${USER_API_URL}/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error || "Failed to delete the user.")
+        return
+      }
+      await fetchUsers()
+    } catch {
+      setError("Could not connect to the User Service.")
+    }
+  }
+ 
+ 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
@@ -233,6 +258,7 @@ export default function AdminPage() {
                           You
                         </span>
                       ) : u.role === "admin" ? (
+                        <div className="flex justify-end gap-2">
                         <Button
                           variant="outline"
                           size="xs"
@@ -240,7 +266,15 @@ export default function AdminPage() {
                         >
                           Demote
                         </Button>
+                        <Button
+                          variant="destructive"
+                          size="xs"
+                          onClick={() => handleDeleteUser(u._id)}>
+                            Delete
+                          </Button>
+                          </div>
                       ) : (
+                        <div className="flex justify-end gap-2">
                         <Button
                           variant="outline"
                           size="xs"
@@ -248,6 +282,13 @@ export default function AdminPage() {
                         >
                           Promote
                         </Button>
+                         <Button
+                          variant="destructive"
+                          size="xs"
+                          onClick={() => handleDeleteUser(u._id)}>
+                            Delete
+                          </Button>
+                          </div>
                       )}
                     </td>
                   </tr>

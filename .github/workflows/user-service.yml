@@ -1,0 +1,55 @@
+name: Continuous Integration for the User Service
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "services/user-service/**"
+      - ".github/workflows/user-service.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the dependencies
+        working-directory: services/user-service
+        run: npm install
+
+      - name: Build the user service
+        working-directory: services/user-service
+        run: npm run build
+
+      - name: Run tests
+        working-directory: services/user-service
+        run: npm test
+        env:
+          MONGODB_URI: mongodb://localhost:27017/peerprep-test
+          JWT_SECRET: test-secret
+          GOOGLE_CLIENT_ID: test-client-id
+          GOOGLE_CLIENT_SECRET: test-client-secret
+
+      - name: Scan the security
+        working-directory: services/user-service
+        run: npm audit --audit-level=high
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-usage-service
+          path: services/user-service/coverage/lcov.info

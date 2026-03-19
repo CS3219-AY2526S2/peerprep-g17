@@ -1,0 +1,36 @@
+name: Continuous Integration for the Question Service
+
+on:
+  push:
+    paths:
+      - "services/question-service/**"
+      - ".github/workflows/question-service.yml" 
+  pull_request:
+    paths:
+      - "services/question-service/**"
+      - ".github/workflows/question-service.yml" 
+
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setting up of Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the dependencies
+        working-directory: services/question-service
+        run: npm install
+
+      - name: Build
+        working-directory: services/question-service
+        run: npm run build
+
+      - name: Scan Security
+        working-directory: services/question-service
+        run: npm audit --audit-level=high

@@ -12,6 +12,7 @@ export interface IUser extends Document {
   role: Role;
   university: string;
   bio: string;
+  googleId: string | null;
   profilePhotoFileId: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
@@ -35,7 +36,7 @@ const userSchema = new Schema<IUser>(
     },
     password: {
       type: String,
-      required: [true, "Password is Required!"],
+      required: false, // Not required if using Google OAuth
       minlength: [8, "Password must be at least 8 characters."],
     },
     role: {
@@ -59,6 +60,11 @@ const userSchema = new Schema<IUser>(
       type: Schema.Types.ObjectId,
       default: null,
     },
+    googleId: {
+      type: String, 
+      default: null, 
+      sparse: true
+    }
   },
   {
     // Automatically handles createdAt and updatedAt fields

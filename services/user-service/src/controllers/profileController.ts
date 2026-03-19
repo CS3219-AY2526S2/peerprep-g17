@@ -1,15 +1,19 @@
 import { Response } from "express";
+import User from "../models/User";
+import AdminRequest from "../models/AdminRequest";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { getProfilePhotoBucket } from "../lib/gridfs";
 import {
   findUserByIdOrRespond,
   getParamAsString,
+  isLastAdmin,
   applyProfileUpdates,
   removePreviousPhoto,
   uploadPhotoToGridFS,
   toSelfProfile,
   toPublicProfile,
 } from "../utils/userHelpers";
+import { loggingTheAction } from "../utils/auditLogger";
 
 /* ── GET /api/users/me ───────────────────────────────── */
 
@@ -146,4 +150,27 @@ export async function getUserPublicProfile(
   if (!user) return;
 
   res.status(200).json({ data: toPublicProfile(user) });
+}
+
+/* ── DELETE /api/users/me ────────────────────────────── */
+
+export async function deleteMyself(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+
+  if (await isLastAdmin(req.userId)) {
+    res.status(409).json({ error: "Cannot delete the last admin account." });
+    return;
+  }
+
+  await User.findByIdAndDelete(req.userId);
+  await AdminRequest.deleteMany({ userId: req.userId });
+  await loggingTheAction(req.userId, "DELETE_THE_USER", req.userId);
+
+  res.status(200).json({ data: { message: "Account deleted successfully." } });
 }

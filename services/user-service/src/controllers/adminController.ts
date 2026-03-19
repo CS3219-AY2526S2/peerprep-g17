@@ -17,6 +17,7 @@ import {
   toAdminRequestResponse,
   mapAdminRequestWithUsers,
 } from "../utils/userHelpers";
+import { loggingTheAction } from "../utils/auditLogger";
 import { config } from "../config";
 
 /* ── GET /api/users ──────────────────────────────────── */
@@ -164,6 +165,7 @@ export async function deleteUser(
 
   await User.findByIdAndDelete(id);
   await AdminRequest.deleteMany({ userId: id });
+  await loggingTheAction(req.userId!, "DELETE_THE_USER", id);
 
   res.status(200).json({ data: { message: "User deleted successfully." } });
 }
@@ -205,6 +207,7 @@ export async function updateUserRole(
 
   user.role = nextRole as Role;
   await user.save();
+  await loggingTheAction(req.userId!, `ROLE_CHANGE_TO_${nextRole.toUpperCase()}`, id);
 
   res.status(200).json({ data: toSafeUser(user) });
 }
@@ -368,6 +371,7 @@ export async function reviewAdminRequest(
   request.reviewedBy = new mongoose.Types.ObjectId(req.userId);
   request.reviewedAt = new Date();
   await request.save();
+  await loggingTheAction(req.userId!, `ADMIN_REQUEST_${status.toUpperCase()}`, String(request.userId));
 
   res.status(200).json({ data: toAdminRequestResponse(request) });
 }
