@@ -64,3 +64,29 @@ export interface User {
   bio: string;
   profilePhotoUrl: string | null;
 }
+
+export type MatchStatus = "searching" | "matched" | "timed_out" | "cancelled";
+
+export interface MatchState {
+  status: MatchStatus;
+  requestId: string;
+  sessionId?: string;
+  remainingMs?: number;
+  partnerUserId?: string;
+  topic?: string;
+  difficulty?: string;
+  questionId?: string;
+}
+
+export interface CollaborationSessionRecord {
+  sessionId: string;
+  userAId: string;
+  userBId: string;
+  topic: string;
+  difficulty: string;
+  questionId: string;
+  language: string;
+  status: string;
+  createdAt: string;
+  completedAt?: string;
+}

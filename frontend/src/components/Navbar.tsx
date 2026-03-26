@@ -33,6 +33,11 @@ export default function Navbar() {
                 Questions
               </Button>
             </Link>
+            <Link to="/match">
+              <Button variant="ghost" size="sm">
+                Match
+              </Button>
+            </Link>
           </div>
         )}
 

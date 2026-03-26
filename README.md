@@ -20,6 +20,7 @@ Then open:
 - User Service: http://localhost:8081
 - Question Service: http://localhost:8080
 - Matching Service: http://localhost:8082
+- Collaboration Service: http://localhost:8083
 - Redis: `localhost:6379`
 
 Stop everything:
@@ -59,3 +60,13 @@ The matching backend lives in `services/matching-service`.
 - Match status events: `searching`, `matched`, `timed_out`, `cancelled`
 
 The Docker setup starts Redis for matchmaking queue state and uses MongoDB for persisted session history.
+
+## Collaboration Service
+
+The collaboration test backend lives in `services/collaboration-service`.
+
+- REST base URL: `http://localhost:8083/api/sessions`
+- Handoff endpoint: `POST /handoff`
+- Session page flow in frontend:
+  - `http://localhost:5173/match`
+  - `http://localhost:5173/collaboration/:sessionId`

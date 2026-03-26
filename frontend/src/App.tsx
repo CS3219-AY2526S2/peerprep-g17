@@ -9,6 +9,8 @@ import ProfilePage from "@/pages/ProfilePage";
 import UserProfilePage from "@/pages/UserProfilePage";
 import QuestionPage from "@/pages/QuestionPage";
 import OAuthCallbackPage from "@/pages/OAuthCallBackPage";
+import MatchPage from "@/pages/MatchPage";
+import CollaborationPage from "@/pages/CollaborationPage";
 
 function App() {
   return (
@@ -55,6 +57,22 @@ function App() {
           element={
             <RequireAuth>
               <QuestionPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/match"
+          element={
+            <RequireAuth>
+              <MatchPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/collaboration/:sessionId"
+          element={
+            <RequireAuth>
+              <CollaborationPage />
             </RequireAuth>
           }
         />
