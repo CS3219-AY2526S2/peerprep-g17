@@ -165,6 +165,38 @@ test("rejects duplicate active requests for the same user", async () => {
   );
 });
 
+test("rejects requests with a topic that is not in the question catalog", async () => {
+  await assert.rejects(
+    () =>
+      matchService.createRequest("user-a", "Bearer token-a", {
+        topic: "Graphs",
+        difficulty: "Easy",
+      }),
+    /invalid topic/i,
+  );
+});
+
+test("rejects new matchmaking requests while the user has an active session", async () => {
+  await Session.create({
+    sessionId: "existing-session",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-arrays-easy",
+    status: "active",
+  });
+
+  await assert.rejects(
+    () =>
+      matchService.createRequest("user-a", "Bearer token-a", {
+        topic: "Arrays",
+        difficulty: "Easy",
+      }),
+    /active collaboration session/i,
+  );
+});
+
 test("falls back to the closest available question difficulty", async () => {
   const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
@@ -185,6 +217,35 @@ test("falls back to the closest available question difficulty", async () => {
 
   assert.equal(resultB.matched, true);
   assert.equal(collaborationClient.payloads[0]?.questionId, "q-arrays-medium");
+});
+
+test("does not match the immediate previous partner when they are at the FIFO head", async () => {
+  await Session.create({
+    sessionId: "completed-session",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-arrays-easy",
+    status: "completed",
+    completedAt: new Date(),
+  });
+
+  await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  const result = await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(result.matched, false);
+  assert.equal(result.state.status, "searching");
+
+  const activeSession = await Session.findOne({ status: "active" });
+  assert.equal(activeSession, null);
 });
 
 test("cancels a queued request and removes it from active state", async () => {
@@ -211,6 +272,30 @@ test("rolls both users back to searching when collaboration handoff fails", asyn
 
   const result = await matchService.createRequest("user-b", "Bearer token-b", {
     topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(result.matched, false);
+  assert.equal(result.state.status, "searching");
+
+  const stateA = await matchService.getUserState("user-a");
+  const stateB = await matchService.getUserState("user-b");
+  assert.equal(stateA?.status, "searching");
+  assert.equal(stateB?.status, "searching");
+
+  const session = await Session.findOne().sort({ createdAt: -1 });
+  assert.ok(session);
+  assert.equal(session.status, "failed");
+});
+
+test("rolls the provisional match back when no question exists for the matched topic", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Dynamic Programming",
+    difficulty: "Easy",
+  });
+
+  const result = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Dynamic Programming",
     difficulty: "Easy",
   });
 
