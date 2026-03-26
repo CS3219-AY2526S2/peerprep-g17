@@ -14,6 +14,18 @@ services:
       retries: 5
       start_period: 10s
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   user-service:
     build:
       context: ./services/user-service
@@ -46,6 +58,32 @@ services:
       mongo:
         condition: service_healthy
 
+  matching-service:
+    build:
+      context: ./services/matching-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      MONGO_URI: mongodb://mongo:27017/matching-service
+      REDIS_URL: redis://redis:6379
+      ALLOWED_ORIGINS: http://localhost:5173
+      USER_SERVICE_URL: http://user-service:8081
+      QUESTION_SERVICE_URL: http://question-service:8080
+      COLLABORATION_SERVICE_URL: http://collaboration-service:8083
+      COLLABORATION_SERVICE_STUB: "true"
+      INTERNAL_SERVICE_TOKEN: dev-internal-service-token
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      question-service:
+        condition: service_started
+
   frontend:
     build:
       context: ./frontend
@@ -56,6 +94,8 @@ services:
       user-service:
         condition: service_started
       question-service:
+        condition: service_started
+      matching-service:
         condition: service_started
 
 volumes:

@@ -19,6 +19,8 @@ Then open:
 - Frontend: http://localhost:5173
 - User Service: http://localhost:8081
 - Question Service: http://localhost:8080
+- Matching Service: http://localhost:8082
+- Redis: `localhost:6379`
 
 Stop everything:
 
@@ -46,3 +48,14 @@ Notes:
 - The target account must already exist.
 - The command promotes the specified account to `admin`.
 - If the user is not found, the command exits with a non-zero status.
+
+## Matching Service
+
+The matching backend lives in `services/matching-service`.
+
+- REST base URL: `http://localhost:8082/api/matches`
+- Health check: `http://localhost:8082/health`
+- WebSocket path: `ws://localhost:8082/ws/matches`
+- Match status events: `searching`, `matched`, `timed_out`, `cancelled`
+
+The Docker setup starts Redis for matchmaking queue state and uses MongoDB for persisted session history.
