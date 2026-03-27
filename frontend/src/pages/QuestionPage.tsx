@@ -330,22 +330,28 @@ export default function QuestionPage() {
               onChange={(e) => setFilterSearch(e.target.value)}
               className="w-64"
             />
+            <style>{`
+              #filter-difficulty option, #filter-category option {
+                background-color: #3e3e3e;
+                color: #d4d4d4;
+              }
+            `} </style>
             <select
+              id="filter-difficulty"
               value={filterDifficulty}
               onChange={(e) => setFilterDifficulty(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-transparent px-3 text-sm outline-none"
+              className="h-8 rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none"
             >
-              <option value="">All Difficulties</option>
-              {DIFFICULTIES.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
+               <option value="">All Difficulties</option>
+                  {DIFFICULTIES.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
             </select>
             <select
+              id="filter-category"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-transparent px-3 text-sm outline-none"
+              className="h-8 rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none"
             >
               <option value="">All Categories</option>
               {CATEGORIES.map((c) => (
@@ -428,7 +434,7 @@ export default function QuestionPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
-                        {q.categories.map((cat) => (
+                        {(q.categories ?? []).map((cat) => (
                           <span
                             key={cat}
                             className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"

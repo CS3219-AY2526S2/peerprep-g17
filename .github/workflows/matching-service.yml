@@ -1,0 +1,75 @@
+name: Continuous Integration for the Matching Service
+
+on:
+  push:
+    paths:
+      - "services/matching-service/**"
+      - ".github/workflows/matching-service.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "services/matching-service/**"
+      - ".github/workflows/matching-service.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: services/matching-service/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/matching-service
+        run: npm ci
+
+      - name: Install c8 for coverage
+        working-directory: services/matching-service
+        run: npm install --save-dev c8
+
+      - name: Build
+        working-directory: services/matching-service
+        run: npm run build
+
+      - name: Run tests with the coverage
+        working-directory: services/matching-service
+        run: npx c8 --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 node --test dist/tests/*.test.js
+        env:
+          MONGODB_URI: mongodb://localhost:27017/peerprep-matching-test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret
+          PORT: 8082
+
+      - name: Security scan
+        working-directory: services/matching-service
+        run: npm audit --audit-level=high
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-matching-service
+          path: services/matching-service/coverage/lcov.info

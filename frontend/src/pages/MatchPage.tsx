@@ -125,6 +125,7 @@ export default function MatchPage() {
         setError("");
 
         if (nextState.status === "matched" && nextState.sessionId) {
+          localStorage.setItem('roomId', nextState.sessionId);
           navigate(`/collaboration/${nextState.sessionId}`);
         }
       } catch {
@@ -265,7 +266,7 @@ export default function MatchPage() {
                   id="topic"
                   value={selectedTopic}
                   onChange={(event) => setSelectedTopic(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm"
                   disabled={loading || matchState?.status === "searching"}
                 >
                   {topics.length === 0 && (
@@ -279,13 +280,20 @@ export default function MatchPage() {
                 </select>
               </div>
 
+              <style>{`
+                #topic option, #difficulty option {
+                background-color: white;
+                color: black;
+                }
+              `}
+              </style>
               <div className="space-y-2">
                 <Label htmlFor="difficulty">Difficulty</Label>
                 <select
                   id="difficulty"
                   value={difficulty}
                   onChange={(event) => setDifficulty(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm"
                   disabled={loading || matchState?.status === "searching"}
                 >
                   <option value="Easy">Easy</option>

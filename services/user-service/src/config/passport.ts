@@ -25,14 +25,7 @@ if (googleClientId && googleClientSecret) {
               user.googleId = profile.id;
               await user.save();
             } else {
-              user = await User.create({
-                googleId: profile.id,
-                email,
-                username:
-                  profile.displayName?.replace(/\s+/g, "") ||
-                  `user_${profile.id.slice(0, 8)}`,
-                role: Role.USER,
-              });
+              return done(null, false, { message: "No account found. Please register first."});
             }
           }
 
