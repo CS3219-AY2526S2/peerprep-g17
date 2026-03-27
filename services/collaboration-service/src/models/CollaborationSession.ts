@@ -20,6 +20,7 @@ export interface ICollaborationSession extends Document {
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  yjsState?: Buffer | null;
 }
 
 const collaborationSessionSchema = new Schema<ICollaborationSession>(
@@ -68,6 +69,10 @@ const collaborationSessionSchema = new Schema<ICollaborationSession>(
     completedAt: {
       type: Date,
     },
+    yjsState: {
+  type: Buffer,
+  default: null,
+}
   },
   { timestamps: true },
 );

@@ -1,46 +1,43 @@
 import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 import { config } from "../config";
 
 export interface AuthRequest extends Request {
   userId?: string;
 }
 
-export async function verifyToken(
+interface JwtPayload {
+  id: string;
+}
+
+/**
+ * Verifies a raw JWT string and returns the userId.
+ * Throws if invalid or expired.
+ */
+export function verifyTokenString(token: string): string {
+  const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
+  return decoded.id;
+}
+
+/**
+ * Express middleware — attaches userId to req on success.
+ */
+export function verifyToken(
   req: AuthRequest,
   res: Response,
   next: NextFunction,
-): Promise<void> {
+): void {
   const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Access denied. No token provided." });
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "No token provided." });
     return;
   }
 
+  const token = authHeader.slice(7);
   try {
-    const response = await fetch(`${config.userServiceUrl}/api/users/me`, {
-      headers: { Authorization: authHeader },
-    });
-
-    if (!response.ok) {
-      res.status(401).json({ error: "Invalid or expired token." });
-      return;
-    }
-
-    const json = (await response.json()) as {
-      data?: { id?: string };
-    };
-
-    if (!json.data?.id) {
-      res.status(401).json({ error: "Invalid token payload." });
-      return;
-    }
-
-    req.userId = json.data.id;
+    req.userId = verifyTokenString(token);
     next();
   } catch {
-    res
-      .status(502)
-      .json({ error: "Unable to reach User Service for authentication." });
+    res.status(401).json({ error: "Invalid or expired token." });
   }
 }

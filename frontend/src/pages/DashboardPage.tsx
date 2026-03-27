@@ -26,6 +26,9 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">
               Browse and attempt curated questions by topic and difficulty.
             </p>
+            <Link to="/questions" className="mt-4 inline-flex">
+              <Button size="sm">View Questions</Button>
+            </Link>
           </div>
           <div className="bg-background p-6">
             <h3 className="mb-2 text-sm font-medium">Find a Peer</h3>

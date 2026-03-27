@@ -8,6 +8,8 @@ export const config = {
     "http://localhost:5173",
   ],
 
+  jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",
+
   userServiceUrl: process.env.USER_SERVICE_URL || "http://localhost:8081",
   matchingServiceUrl:
     process.env.MATCHING_SERVICE_URL || "http://localhost:8082",

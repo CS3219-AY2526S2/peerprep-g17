@@ -13,6 +13,7 @@ export interface IUser extends Document {
   university: string;
   bio: string;
   googleId: string | null;
+  githubId: String | null;
   profilePhotoFileId: mongoose.Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
@@ -64,10 +65,14 @@ const userSchema = new Schema<IUser>(
       type: String, 
       default: null, 
       sparse: true
+    }, 
+    githubId: {
+      type: String,  
+      default: null,
+      sparse: true
     }
   },
   {
-    // Automatically handles createdAt and updatedAt fields
     timestamps: true,
   },
 );

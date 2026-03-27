@@ -14,6 +14,7 @@ export function createMatchRoutes(controller: MatchController): Router {
     verifyInternalServiceToken,
     controller.completeSession,
   );
+  router.get('/requests/me', (req, res) => res.status(200).json({ data: null }));
 
   return router;
 }

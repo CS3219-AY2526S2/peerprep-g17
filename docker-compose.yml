@@ -19,6 +19,7 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    command: redis-server --save "" --appendonly no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -39,6 +40,8 @@ services:
       JWT_SECRET: dev-secret-change-me
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
     depends_on:
       mongo:
         condition: service_healthy
@@ -71,6 +74,7 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       MATCHING_SERVICE_URL: http://matching-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-service-token
+      JWT_SECRET: dev-secret-change-me
     depends_on:
       mongo:
         condition: service_healthy
@@ -104,13 +108,18 @@ services:
         condition: service_started
       collaboration-service:
         condition: service_started
-
+        
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_COLLAB_WS_URL: ws://localhost:8083
+        VITE_COLLAB_URL: http://localhost:8083
+        VITE_MATCHING_API_URL: http://localhost:8082/api/matches
+        VITE_MATCHING_WS_URL: ws://localhost:8082
     restart: unless-stopped
     ports:
-      - "5173:5173"
+    - "5173:5173"
     depends_on:
       user-service:
         condition: service_started
@@ -120,6 +129,17 @@ services:
         condition: service_started
       collaboration-service:
         condition: service_started
+  
+  question-seeder:
+    build:
+      context: ./services/question-service
+    command: npm run seed
+    environment:
+      MONGO_URI: mongodb://mongo:27017/question-service
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: no
 
 volumes:
   mongo-data:

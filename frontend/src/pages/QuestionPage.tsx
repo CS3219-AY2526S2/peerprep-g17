@@ -48,6 +48,12 @@ export default function QuestionPage() {
   // ── Seed ──────────────────────────────────────────
   const [seeding, setSeeding] = useState(false);
 
+  // ── Filtering ───────────────────────────────────────
+  const [sortField, setSortField] = useState<"title" | "difficulty" | null>(null)
+  const [sortDirectory, setSortDirectory] = useState<"asc" | "desc">("asc");
+  const DIFFICULTY_ORDER: Record<string, number> = {Easy: 0, Medium:1, Hard: 2};
+
+
   /* ── Helpers ─────────────────────────────────────── */
 
   function clearMessages() {
@@ -220,6 +226,32 @@ export default function QuestionPage() {
     filterCategory ||
     filterSearch
   );
+
+  /* ── Filtering the Title ─────────────────────────────────────── */
+
+   const handleTheSort = (field: "title" | "difficulty") => {
+    if (sortField == field) {
+        setSortDirectory(sortDirectory === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirectory("asc");
+    }
+  };
+
+  const sortingTheQuestions = [...questions].sort((a, b) => {
+    if (!sortField) return 0;
+    if (sortField == "title") {
+      return sortDirectory == "asc"
+        ? a.title.localeCompare(b.title)
+        : b.title.localeCompare(a.title)
+    }
+    if (sortField === "difficulty") {
+      const diff = (DIFFICULTY_ORDER[a.difficulty] ?? 0) - (DIFFICULTY_ORDER[b.difficulty] ?? 0);
+      return sortDirectory === "asc" ? diff : -diff;
+    }
+    return 0;
+  });
+
 
   /* ═══════════════════════════════════════════════════ */
 
@@ -398,11 +430,16 @@ export default function QuestionPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
-                  <th className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground">
-                    Title
+                  <th 
+                    className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground"
+                    onClick={() => handleTheSort("title")}
+                  >
+                    Title {sortField === "title" ? (sortDirectory == "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="w-[10%] px-4 py-3 text-left font-medium text-muted-foreground">
-                    Difficulty
+                  <th className="w-[10%] px-4 py-3 text-left font-medium text-muted-foreground"
+                    onClick={() => handleTheSort("difficulty")}
+                  >
+                    Difficulty {sortField === "difficulty" ? (sortDirectory === "asc" ? "↑" : "↓") : "↕"}
                   </th>
                   <th className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground">
                     Categories
@@ -415,7 +452,7 @@ export default function QuestionPage() {
                 </tr>
               </thead>
               <tbody>
-                {questions.map((q) => (
+                {sortingTheQuestions.map((q) => (
                   <tr
                     key={q.id}
                     className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
