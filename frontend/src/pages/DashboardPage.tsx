@@ -1,5 +1,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -30,6 +32,9 @@ export default function DashboardPage() {
             <p className="text-sm text-muted-foreground">
               Get matched with another user and collaborate in real time.
             </p>
+            <Link to="/match" className="mt-4 inline-flex">
+              <Button size="sm">Open match tester</Button>
+            </Link>
           </div>
         </div>
       </main>
