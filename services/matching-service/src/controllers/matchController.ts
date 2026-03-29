@@ -52,6 +52,19 @@ export class MatchController {
     }
   };
 
+ terminateMatch = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) {
+    res.status(401).json({ error: "Unauthorized." });
+    return;
+  }
+  try {
+    await this.matchService.removeActiveSession(req.userId);
+    res.status(200).json({ data: { message: "Match state cleared." } });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to clear match state." });
+  }
+};
+
   getMyRequestState = async (
     req: AuthRequest,
     res: Response,

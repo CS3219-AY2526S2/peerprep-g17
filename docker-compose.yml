@@ -27,6 +27,27 @@ services:
       retries: 5
       start_period: 5s
 
+  piston:
+    image: ghcr.io/engineer-man/piston
+    restart: unless-stopped
+    ports:
+      - "2000:2000"
+    volumes:
+      - piston-data:/piston
+    tmpfs:
+      - /tmp:exec
+    privileged: true
+
+  piston-installer:
+    image: curlimages/curl:latest
+    entrypoint:
+      - sh
+      - -c
+      - "until curl -sf http://piston:2000/api/v2/runtimes > /dev/null; do echo 'Waiting...'; sleep 5; done && curl -s -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"python\",\"version\":\"3.10.0\"}'"
+    depends_on:
+      - piston
+    restart: no
+  
   user-service:
     build:
       context: ./services/user-service
@@ -75,12 +96,12 @@ services:
       MATCHING_SERVICE_URL: http://matching-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-service-token
       JWT_SECRET: dev-secret-change-me
+      PISTON_URL: http://piston:2000
     depends_on:
       mongo:
         condition: service_healthy
       user-service:
         condition: service_started
-
   matching-service:
     build:
       context: ./services/matching-service
@@ -108,7 +129,7 @@ services:
         condition: service_started
       collaboration-service:
         condition: service_started
-        
+
   frontend:
     build:
       context: ./frontend
@@ -117,9 +138,11 @@ services:
         VITE_COLLAB_URL: http://localhost:8083
         VITE_MATCHING_API_URL: http://localhost:8082/api/matches
         VITE_MATCHING_WS_URL: ws://localhost:8082
+        VITE_GROQ_API_KEY: ${VITE_GROQ_API_KEY} 
+
     restart: unless-stopped
     ports:
-    - "5173:5173"
+      - "5173:5173"
     depends_on:
       user-service:
         condition: service_started
@@ -129,7 +152,7 @@ services:
         condition: service_started
       collaboration-service:
         condition: service_started
-  
+
   question-seeder:
     build:
       context: ./services/question-service
@@ -143,3 +166,4 @@ services:
 
 volumes:
   mongo-data:
+  piston-data:

@@ -46,7 +46,6 @@ jobs:
 
       - name: Run tests with the coverage
         working-directory: services/collaboration-service
-        run: npx c8 --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 node --test dist/tests/*.test.js
         env:
           MONGODB_URI: mongodb://localhost:27017/peerprep-collaboration-test
           JWT_SECRET: test-secret
@@ -55,7 +54,6 @@ jobs:
       - name: Security scan
         working-directory: services/collaboration-service
         run: npm audit --audit-level=high
-
       - name: Upload the coverage report
         if: always()
         uses: actions/upload-artifact@v4

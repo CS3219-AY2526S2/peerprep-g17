@@ -1,5 +1,4 @@
 import { config } from "../config";
-
 export class MatchingServiceClient {
   async completeSession(sessionId: string): Promise<void> {
     const response = await fetch(

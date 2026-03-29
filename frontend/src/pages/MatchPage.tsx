@@ -71,17 +71,22 @@ export default function MatchPage() {
           setTopics(categories);
           setSelectedTopic((current) => current || categories[0] || "");
         }
-
         if (stateRes.ok) {
-          const stateJson = (await stateRes.json()) as { data: MatchState };
-          if (!cancelled) {
-            setMatchState(stateJson.data);
-          }
-          if (stateJson.data.status === "matched" && stateJson.data.sessionId) {
-            navigate(`/collaboration/${stateJson.data.sessionId}`);
-            return;
-          }
-        }
+  const stateJson = await stateRes.json();
+  const sessionData = stateJson.data;
+
+  const deadSessionId = sessionStorage.getItem("dead_session");
+
+  if (sessionData.status === "matched" && sessionData.sessionId) {
+    if (sessionData.sessionId === deadSessionId) {
+      setMatchState({ ...sessionData, status: "idle" });
+    } else {
+      navigate(`/collaboration/${sessionData.sessionId}`);
+    }
+  } else {
+    setMatchState(sessionData);
+  }
+}
       } catch {
         if (!cancelled) {
           setError("Unable to load match page data.");
@@ -125,7 +130,6 @@ export default function MatchPage() {
         setError("");
 
         if (nextState.status === "matched" && nextState.sessionId) {
-          localStorage.setItem('roomId', nextState.sessionId);
           navigate(`/collaboration/${nextState.sessionId}`);
         }
       } catch {
@@ -169,7 +173,7 @@ export default function MatchPage() {
     try {
       setSubmitting(true);
       setError("");
-
+      sessionStorage.removeItem("dead_session");
       const response = await fetch(`${MATCHING_API_URL}/requests`, {
         method: "POST",
         headers: {
@@ -266,7 +270,7 @@ export default function MatchPage() {
                   id="topic"
                   value={selectedTopic}
                   onChange={(event) => setSelectedTopic(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
                   disabled={loading || matchState?.status === "searching"}
                 >
                   {topics.length === 0 && (
@@ -280,20 +284,13 @@ export default function MatchPage() {
                 </select>
               </div>
 
-              <style>{`
-                #topic option, #difficulty option {
-                background-color: white;
-                color: black;
-                }
-              `}
-              </style>
               <div className="space-y-2">
                 <Label htmlFor="difficulty">Difficulty</Label>
                 <select
                   id="difficulty"
                   value={difficulty}
                   onChange={(event) => setDifficulty(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
                   disabled={loading || matchState?.status === "searching"}
                 >
                   <option value="Easy">Easy</option>

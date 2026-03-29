@@ -5,11 +5,12 @@ import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import { WebSocket } from "ws";
 import CollaborationSession from "../models/CollaborationSession";
+import { sessionSocketManager } from "./sessionSocketManager";
 
 const messageSync = 0;
 const messageAwareness = 1;
 
-const docs = new Map<string, Y.Doc>();
+export const docs = new Map<string, Y.Doc>();
 const awarenesses = new Map<string, awarenessProtocol.Awareness>();
 const connections = new Map<string, Set<WebSocket>>();
 const clientIds = new Map<WebSocket, number>();
@@ -95,13 +96,10 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
 
   room.add(ws);
 
-  // Send sync step 1
   const syncEncoder = encoding.createEncoder();
   encoding.writeVarUint(syncEncoder, messageSync);
   syncProtocol.writeSyncStep1(syncEncoder, doc);
   ws.send(encoding.toUint8Array(syncEncoder));
-
-  // Send sync step 2 with full doc state
   const step2Encoder = encoding.createEncoder();
   encoding.writeVarUint(step2Encoder, messageSync);
   syncProtocol.writeSyncStep2(step2Encoder, doc, Y.encodeStateVector(doc));
@@ -110,7 +108,6 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
     ws.send(step2Msg);
   }
 
-  // Send current awareness states
   const awarenessStates = awareness.getStates();
   if (awarenessStates.size > 0) {
     const awarenessEncoder = encoding.createEncoder();
@@ -123,6 +120,7 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
   }
 
   const updateHandler = (update: Uint8Array, origin: unknown) => {
+    sessionSocketManager.recordActivity(sessionId);
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, messageSync);
     syncProtocol.writeUpdate(encoder, update);
@@ -168,7 +166,6 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
             clientIds.set(ws, clientId);
           }
         } catch {
-          // ignore
         }
         awarenessProtocol.applyAwarenessUpdate(awareness, update, ws);
       }

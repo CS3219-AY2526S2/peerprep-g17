@@ -93,7 +93,6 @@ export function useCollaborationSocket(
             break;
         }
       } catch {
-        // ignore malformed messages
       }
     };
 
