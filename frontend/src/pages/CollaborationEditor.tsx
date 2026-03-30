@@ -6,7 +6,6 @@ import { EditorView, basicSetup } from "codemirror";
 import { python } from "@codemirror/lang-python";
 import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { IndexeddbPersistence } from "y-indexeddb";
 
 interface EditorProps {
   sessionId: string;
@@ -18,7 +17,7 @@ interface EditorProps {
 export interface CodeEditorHandle {
   format: () => Promise<void>;
   getCode: () => string;
-  disconnect: () => void; 
+  disconnect: () => void;
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
@@ -27,25 +26,34 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
-    
+    const onActivityRef = useRef(onActivity);
+
+    useEffect(() => {
+      onActivityRef.current = onActivity;
+    }, [onActivity]);
 
     useImperativeHandle(ref, () => ({
       disconnect() {
         if (providerRef.current) {
-            providerRef.current.disconnect();
-            providerRef.current.destroy();
+          providerRef.current.disconnect();
+          providerRef.current.destroy();
         }
       },
       async format() {
         const ytext = ytextRef.current;
         if (!ytext) return;
         const code = ytext.toString();
-        const formatted = code.split("\n").map(line => {
-          const stripped = line.trimStart();
-          const indent = Math.round((line.length - stripped.length) / 4) * 4;
-          return " ".repeat(indent) + stripped;
-        }).join("\n").trimEnd() + "\n";
-        
+        const formatted =
+          code
+            .split("\n")
+            .map((line) => {
+              const stripped = line.trimStart();
+              const indent = Math.round((line.length - stripped.length) / 4) * 4;
+              return " ".repeat(indent) + stripped;
+            })
+            .join("\n")
+            .trimEnd() + "\n";
+
         ytext.delete(0, ytext.length);
         ytext.insert(0, formatted);
       },
@@ -59,13 +67,30 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
-      const persistence = new IndexeddbPersistence(sessionId, ydoc);
 
-      const provider = new WebsocketProvider(`${wsUrl}/ws/sessions`, sessionId, ydoc, {
-        params: { token },
-      });
+      // 1. Initialize the provider
+      const provider = new WebsocketProvider(
+        `${wsUrl}/ws/sessions`,
+        sessionId,
+        ydoc,
+        { params: { token } }
+      );
+
+      const setupWsFilter = () => {
+        if (provider.ws) {
+          const originalOnMessage = provider.ws.onmessage;
+          provider.ws.onmessage = (event) => {
+            if (typeof event.data === "string" && event.data.startsWith("{")) {
+              return;
+            }
+            originalOnMessage?.call(provider.ws!, event);
+          };
+        }
+      };
+
+      setupWsFilter();
+      provider.on("status", setupWsFilter);
       providerRef.current = provider;
-
       provider.awareness.setLocalStateField("user", {
         name: username,
         color: "#" + Math.floor(Math.random() * 16777215).toString(16),
@@ -73,10 +98,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
-
       const activityExtension = EditorView.updateListener.of((update) => {
-        if (update.docChanged && onActivity) {
-          onActivity();
+        if (update.docChanged && onActivityRef.current) {
+          onActivityRef.current();
         }
       });
 
@@ -94,16 +118,21 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const view = new EditorView({ state, parent: editorRef.current });
       viewRef.current = view;
 
-     return () => {
-  provider.disconnect();
-  provider.destroy(); 
-  persistence.destroy(); 
-  ydoc.destroy();
-  view.destroy();
-};
-    }, [sessionId, username, token, onActivity]);
+      return () => {
+        provider.off("status", setupWsFilter);
+        provider.disconnect();
+        provider.destroy();
+        ydoc.destroy();
+        view.destroy();
+      };
+    }, [sessionId, username, token]);
 
-    return <div ref={editorRef} className="rounded-md border overflow-hidden bg-background shadow-inner" />;
+    return (
+      <div
+        ref={editorRef}
+        className="rounded-md border overflow-hidden bg-background shadow-inner"
+      />
+    );
   }
 );
 

@@ -15,13 +15,13 @@ function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; 
   const timeStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, "0")}s` : `${secs}s`;
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 animate-in slide-in-from-top-4">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-md px-4 animate-in slide-in-from-top-4">
       <div className="rounded-lg border border-amber-500/40 bg-amber-950/90 px-4 py-3 shadow-2xl backdrop-blur-md flex items-center justify-between gap-4 text-white">
         <div>
           <p className="text-sm font-bold text-amber-500 uppercase tracking-tight">Inactivity Warning</p>
           <p className="text-xs text-amber-200/80 mt-0.5">Terminating in <span className="font-mono font-bold text-amber-400">{timeStr}</span></p>
         </div>
-        <button className="bg-amber-500/20 text-amber-500 px-3 py-1 rounded border border-amber-500/40 text-sm hover:bg-amber-500/30" onClick={onKeepAlive}>Stay Connected</button>
+        <button className="bg-500/20 text-amber-500 px-3 py-1 rounded border border-amber-500/40 text-sm hover:bg-amber-500/30" onClick={onKeepAlive}>Stay Connected</button>
       </div>
     </div>
   );
@@ -70,13 +70,22 @@ export default function CollaborationPage() {
   }, []);
 
   const startCountdown = useCallback((seconds: number) => {
-    cancelCountdown();
-    setCountdown(seconds);
-    setWarningActive(true);
-    countdownTimerRef.current = setInterval(() => {
-      setCountdown((prev) => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
-  }, [cancelCountdown]);
+  cancelCountdown();
+  setCountdown(seconds);
+  setWarningActive(true);
+
+  countdownTimerRef.current = setInterval(() => {
+    setCountdown((prev) => {
+      if (prev <= 1) {
+        clearInterval(countdownTimerRef.current!);
+        console.log("⏰ Timer hit zero. Auto-redirecting...");
+        window.location.href = "/match"; 
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
+}, [cancelCountdown]);
 
   const handleKeepAlive = () => {
     sendKeepAlive();
@@ -120,36 +129,42 @@ export default function CollaborationPage() {
   };
 
   useEffect(() => {
-    if (!token || !sessionId || terminated || terminatedRef.current || isRedirecting.current) return;
+    if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
     const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
     const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username}`);
     socketRef.current = ws;
+    ws.onopen = () => console.log("[WS] Chat socket opened");
     ws.onmessage = (event) => {
+      if (typeof event.data !== 'string') return;
       try {
         const data = JSON.parse(event.data);
-        if (data.type === "session_terminated") {
-          if (isRedirecting.current) return;
-          isRedirecting.current = true;
-          setTerminated(true);
-          setTimeout(() => navigate("/match"), 3000);
+        console.log("Valid JSON arrived:", data.type);
+        if (data.type === "session_warning") {
+          data.payload.cancelled ? cancelCountdown() : startCountdown(data.payload.countdownSeconds);
         } else if (data.type === "chat_message") {
           setMessages((prev) => [...prev, data.payload]);
-        } else if (data.type === "session_warning") {
-          data.payload.cancelled ? cancelCountdown() : startCountdown(data.payload.countdownSeconds);
+        } else if (data.type === "session_terminated") {
+          if (isRedirecting.current) return;
+          isRedirecting.current = true;
+          editorRef.current?.disconnect();
+          setTerminated(true);
+          setTimeout(() => navigate("/match"), 3000);
         }
       } catch (_) {}
     };
-    ws.onclose = () => {
+
+    ws.onclose = (e) => {
+      console.log("[WS] Chat socket closed", e.code, e.reason);
       setSocket(null);
       if (terminatedRef.current && !isRedirecting.current) {
         isRedirecting.current = true;
         navigate("/match");
       }
     };
+    ws.onerror = (e) => console.log("[WS] Chat socket error", e);
     setSocket(ws);
     return () => { ws.close(); socketRef.current = null; cancelCountdown(); };
-  }, [sessionId, token, navigate, startCountdown, cancelCountdown, user?.username, terminated]);
-
+  }, [sessionId, token, navigate, startCountdown, cancelCountdown, user?.username]);
   useEffect(() => {
     if (!token || !sessionId || isRedirecting.current) return;
     async function load() {

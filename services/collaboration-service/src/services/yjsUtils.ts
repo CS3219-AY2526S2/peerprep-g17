@@ -100,13 +100,6 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
   encoding.writeVarUint(syncEncoder, messageSync);
   syncProtocol.writeSyncStep1(syncEncoder, doc);
   ws.send(encoding.toUint8Array(syncEncoder));
-  const step2Encoder = encoding.createEncoder();
-  encoding.writeVarUint(step2Encoder, messageSync);
-  syncProtocol.writeSyncStep2(step2Encoder, doc, Y.encodeStateVector(doc));
-  const step2Msg = encoding.toUint8Array(step2Encoder);
-  if (step2Msg.byteLength > 1) {
-    ws.send(step2Msg);
-  }
 
   const awarenessStates = awareness.getStates();
   if (awarenessStates.size > 0) {

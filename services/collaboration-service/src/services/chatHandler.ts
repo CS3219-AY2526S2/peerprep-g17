@@ -28,7 +28,7 @@ export function handleChatConnection(
     return;
   }
 
-  sessionSocketManager.join(sessionId, userId, ws);
+sessionSocketManager.join(sessionId, `chat:${userId}`, ws);
   if (!chatRooms.has(sessionId)) {
     chatRooms.set(sessionId, new Map());
   }
@@ -104,11 +104,11 @@ export function handleChatConnection(
       if (client.readyState === WebSocket.OPEN) client.send(leaveMsg);
     });
     if (room.size === 0) chatRooms.delete(sessionId);
-    sessionSocketManager.leave(sessionId, userId);
+sessionSocketManager.leave(sessionId, `chat:${userId}`);
     console.log(`[Chat] User ${leavingUsername} left session ${sessionId}`);
   });
   ws.on("error", (err) => {
     console.error(`[Chat] Error for user ${userId}:`, err);
-    sessionSocketManager.leave(sessionId, userId);
+sessionSocketManager.leave(sessionId, `chat:${userId}`);
   });
 }

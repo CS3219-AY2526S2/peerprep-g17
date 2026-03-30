@@ -29,7 +29,7 @@ export function handleWebSocketConnection(
     .getSessionForUser(sessionId, userId)
     .then(async (session) => {
       if (!session) { ws.close(4004, "Session not found or access denied"); return; }
-      sessionSocketManager.join(sessionId, userId, ws);
+sessionSocketManager.join(sessionId, `yjs:${userId}`, ws);
 
       await setupYjsConnection(ws, sessionId);
 
@@ -71,12 +71,12 @@ ws.on("message", async (data: any, isBinary: boolean) => {
       ws.on("close", (code) => {
         console.log(`[WS] User ${userId} disconnected (Code: ${code}) from session ${sessionId}`);
         const wasGraceful = code === 1000;
-        sessionSocketManager.leave(sessionId, userId, wasGraceful);
+sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
 
       ws.on("error", (err) => {
         console.error(`[WS] Error for user ${userId}:`, err);
-        sessionSocketManager.leave(sessionId, userId, false);
+sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
     })
     .catch((err) => {

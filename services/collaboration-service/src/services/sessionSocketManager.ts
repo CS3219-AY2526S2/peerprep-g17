@@ -43,18 +43,23 @@ export class SessionSocketManager {
 
     const room = this.rooms.get(sessionId)!;
     room.users.set(userId, { ws, userId });
-    this.recordActivity(sessionId);
   }
   leave(sessionId: string, userId: string, isManual: boolean = false): void {
   const room = this.rooms.get(sessionId);
   if (!room) return;
+  console.log(`[Inactivity] User left, room size: ${room.users.size}, lastActivityAt: ${room.lastActivityAt}`);
   room.users.delete(userId);
   this.broadcastToSession(sessionId, {
     type: "peer_status_change",
     payload: { userId, isConnected: false, reason: isManual ? "manual" : "disconnect" }
   });
   if (room.users.size === 0) {
-    this.cleanupRoom(sessionId);
+    setTimeout(() => {
+      const r = this.rooms.get(sessionId);
+      if (r && r.users.size === 0) {
+        this.cleanupRoom(sessionId);
+      }
+    }, 30000);
   }
 }
 
@@ -72,32 +77,32 @@ export class SessionSocketManager {
     if (room.warningActive) {
       room.warningActive = false;
       clearTimeout(room.terminationTimer);
-      this.broadcastToSession(sessionId, {
-        type: "session_warning",
-        payload: { cancelled: true },
-        timestamp: new Date().toISOString()
-      });
+     this.broadcastToSession(sessionId, {
+  type: "session_warning",
+  payload: { countdownSeconds: 60, cancelled: false },
+});
     }
   }
 
   private startInactivityCheck(sessionId: string): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;
-
     room.inactivityCheckTimer = setInterval(() => {
       const r = this.rooms.get(sessionId);
       if (!r || r.users.size === 0) return;
       const idleMs = Date.now() - r.lastActivityAt;
-      if (idleMs > 1800000  && !r.warningActive) { 
+      console.log(`[Inactivity] Session ${sessionId} idle ${idleMs}ms, warningActive: ${r.warningActive}`);
+      if (idleMs > 25 * 60 * 1000  && !r.warningActive) { 
         r.warningActive = true;
         this.broadcastToSession(sessionId, {
           type: "session_warning",
-          payload: { countdownSeconds: 60, cancelled: false },
+          payload: { countdownSeconds: 300, cancelled: false },
           timestamp: new Date().toISOString()
         });
-        r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 300000);
+      r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 5 *60 * 1000);
       }
     }, 10000);
+
   }
 
   private async terminateSession(sessionId: string): Promise<void> {
