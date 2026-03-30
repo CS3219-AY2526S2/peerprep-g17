@@ -71,17 +71,22 @@ export default function MatchPage() {
           setTopics(categories);
           setSelectedTopic((current) => current || categories[0] || "");
         }
-
         if (stateRes.ok) {
-          const stateJson = (await stateRes.json()) as { data: MatchState };
-          if (!cancelled) {
-            setMatchState(stateJson.data);
-          }
-          if (stateJson.data.status === "matched" && stateJson.data.sessionId) {
-            navigate(`/collaboration/${stateJson.data.sessionId}`);
-            return;
-          }
-        }
+  const stateJson = await stateRes.json();
+  const sessionData = stateJson.data;
+
+  const deadSessionId = sessionStorage.getItem("dead_session");
+
+  if (sessionData.status === "matched" && sessionData.sessionId) {
+    if (sessionData.sessionId === deadSessionId) {
+      setMatchState({ ...sessionData, status: "idle" });
+    } else {
+      navigate(`/collaboration/${sessionData.sessionId}`);
+    }
+  } else {
+    setMatchState(sessionData);
+  }
+}
       } catch {
         if (!cancelled) {
           setError("Unable to load match page data.");
@@ -168,7 +173,7 @@ export default function MatchPage() {
     try {
       setSubmitting(true);
       setError("");
-
+      sessionStorage.removeItem("dead_session");
       const response = await fetch(`${MATCHING_API_URL}/requests`, {
         method: "POST",
         headers: {

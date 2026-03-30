@@ -7,6 +7,7 @@ export const SESSION_STATUSES = [
   "completed",
   "failed",
   "cancelled",
+  "expired"
 ] as const;
 
 export type SessionStatus = (typeof SESSION_STATUSES)[number];

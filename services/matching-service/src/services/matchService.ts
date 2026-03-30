@@ -248,6 +248,14 @@ export class MatchService {
     return buildMatchedState(activeSession.sessionId, activeSession, userId);
   }
 
+ async removeActiveSession(userId: string): Promise<void> {
+  await Session.deleteMany({
+    status: { $in: ACTIVE_SESSION_STATUSES },
+    $or: [{ userAId: userId }, { userBId: userId }],
+  });
+  await this.redis.del(userRequestKey(userId));
+}
+
   async cancelRequest(userId: string): Promise<boolean> {
     const userLock = await this.lockService.acquire(userLockKey(userId));
     if (!userLock) {

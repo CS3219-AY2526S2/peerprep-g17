@@ -11,6 +11,7 @@ import QuestionPage from "@/pages/QuestionPage";
 import OAuthCallbackPage from "@/pages/OAuthCallBackPage";
 import MatchPage from "@/pages/MatchPage";
 import CollaborationPage from "@/pages/CollaborationPage";
+import HistoryPage from "@/pages/HistoryPage";
 
 function App() {
   return (
@@ -73,6 +74,14 @@ function App() {
           element={
             <RequireAuth>
               <CollaborationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireAuth>
+              <HistoryPage />
             </RequireAuth>
           }
         />

@@ -1,0 +1,62 @@
+name: Continuous Integration for the Collaboration Service
+
+on:
+  push:
+    paths:
+      - "services/collaboration-service/**"
+      - ".github/workflows/collaboration-service.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "services/collaboration-service/**"
+      - ".github/workflows/collaboration-service.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: services/collaboration-service/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/collaboration-service
+        run: npm ci
+
+      - name: Install c8 for coverage
+        working-directory: services/collaboration-service
+        run: npm install --save-dev c8
+
+      - name: Build
+        working-directory: services/collaboration-service
+        run: npm run build
+
+      - name: Run tests with the coverage
+        working-directory: services/collaboration-service
+        env:
+          MONGODB_URI: mongodb://localhost:27017/peerprep-collaboration-test
+          JWT_SECRET: test-secret
+          PORT: 8083
+
+      - name: Security scan
+        working-directory: services/collaboration-service
+        run: npm audit --audit-level=high
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-collaboration-service
+          path: services/collaboration-service/coverage/lcov.info

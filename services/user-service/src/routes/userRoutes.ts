@@ -32,11 +32,9 @@ const router = Router();
 // ── Rate limiter for auth endpoints ─────────────────
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 15, // 15 attempts
-  keyGenerator: (req: Request) => {
-    return req.body.identifier || req.body.email || req.ip;
-  },
-  message: { error: "Too many login attempts, please try again later." },
+  limit: 15, // 15 attempt
+  validate: { xForwardedForHeader: false },
+
 });
 
 // ── Public routes ───────────────────────────────────
@@ -83,7 +81,6 @@ router.patch("/:id", verifyToken, updateUser);
 router.patch("/:id/role", verifyToken, verifyAdmin, updateUserRole);
 router.delete("/:id", verifyToken, verifyAdmin, deleteUser);
 
-// ── Google OAuth ────────────────────────────────────
 router.get(
   "/auth/google",
   passportConfig.authenticate("google", {
@@ -95,6 +92,29 @@ router.get(
 router.get(
   "/auth/google/callback",
   passportConfig.authenticate("google", {
+    failureRedirect: "http://localhost:5173/login",
+    session: false,
+  }),
+  (req, res) => {
+    const user = req.user as { _id: string };
+    const token = jwt.sign({ id: user._id }, config.jwtSecret, {
+      expiresIn: "48h",
+    });
+    res.redirect(`http://localhost:5173/oauth-callback?token=${token}`);
+  },
+);
+
+router.get(
+  "/auth/github",
+  passportConfig.authenticate("github", {
+    scope: ["user:email"],
+    session: false,
+  }),
+);
+
+router.get(
+  "/auth/github/callback",
+  passportConfig.authenticate("github", {
     failureRedirect: "http://localhost:5173/login",
     session: false,
   }),

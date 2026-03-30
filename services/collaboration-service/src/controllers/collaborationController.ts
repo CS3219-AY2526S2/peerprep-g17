@@ -2,19 +2,8 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { CollaborationService } from "../services/collaborationService";
 import { CollaborationSessionPayload, DIFFICULTIES } from "../types";
-
-function formatSessionResponse(session: {
-  sessionId: string;
-  userAId: string;
-  userBId: string;
-  topic: string;
-  difficulty: string;
-  questionId: string;
-  language: string;
-  status: string;
-  createdAt: Date;
-  completedAt?: Date | null;
-}) {
+import SessionModel from "../models/CollaborationSession"; 
+function formatSessionResponse(session: any) {
   return {
     sessionId: session.sessionId,
     userAId: session.userAId,
@@ -24,6 +13,7 @@ function formatSessionResponse(session: {
     questionId: session.questionId,
     language: session.language,
     status: session.status,
+    messages: session.messages || [], 
     createdAt: session.createdAt.toISOString(),
     completedAt: session.completedAt?.toISOString(),
   };
@@ -34,7 +24,6 @@ export class CollaborationController {
 
   handoffSession = async (req: Request, res: Response): Promise<void> => {
     const payload = req.body as Partial<CollaborationSessionPayload>;
-
     if (
       !payload.sessionId ||
       !payload.userAId ||
@@ -65,22 +54,68 @@ export class CollaborationController {
     res.status(201).json({ data: formatSessionResponse(session) });
   };
 
-  getSession = async (req: AuthRequest, res: Response): Promise<void> => {
+  terminateSession = async (req: AuthRequest, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      await SessionModel.deleteOne({ sessionId }); 
+      res.status(200).json({ message: "Session ended." });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete session." });
+    }
+  };
+
+  executeCode = async (req: AuthRequest, res: Response): Promise<void> => {
     if (!req.userId) {
       res.status(401).json({ error: "Unauthorized." });
       return;
     }
 
+    const { code, language = "python", version = "3.10.0" } = req.body as {
+      code?: string;
+      language?: string;
+      version?: string;
+    };
+
+    if (!code?.trim()) {
+      res.status(400).json({ error: "No code provided." });
+      return;
+    }
+
+    try {
+      const pistonUrl = process.env.PISTON_URL || "http://localhost:2000";
+      const response = await fetch(`${pistonUrl}/api/v2/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language,
+          version,
+          files: [{ content: code }],
+        }),
+      });
+      if (!response.ok) {
+        res.status(502).json({ error: "Code execution service unavailable." });
+        return;
+      }
+      const result = await response.json();
+      res.status(200).json({ data: result });
+    } catch (error) {
+      res.status(502).json({ error: "Failed to execute code." });
+    }
+  };
+
+  getSession = async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
     const session = await this.collaborationService.getSessionForUser(
       String(req.params.sessionId),
       req.userId,
     );
-
     if (!session) {
       res.status(404).json({ error: "Session not found." });
       return;
     }
-
     res.status(200).json({ data: formatSessionResponse(session) });
   };
 
@@ -95,20 +130,30 @@ export class CollaborationController {
         String(req.params.sessionId),
         req.userId,
       );
-
       if (!session) {
         res.status(404).json({ error: "Session not found." });
         return;
       }
-
       res.status(200).json({ data: formatSessionResponse(session) });
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Failed to complete collaboration session.";
-
       res.status(502).json({ error: message });
+    }
+  };
+
+  getAttemptHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+    try {
+      const attempts = await this.collaborationService.getAttemptHistory(req.userId);
+      res.status(200).json({ data: attempts });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch attempt history." });
     }
   };
 }

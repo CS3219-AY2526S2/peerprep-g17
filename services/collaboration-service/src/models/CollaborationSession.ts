@@ -20,6 +20,12 @@ export interface ICollaborationSession extends Document {
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  yjsState?: Buffer | null;
+  messages: {
+    username: string;
+    text: string;
+    timestamp: Date;
+  }[];
 }
 
 const collaborationSessionSchema = new Schema<ICollaborationSession>(
@@ -68,6 +74,18 @@ const collaborationSessionSchema = new Schema<ICollaborationSession>(
     completedAt: {
       type: Date,
     },
+    yjsState: {
+      type: Buffer,
+      default: null,
+    },
+    // 2. Added the messages array to the Schema
+    messages: [
+      {
+        username: { type: String, required: true },
+        text: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true },
 );

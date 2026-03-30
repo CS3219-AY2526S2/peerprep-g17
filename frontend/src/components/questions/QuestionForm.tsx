@@ -145,7 +145,7 @@ export default function QuestionForm({
               id="form-difficulty"
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value)}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="h-8 w-full rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               required
             >
               {DIFFICULTIES.map((d) => (
@@ -186,7 +186,7 @@ export default function QuestionForm({
                   className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                     selected
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-transparent text-muted-foreground hover:bg-muted"
+                      : "border-border bg-[#3e3e3e] text-[#d4d4d4] text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {cat}
