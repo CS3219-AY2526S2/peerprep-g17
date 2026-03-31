@@ -68,13 +68,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
-      // 1. Initialize the provider
-      const provider = new WebsocketProvider(
-        `${wsUrl}/ws/sessions`,
+     const provider = new WebsocketProvider(
+      `${wsUrl}/ws/sessions/`, 
         sessionId,
         ydoc,
         { params: { token } }
-      );
+    );
 
       const setupWsFilter = () => {
         if (provider.ws) {

@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { CollaborationSessionRecord } from "@/types";
 import CodeEditor from "./CollaborationEditor";
 import type { CodeEditorHandle } from "./CollaborationEditor";
+import { QUESTION_API_URL } from "@/config";
+
 
 function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; onKeepAlive: () => void; }) {
   const mins = Math.floor(secondsLeft / 60);
@@ -101,8 +103,8 @@ export default function CollaborationPage() {
     try {
       setCompleting(true);
       const collabUrl = shouldSave 
-        ? `${COLLABORATION_API_URL}/${sessionId}/complete`
-        : `${COLLABORATION_API_URL}/${sessionId}`;
+        ? `${COLLABORATION_API_URL}/sessions/${sessionId}/complete`
+        : `${COLLABORATION_API_URL}/sessions/${sessionId}`;
 
       await fetch(collabUrl, {
         method: shouldSave ? "POST" : "DELETE",
@@ -130,9 +132,8 @@ export default function CollaborationPage() {
 
   useEffect(() => {
     if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
-    const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
-    const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username}`);
-    socketRef.current = ws;
+const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
+const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    socketRef.current = ws;
     ws.onopen = () => console.log("[WS] Chat socket opened");
     ws.onmessage = (event) => {
       if (typeof event.data !== 'string') return;
@@ -170,7 +171,7 @@ export default function CollaborationPage() {
     async function load() {
       try {
         setLoading(true);
-        const res = await fetch(`${COLLABORATION_API_URL}/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           const json = await res.json();
           setSession(json.data);
@@ -188,7 +189,8 @@ export default function CollaborationPage() {
     if (!session?.questionId || !token) return;
     async function loadQuestion() {
       try {
-        const res = await fetch(`http://localhost:8080/api/questions/${session!.questionId}`, {
+
+const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -217,7 +219,7 @@ export default function CollaborationPage() {
       setRunning(true);
       setOutput(null);
       setRunError(null);
-      const res = await fetch(`${COLLABORATION_API_URL}/execute`, {
+      const res = await fetch(`${COLLABORATION_API_URL}/sessions/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code }),
