@@ -15,6 +15,7 @@ import { config } from "../config";
 import {
   bucketLockKey,
   queueKey,
+  queueSequenceKey,
   relaxationT1ZsetKey,
   relaxationT2ZsetKey,
   requestKey,
@@ -84,11 +85,30 @@ function parseBoolean(value?: string): boolean {
   return value === "1";
 }
 
+function buildQueueMember(queueSequence: number, requestId: string): string {
+  return `${String(queueSequence).padStart(20, "0")}:${requestId}`;
+}
+
+function parseRequestIdFromQueueMember(queueMember: string): string {
+  const separatorIndex = queueMember.indexOf(":");
+  return separatorIndex === -1
+    ? queueMember
+    : queueMember.slice(separatorIndex + 1);
+}
+
 function parseRequestRecord(
   requestId: string,
   raw: Record<string, string>,
 ): RequestRecord | null {
-  if (!raw.userId || !raw.topic || !raw.difficulty || !raw.createdAt) {
+  if (
+    !raw.userId ||
+    !raw.topic ||
+    !raw.difficulty ||
+    !raw.createdAt ||
+    !raw.queueScore ||
+    !raw.queueSequence ||
+    !raw.queueMember
+  ) {
     return null;
   }
 
@@ -98,6 +118,9 @@ function parseRequestRecord(
     topic: raw.topic,
     difficulty: raw.difficulty as Difficulty,
     createdAt: Number(raw.createdAt),
+    queueScore: Number(raw.queueScore),
+    queueSequence: Number(raw.queueSequence),
+    queueMember: raw.queueMember,
     timeoutAt: Number(raw.timeoutAt),
     t1At: Number(raw.t1At),
     t2At: Number(raw.t2At),
@@ -115,6 +138,9 @@ function serializeRequestRecord(
     topic: request.topic,
     difficulty: request.difficulty,
     createdAt: String(request.createdAt),
+    queueScore: String(request.queueScore),
+    queueSequence: String(request.queueSequence),
+    queueMember: request.queueMember,
     timeoutAt: String(request.timeoutAt),
     t1At: String(request.t1At),
     t2At: String(request.t2At),
@@ -197,12 +223,17 @@ export class MatchService {
       }
 
       const now = Date.now();
+      const queueSequence = await this.redis.incr(queueSequenceKey);
+      const requestId = randomUUID();
       const request: RequestRecord = {
-        id: randomUUID(),
+        id: requestId,
         userId,
         topic,
         difficulty,
         createdAt: now,
+        queueScore: now,
+        queueSequence,
+        queueMember: buildQueueMember(queueSequence, requestId),
         timeoutAt: now + config.matchRequestTimeoutMs,
         t1At: now + config.relaxationT1Ms,
         t2At: now + config.relaxationT2Ms,
@@ -361,17 +392,39 @@ export class MatchService {
   }
 
   async markUserDisconnected(userId: string): Promise<void> {
-    const activeRequestId = await this.redis.get(userRequestKey(userId));
-    if (!activeRequestId) {
+    const userLock = await this.lockService.acquire(userLockKey(userId));
+    if (!userLock) {
       return;
     }
 
-    const request = await this.getRequest(activeRequestId);
-    if (!request || request.status !== "matching") {
-      return;
-    }
+    try {
+      const activeRequestId = await this.redis.get(userRequestKey(userId));
+      if (!activeRequestId) {
+        return;
+      }
 
-    await this.redis.hset(requestKey(request.id), "cancelRequested", "1");
+      const request = await this.getRequest(activeRequestId);
+      if (!request) {
+        await this.cleanupRequest(activeRequestId, userId);
+        return;
+      }
+
+      if (request.status === "matching") {
+        await this.redis.hset(requestKey(request.id), "cancelRequested", "1");
+        return;
+      }
+
+      await this.removeRequestFromQueue(request);
+      await this.cleanupRequest(request.id, request.userId);
+      await this.publishStatus(request.userId, {
+        status: "cancelled",
+        requestId: request.id,
+        topic: request.topic,
+        difficulty: request.difficulty,
+      });
+    } finally {
+      await this.lockService.release(userLock);
+    }
   }
 
   private async persistRequest(request: RequestRecord): Promise<void> {
@@ -385,7 +438,11 @@ export class MatchService {
   }
 
   private async enqueueRequest(request: RequestRecord): Promise<void> {
-    await this.redis.rpush(queueKey(request.topic, request.difficulty), request.id);
+    await this.redis.zadd(
+      queueKey(request.topic, request.difficulty),
+      String(request.queueScore),
+      request.queueMember,
+    );
   }
 
   private async getRequest(requestId: string): Promise<RequestRecord | null> {
@@ -447,14 +504,15 @@ export class MatchService {
   ): Promise<RequestRecord | null> {
     while (true) {
       const bucket = queueKey(requester.topic, bucketDifficulty);
-      const headRequestId = await this.redis.lindex(bucket, 0);
-      if (!headRequestId) {
+      const [headQueueMember] = await this.redis.zrange(bucket, 0, 0);
+      if (!headQueueMember) {
         return null;
       }
+      const headRequestId = parseRequestIdFromQueueMember(headQueueMember);
 
       const candidate = await this.getRequest(headRequestId);
       if (!candidate || candidate.status !== "searching") {
-        await this.redis.lpop(bucket);
+        await this.redis.zrem(bucket, headQueueMember);
         continue;
       }
 
@@ -490,16 +548,16 @@ export class MatchService {
 
       try {
         const freshCandidate = await this.getRequest(candidate.id);
-        const freshHead = await this.redis.lindex(bucket, 0);
+        const [freshHead] = await this.redis.zrange(bucket, 0, 0);
         if (
           !freshCandidate ||
           freshCandidate.status !== "searching" ||
-          freshHead !== candidate.id
+          freshHead !== candidate.queueMember
         ) {
           continue;
         }
 
-        await this.redis.lpop(bucket);
+        await this.redis.zrem(bucket, candidate.queueMember);
         freshCandidate.status = "matching";
         await this.redis.hmset(
           requestKey(freshCandidate.id),
@@ -618,7 +676,11 @@ export class MatchService {
       current.sessionId = "";
       current.cancelRequested = false;
       await this.redis.hmset(requestKey(current.id), serializeRequestRecord(current));
-      await this.redis.lpush(queueKey(current.topic, current.difficulty), current.id);
+      await this.redis.zadd(
+        queueKey(current.topic, current.difficulty),
+        String(current.queueScore),
+        current.queueMember,
+      );
       await this.publishStatus(current.userId, buildSearchingState(current));
     }
   }
@@ -635,10 +697,9 @@ export class MatchService {
   }
 
   private async removeRequestFromQueue(request: RequestRecord): Promise<void> {
-    await this.redis.lrem(
+    await this.redis.zrem(
       queueKey(request.topic, request.difficulty),
-      1,
-      request.id,
+      request.queueMember,
     );
   }
 

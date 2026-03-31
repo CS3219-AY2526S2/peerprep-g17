@@ -48,6 +48,9 @@ export interface RequestRecord {
   topic: string;
   difficulty: Difficulty;
   createdAt: number;
+  queueScore: number;
+  queueSequence: number;
+  queueMember: string;
   timeoutAt: number;
   t1At: number;
   t2At: number;
@@ -65,4 +68,3 @@ export interface MatchEventEnvelope {
   userId: string;
   event: MatchStatusEvent;
 }
-
