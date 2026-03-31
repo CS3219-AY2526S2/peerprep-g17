@@ -24,6 +24,7 @@ export function bucketLockKey(topic: string, difficulty: Difficulty): string {
   return `match:lock:bucket:${encodeTopic(topic)}:${difficulty}`;
 }
 
+export const queueSequenceKey = "match:queue-sequence";
 export const timeoutZsetKey = "match:timeouts";
 export const relaxationT1ZsetKey = "match:relaxation:t1";
 export const relaxationT2ZsetKey = "match:relaxation:t2";
