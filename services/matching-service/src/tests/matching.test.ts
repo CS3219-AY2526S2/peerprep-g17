@@ -262,6 +262,19 @@ test("cancels a queued request and removes it from active state", async () => {
   assert.equal(eventBus.events.at(-1)?.event.status, "cancelled");
 });
 
+test("removes a queued request immediately when the user disconnects", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  await matchService.markUserDisconnected("user-a");
+
+  const state = await matchService.getUserState("user-a");
+  assert.equal(state, null);
+  assert.equal(eventBus.events.at(-1)?.event.status, "cancelled");
+});
+
 test("rolls both users back to searching when collaboration handoff fails", async () => {
   await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
@@ -286,6 +299,32 @@ test("rolls both users back to searching when collaboration handoff fails", asyn
   const session = await Session.findOne().sort({ createdAt: -1 });
   assert.ok(session);
   assert.equal(session.status, "failed");
+});
+
+test("preserves fifo order after a provisional match rolls back", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  collaborationClient.shouldFail = true;
+
+  const failedMatch = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(failedMatch.matched, false);
+
+  collaborationClient.shouldFail = false;
+
+  const nextMatch = await matchService.createRequest("user-c", "Bearer token-c", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(nextMatch.matched, true);
+  assert.equal(collaborationClient.payloads.at(-1)?.userAId, "user-a");
 });
 
 test("rolls the provisional match back when no question exists for the matched topic", async () => {
