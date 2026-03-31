@@ -6,7 +6,8 @@
     "dev": "nodemon src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "npm run build && node --test dist/tests/*.test.js"
+    "test": "npm run build && node --test --test-reporter=spec dist/tests/",
+    "test:coverage": "c8 --check-coverage --lines 80 --branches 80 npm test"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +27,7 @@
     "@types/node": "^25.3.5",
     "@types/supertest": "^7.0.0",
     "@types/ws": "^8.18.1",
+    "c8": "^11.0.0",
     "ioredis-mock": "^8.13.0",
     "mongodb-memory-server": "^10.2.3",
     "nodemon": "^3.1.14",
