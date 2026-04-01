@@ -9,28 +9,22 @@
 ## Run Everything with One Command (Docker)
 
 From the repository root:
-
 ```bash
 make start
 ```
 
 Then open:
+- **Local**: http://localhost
+- **Network (other devices)**: http://<YOUR_IP> (e.g. http://192.168.x.x)
 
-- Frontend: http://localhost:5173
-- User Service: http://localhost:8081
-- Question Service: http://localhost:8080
-- Matching Service: http://localhost:8082
-- Collaboration Service: http://localhost:8083
-- Redis: `localhost:6379`
+All services are proxied through nginx on port 80 so you do not need to access individual service ports directly.
 
 Stop everything:
-
 ```bash
 make stop
 ```
 
 If you also want to remove MongoDB data volume:
-
 ```bash
 make clean
 ```
@@ -39,12 +33,10 @@ make clean
 
 Newly registered users are created with role `user` by default.
 To bootstrap the first admin in a fresh environment:
-
 ```bash
 cd services/user-service
 npm run bootstrap-admin -- --email <existing-user-email>
 ```
-
 Notes:
 - The target account must already exist.
 - The command promotes the specified account to `admin`.
@@ -54,19 +46,20 @@ Notes:
 
 The matching backend lives in `services/matching-service`.
 
-- REST base URL: `http://localhost:8082/api/matches`
-- Health check: `http://localhost:8082/health`
-- WebSocket path: `ws://localhost:8082/ws/matches`
+- REST base URL: `http://localhost/api/matches`
+- WebSocket path: `ws://localhost/ws/matches`
 - Match status events: `searching`, `matched`, `timed_out`, `cancelled`
 
 The Docker setup starts Redis for matchmaking queue state and uses MongoDB for persisted session history.
 
 ## Collaboration Service
 
-The collaboration test backend lives in `services/collaboration-service`.
+The collaboration backend lives in `services/collaboration-service`.
 
-- REST base URL: `http://localhost:8083/api/sessions`
-- Handoff endpoint: `POST /handoff`
+- REST base URL: `http://localhost/api/collab/sessions`
+- Handoff endpoint: `POST /api/collab/sessions/handoff`
+- WebSocket (Yjs editor): `ws://localhost/ws/sessions/`
+- WebSocket (chat): `ws://localhost/ws/chat/`
 - Session page flow in frontend:
-  - `http://localhost:5173/match`
-  - `http://localhost:5173/collaboration/:sessionId`
+  - `http://localhost/match`
+  - `http://localhost/collaboration/:sessionId`

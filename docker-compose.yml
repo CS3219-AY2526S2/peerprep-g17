@@ -60,7 +60,6 @@ services:
     environment:
       PORT: 8081
       MONGO_URI: mongodb://mongo:27017/user-service
-      # Use the variable from .env
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       JWT_SECRET: dev-secret-change-me
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
