@@ -12,7 +12,7 @@ if (googleClientId && googleClientSecret) {
       {
         clientID: googleClientId,
         clientSecret: googleClientSecret,
-        callbackURL: "/api/users/auth/google/callback",
+        callbackURL: "http://localhost/api/users/auth/google/callback",
       },
       async (_accessToken, _refreshToken, profile, done) => {
         try {
@@ -61,7 +61,7 @@ if (githubClientId && githubClientSecret) {
       {
         clientID: githubClientId,
         clientSecret: githubClientSecret,
-        callbackURL: "/api/users/auth/github/callback",
+        callbackURL: "http://localhost/api/users/auth/github/callback",
         scope: ["user:email"],
       },
       async (_accessToken: string, _refreshToken: string, profile: any, done: any) => {

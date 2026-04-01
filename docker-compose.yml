@@ -63,6 +63,11 @@ services:
       # Use the variable from .env
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       JWT_SECRET: dev-secret-change-me
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
     depends_on:
       mongo:
         condition: service_healthy

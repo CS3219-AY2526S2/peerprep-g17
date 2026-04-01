@@ -10,7 +10,6 @@ import CodeEditor from "./CollaborationEditor";
 import type { CodeEditorHandle } from "./CollaborationEditor";
 import { QUESTION_API_URL } from "@/config";
 
-
 function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; onKeepAlive: () => void; }) {
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
