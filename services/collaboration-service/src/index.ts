@@ -19,10 +19,8 @@ async function startServer(): Promise<void> {
     const controller = new CollaborationController(collaborationService);
     const app = createApp(controller);
     const server = http.createServer(app);
-
     const wss = new WebSocketServer({ noServer: true });
-    const chatWss = new WebSocketServer({ noServer: true }); // separate server for chat
-
+    const chatWss = new WebSocketServer({ noServer: true }); 
     server.on("upgrade", (request, socket, head) => {
       const url = new URL(request.url!, `http://${request.headers.host}`);
       const pathname = url.pathname;

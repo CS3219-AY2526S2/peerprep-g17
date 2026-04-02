@@ -10,4 +10,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // ADD THIS BLOCK BELOW
+  server: {
+    host: true, // Listen on all local IPs (0.0.0.0)
+    port: 5173,
+    allowedHosts: true, // Tell Vite to stop blocking Nginx/Gateway requests
+  },
 });

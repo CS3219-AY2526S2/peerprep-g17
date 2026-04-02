@@ -29,12 +29,13 @@ import { config } from "../config";
 
 const router = Router();
 
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost";
+
 // ── Rate limiter for auth endpoints ─────────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 15, // 15 attempt
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
   validate: { xForwardedForHeader: false },
-
 });
 
 // ── Public routes ───────────────────────────────────
@@ -51,12 +52,7 @@ router.delete("/me", verifyToken, deleteMyself);
 router.post("/admin-requests", verifyToken, createAdminRequest);
 router.get("/admin-requests/me", verifyToken, getMyAdminRequests);
 router.get("/admin-requests", verifyToken, verifyAdmin, getAdminRequests);
-router.patch(
-  "/admin-requests/:id",
-  verifyToken,
-  verifyAdmin,
-  reviewAdminRequest,
-);
+router.patch("/admin-requests/:id", verifyToken, verifyAdmin, reviewAdminRequest);
 
 // ── Audit logs (admin only) ─────────────────────────
 router.get("/audit/logs", verifyToken, verifyAdmin, async (_req, res) => {
@@ -92,7 +88,7 @@ router.get(
 router.get(
   "/auth/google/callback",
   passportConfig.authenticate("google", {
-    failureRedirect: "http://localhost:5173/login",
+    failureRedirect: `${FRONTEND_URL}/login`,
     session: false,
   }),
   (req, res) => {
@@ -100,7 +96,7 @@ router.get(
     const token = jwt.sign({ id: user._id }, config.jwtSecret, {
       expiresIn: "48h",
     });
-    res.redirect(`http://localhost:5173/oauth-callback?token=${token}`);
+    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
   },
 );
 
@@ -115,7 +111,7 @@ router.get(
 router.get(
   "/auth/github/callback",
   passportConfig.authenticate("github", {
-    failureRedirect: "http://localhost:5173/login",
+    failureRedirect: `${FRONTEND_URL}/login`,
     session: false,
   }),
   (req, res) => {
@@ -123,7 +119,7 @@ router.get(
     const token = jwt.sign({ id: user._id }, config.jwtSecret, {
       expiresIn: "48h",
     });
-    res.redirect(`http://localhost:5173/oauth-callback?token=${token}`);
+    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
   },
 );
 
