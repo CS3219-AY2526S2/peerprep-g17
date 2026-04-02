@@ -16,8 +16,7 @@ export const config = {
   collaborationServiceUrl:
     process.env.COLLABORATION_SERVICE_URL || "http://localhost:8083",
 
-  collaborationServiceStub:
-    process.env.COLLABORATION_SERVICE_STUB === "true",
+  collaborationServiceStub: process.env.COLLABORATION_SERVICE_STUB === "true",
 
   internalServiceToken:
     process.env.INTERNAL_SERVICE_TOKEN || "dev-internal-service-token",
@@ -27,6 +26,8 @@ export const config = {
   relaxationT2Ms: Number(process.env.MATCH_RELAXATION_T2_MS) || 60000,
   timeoutPollIntervalMs:
     Number(process.env.MATCH_TIMEOUT_POLL_INTERVAL_MS) || 1000,
+  relaxationPollIntervalMs:
+    Number(process.env.RELAXATION_POLL_INTERVAL_MS) || 1000,
   lockTtlMs: Number(process.env.MATCH_LOCK_TTL_MS) || 5000,
   topicCacheTtlMs: Number(process.env.TOPIC_CACHE_TTL_MS) || 60000,
   matchEventChannel: process.env.MATCH_EVENT_CHANNEL || "match:events",
