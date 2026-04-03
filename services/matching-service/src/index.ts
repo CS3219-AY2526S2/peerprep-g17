@@ -11,6 +11,7 @@ import { MatchService } from "./services/matchService";
 import { QuestionCatalogService } from "./services/questionCatalogService";
 import { RedisMatchEventBus } from "./services/redisEventBus";
 import { TimeoutWorker } from "./services/timeoutWorker";
+import { RelaxationWorker } from "./services/relaxationWorker";
 import { WebSocketGateway } from "./services/websocketGateway";
 
 async function startServer(): Promise<void> {
@@ -46,9 +47,14 @@ async function startServer(): Promise<void> {
       matchService,
       config.timeoutPollIntervalMs,
     );
+    const relaxationWorker = new RelaxationWorker(
+      matchService,
+      config.relaxationPollIntervalMs,
+    );
 
     await websocketGateway.start();
     timeoutWorker.start();
+    relaxationWorker.start();
 
     server.listen(config.port, () => {
       console.log(`Matching Service listening on port ${config.port}`);

@@ -57,6 +57,7 @@ export interface RequestRecord {
   status: "searching" | "matching";
   sessionId: string;
   cancelRequested: boolean;
+  authHeader: string;
 }
 
 export interface MatchCandidateResult {

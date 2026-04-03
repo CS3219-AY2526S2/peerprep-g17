@@ -127,6 +127,7 @@ function parseRequestRecord(
     status: raw.status as RequestRecord["status"],
     sessionId: raw.sessionId || "",
     cancelRequested: parseBoolean(raw.cancelRequested),
+    authHeader: raw.authHeader || "",
   };
 }
 
@@ -147,6 +148,7 @@ function serializeRequestRecord(
     status: request.status,
     sessionId: request.sessionId,
     cancelRequested: request.cancelRequested ? "1" : "0",
+    authHeader: request.authHeader,
   };
 }
 
@@ -240,6 +242,7 @@ export class MatchService {
         status: "searching",
         sessionId: "",
         cancelRequested: false,
+        authHeader,
       };
 
       await this.persistRequest(request);
@@ -389,6 +392,72 @@ export class MatchService {
     }
 
     return processed;
+  }
+
+  async processDueRelaxations(now = Date.now()): Promise<number> {
+    let matched = 0;
+    matched += await this.processRelaxationTier(relaxationT1ZsetKey, now);
+    matched += await this.processRelaxationTier(relaxationT2ZsetKey, now);
+    return matched;
+  }
+
+  private async processRelaxationTier(
+    zsetKey: string,
+    now: number,
+  ): Promise<number> {
+    const requestIds = await this.redis.zrangebyscore(
+      zsetKey,
+      0,
+      now,
+      "LIMIT",
+      0,
+      50,
+    );
+
+    let matched = 0;
+
+    for (const requestId of requestIds) {
+      const removed = await this.redis.zrem(zsetKey, requestId);
+      if (!removed) {
+        continue;
+      }
+
+      const request = await this.getRequest(requestId);
+      if (!request || request.status !== "searching") {
+        continue;
+      }
+
+      const userLock = await this.lockService.acquire(
+        userLockKey(request.userId),
+      );
+      if (!userLock) {
+        continue;
+      }
+
+      try {
+        const fresh = await this.getRequest(requestId);
+        if (!fresh || fresh.status !== "searching") {
+          continue;
+        }
+
+        await this.removeRequestFromQueue(fresh);
+
+        const matchedState = await this.tryMatchRequest(
+          fresh,
+          fresh.authHeader,
+        );
+
+        if (matchedState) {
+          matched += 1;
+        } else {
+          await this.enqueueRequest(fresh);
+        }
+      } finally {
+        await this.lockService.release(userLock);
+      }
+    }
+
+    return matched;
   }
 
   async markUserDisconnected(userId: string): Promise<void> {
