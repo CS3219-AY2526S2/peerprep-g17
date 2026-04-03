@@ -15,10 +15,13 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    ports:
+      - "27017:27017" # for dev purposes viewing MongoDB Compass (to look at the db)
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,11 +52,11 @@ services:
     entrypoint:
       - sh
       - -c
-      - "until curl -sf http://piston:2000/api/v2/runtimes > /dev/null; do echo 'Waiting...'; sleep 5; done && curl -s -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"python\",\"version\":\"3.10.0\"}'"
+      - 'until curl -sf http://piston:2000/api/v2/runtimes > /dev/null; do echo ''Waiting...''; sleep 5; done && curl -s -X POST http://piston:2000/api/v2/packages -H ''Content-Type: application/json'' -d ''{"language":"python","version":"3.10.0"}'''
     depends_on:
       - piston
     restart: no
-  
+
   user-service:
     build: ./services/user-service
     restart: unless-stopped
@@ -111,7 +114,7 @@ services:
       QUESTION_SERVICE_URL: http://question-service:8080
       COLLABORATION_SERVICE_URL: http://collaboration-service:8083
       INTERNAL_SERVICE_TOKEN: dev-internal-service-token
-      JWT_SECRET: dev-secret-change-me 
+      JWT_SECRET: dev-secret-change-me
     depends_on:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -126,6 +129,7 @@ services:
   question-seeder:
     build:
       context: ./services/question-service
+      target: builder
     command: npm run seed
     environment:
       MONGO_URI: mongodb://mongo:27017/question-service
