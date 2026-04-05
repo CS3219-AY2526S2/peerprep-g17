@@ -158,7 +158,15 @@ export async function deleteUser(
   const user = await findUserByIdOrRespond(id, res);
   if (!user) return;
 
-  if (user.role === Role.ADMIN && (await isLastAdmin(id))) {
+  const isSuperAdmin = req.role === Role.SUPERADMIN;
+  const isTargetAdmin = user.role === Role.ADMIN || user.role === Role.SUPERADMIN;
+
+  if (!isSuperAdmin && isTargetAdmin) {
+    res.status(403).json({ error: "Admins cannot delete other admins or superadmins." });
+    return;
+  }
+
+  if (isTargetAdmin && (await isLastAdmin(id))) {
     res.status(409).json({ error: "Cannot delete the last admin." });
     return;
   }
@@ -176,9 +184,15 @@ export async function updateUserRole(
   req: AuthRequest,
   res: Response,
 ): Promise<void> {
-  const id = getParamAsString(req.params.id);
-  if (!id) {
+  const targetId = getParamAsString(req.params.id);
+  if (!targetId) {
     res.status(400).json({ error: "Invalid user id." });
+    return;
+  }
+
+  // Prevent self-modification to maintain system stability
+  if (req.userId === targetId) {
+    res.status(400).json({ error: "Cannot modify yourself." });
     return;
   }
 
@@ -190,26 +204,43 @@ export async function updateUserRole(
     return;
   }
 
-  const user = await findUserByIdOrRespond(id, res);
-  if (!user) return;
+  const targetUser = await findUserByIdOrRespond(targetId, res);
+  if (!targetUser) return;
 
-  const isDemotion = user.role === Role.ADMIN && nextRole === Role.USER;
-
-  if (isDemotion && req.userId === id) {
-    res.status(400).json({ error: "You cannot demote yourself." });
-    return;
+  // admins can only promote users to admin
+  if (req.role === Role.ADMIN) {
+    if (targetUser.role === Role.ADMIN || targetUser.role === Role.SUPERADMIN) {
+      res.status(403).json({ error: "Admins cannot modify other admin roles." });
+      return;
+    }
+    if (nextRole === Role.SUPERADMIN) {
+      res.status(403).json({ error: "Only superadmins can appoint new superadmins." });
+      return;
+    }
   }
 
-  if (isDemotion && (await isLastAdmin(id))) {
-    res.status(409).json({ error: "Cannot demote the last admin." });
-    return;
+  const isDemotingAdmin = targetUser.role === Role.ADMIN && nextRole === Role.USER;
+  const isDemotingSuper = targetUser.role === Role.SUPERADMIN && nextRole !== Role.SUPERADMIN;
+
+  if (isDemotingAdmin || isDemotingSuper) {
+    // Only Superadmins reach this check if the target is an Admin
+    if (req.role !== Role.SUPERADMIN) {
+      res.status(403).json({ error: "Only superadmins can demote administrative accounts." });
+      return;
+    }
+
+    // Safety check: Don't leave the system without a root user
+    if (await isLastAdmin(targetId)) {
+      res.status(409).json({ error: "Cannot demote the last admin or superadmin account." });
+      return;
+    }
   }
 
-  user.role = nextRole as Role;
-  await user.save();
-  await loggingTheAction(req.userId!, `ROLE_CHANGE_TO_${nextRole.toUpperCase()}`, id);
+  targetUser.role = nextRole as Role;
+  await targetUser.save();
+  await loggingTheAction(req.userId!, `ROLE_CHANGE_TO_${nextRole.toUpperCase()}`, targetId);
 
-  res.status(200).json({ data: toSafeUser(user) });
+  res.status(200).json({ data: toSafeUser(targetUser) });
 }
 
 /* ── POST /api/users/admin-requests ──────────────────── */

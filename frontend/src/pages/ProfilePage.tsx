@@ -377,7 +377,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {user?.role !== "admin" && (
+        {user?.role !== "admin" && user?.role !== "superadmin" && (
           <section className="mt-8 rounded-xl border border-border/50 p-5">
             <h2 className="text-lg font-semibold tracking-tight">
               Request Admin Privileges

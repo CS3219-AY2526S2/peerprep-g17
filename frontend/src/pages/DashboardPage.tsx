@@ -15,7 +15,15 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="mt-2 text-muted-foreground">
           Welcome back, {user?.username}. You're logged in as{" "}
-          <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">
+          <span
+            className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+              user?.role === "superadmin" 
+              ? "bg-purple-500/10 text-purple-600"
+              : user?.role === "admin"
+              ? "bg-primary/10 text-primary"
+              : "bg-muted text-muted-foreground"
+            }`}
+          >
             {user?.role}
           </span>
         </p>

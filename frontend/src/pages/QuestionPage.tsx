@@ -19,7 +19,7 @@ import {
 
 export default function QuestionPage() {
   const { token, user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
 
   // ── Data ──────────────────────────────────────────
   const [questions, setQuestions] = useState<QuestionRecord[]>([]);

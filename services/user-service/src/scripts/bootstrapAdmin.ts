@@ -14,8 +14,18 @@ function getArgValue(flag: string): string | null {
 
 async function run(): Promise<void> {
   const email = getArgValue("--email");
+  // Default to ADMIN if no role is specified, but allow 'superadmin'
+  const rawRole = getArgValue("--role")?.toLowerCase() || Role.ADMIN;
+  const targetRole = rawRole as Role;
+
   if (!email) {
-    console.error("Usage: npm run bootstrap-admin -- --email <email>");
+    console.error("Usage: npm run bootstrap-admin -- --email <email> [--role admin|superadmin]");
+    process.exit(1);
+  }
+
+  // Check if the input role is valid based on your User model
+  if (!Object.values(Role).includes(targetRole)) {
+    console.error(`Invalid role: ${targetRole}. Valid roles: ${Object.values(Role).join(", ")}`);
     process.exit(1);
   }
 
@@ -28,14 +38,14 @@ async function run(): Promise<void> {
       process.exit(1);
     }
 
-    if (user.role === Role.ADMIN) {
-      console.log(`User ${user.email} is already an admin.`);
+    if (user.role === targetRole) {
+      console.log(`User ${user.email} is already a ${targetRole}.`);
       process.exit(0);
     }
 
-    user.role = Role.ADMIN;
+    user.role = targetRole;
     await user.save();
-    console.log(`Promoted ${user.email} to admin.`);
+    console.log(`Successfully updated ${user.email} to ${targetRole}.`);
   } finally {
     await mongoose.disconnect();
   }

@@ -19,7 +19,7 @@ export default function Navbar() {
             <Link to="/dashboard">
               <Button variant="ghost" size="sm">Dashboard</Button>
             </Link>
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "superadmin") && (
               <Link to="/admin">
                 <Button variant="ghost" size="sm">Admin</Button>
               </Link>

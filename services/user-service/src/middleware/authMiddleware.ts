@@ -53,7 +53,7 @@ export async function verifyToken(
 }
 
 /**
- * Checks that the authenticated user has the admin role.
+ * Checks that the authenticated user has the admin or superadmin role.
  * Must be used AFTER verifyToken in the middleware chain.
  */
 
@@ -62,7 +62,7 @@ export function verifyAdmin(
   res: Response,
   next: NextFunction,
 ) {
-  if (req.role !== Role.ADMIN) {
+  if ((req.role !== Role.ADMIN) && (req.role !== Role.SUPERADMIN)) {
     res
       .status(403)
       .json({ error: "Access denied. Admin privileges required." });
@@ -70,3 +70,21 @@ export function verifyAdmin(
   }
   next();
 }
+
+/**
+ * Checks that the authenticated user has the superadmin role.
+ * Must be used AFTER verifyToken in the middleware chain.
+ */
+export const verifySuperAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  if (req.role !== Role.SUPERADMIN) {
+    res
+      .status(403)
+      .json({ error: "Access denied. Superadmin privileges required." });
+    return;
+  }
+  next();
+};
