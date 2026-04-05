@@ -6,6 +6,7 @@ import Attempt from "../models/Attempt";
 import { CollaborationSessionPayload } from "../types";
 import { MatchingServiceClient } from "./matchingServiceClient";
 import { docs } from "./yjsUtils";
+import { IAttempt } from "../models/Attempt";
 
 export class CollaborationService {
   constructor(
@@ -47,7 +48,6 @@ export class CollaborationService {
   ): Promise<ICollaborationSession | null> {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) return null;
-    if (session.status === "completed") return session;
     let code = "";
     try {
       const doc = docs.get(sessionId);
@@ -71,25 +71,26 @@ export class CollaborationService {
       attemptedAt: new Date(),
     };
 
-    await Attempt.insertMany([
-      { ...attemptData, userId: session.userAId },
-      { ...attemptData, userId: session.userBId },
-    ]);
+    await Attempt.findOneAndUpdate(
+      { sessionId, userId },
+      { ...attemptData, userId },
+      { upsert: true, new: true }
+    );
 
+  const attemptCount = await Attempt.countDocuments({ sessionId });
+  if (attemptCount >= 2) {
     try {
       await this.matchingServiceClient.completeSession(sessionId);
-      console.log(`[Collab] Notified matching service for session ${sessionId}`);
+      session.completedAt = new Date();
+      await session.save();
     } catch (err) {
       console.error(`[Collab] Failed to notify matching service:`, err);
     }
-    session.status = "completed";
-    session.completedAt = new Date();
-    await session.save();
-    return session;
   }
+  return session;
+}
   async getAttemptHistory(userId: string): Promise<IAttempt[]> {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
   }
 }
 
-import { IAttempt } from "../models/Attempt";

@@ -263,14 +263,21 @@ export default function MatchPage() {
                 Signed in as {user?.username} ({user?.id})
               </CardDescription>
             </CardHeader>
+           
             <CardContent className="space-y-4">
+               <style>{`
+                  #topic option, #difficulty option {
+                  background-color: var(--background);
+                  color: var(--foreground);
+                }
+              `}</style>
               <div className="space-y-2">
                 <Label htmlFor="topic">Topic</Label>
                 <select
                   id="topic"
                   value={selectedTopic}
                   onChange={(event) => setSelectedTopic(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 text-sm outline-none"
                   disabled={loading || matchState?.status === "searching"}
                 >
                   {topics.length === 0 && (
@@ -290,7 +297,7 @@ export default function MatchPage() {
                   id="difficulty"
                   value={difficulty}
                   onChange={(event) => setDifficulty(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+                  className="h-10 w-full rounded-lg border border-input bg-background text-foreground px-3 text-sm outline-none"
                   disabled={loading || matchState?.status === "searching"}
                 >
                   <option value="Easy">Easy</option>

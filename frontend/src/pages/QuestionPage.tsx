@@ -362,17 +362,17 @@ export default function QuestionPage() {
               onChange={(e) => setFilterSearch(e.target.value)}
               className="w-64"
             />
-            <style>{`
-              #filter-difficulty option, #filter-category option {
-                background-color: #3e3e3e;
-                color: #d4d4d4;
+           <style>{`
+                #filter-difficulty option, #filter-category option {
+                background-color: var(--background);
+                color: var(--foreground);
               }
-            `} </style>
+            `}</style>
             <select
               id="filter-difficulty"
               value={filterDifficulty}
               onChange={(e) => setFilterDifficulty(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none"
+              className="h-8 rounded-lg border border-input bg-background text-foreground px-3 text-sm outline-none"
             >
                <option value="">All Difficulties</option>
                   {DIFFICULTIES.map((d) => (
@@ -383,7 +383,7 @@ export default function QuestionPage() {
               id="filter-category"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none"
+              className="h-8 rounded-lg border border-input bg-background text-foreground px-3 text-sm outline-none"
             >
               <option value="">All Categories</option>
               {CATEGORIES.map((c) => (

@@ -10,10 +10,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
-      "*": ["node_modules/*"]
-    }
+      "@/*": ["./src/*"]
+    },
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules"]

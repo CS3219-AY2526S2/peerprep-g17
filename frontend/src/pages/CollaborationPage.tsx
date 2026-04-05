@@ -95,25 +95,20 @@ export default function CollaborationPage() {
 
   async function completeSession(shouldSave: boolean = true) {
     if (!token || !sessionId || isRedirecting.current) return;
-    
     isRedirecting.current = true;
     terminatedRef.current = true;
-
     try {
       setCompleting(true);
-      const collabUrl = shouldSave 
-        ? `${COLLABORATION_API_URL}/sessions/${sessionId}/complete`
-        : `${COLLABORATION_API_URL}/sessions/${sessionId}`;
-
-      await fetch(collabUrl, {
-        method: shouldSave ? "POST" : "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      if (shouldSave) {
+        await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}/complete`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
       await fetch(`${MATCHING_API_URL}/requests/me/session`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-
     } catch (err) {
       console.error("Cleanup failed:", err);
     } finally {
@@ -121,7 +116,6 @@ export default function CollaborationPage() {
       window.location.href = "/match";
     }
   }
-
   const handleActionConfirm = async () => {
     const mode = confirmMode;
     setConfirmMode(null);
