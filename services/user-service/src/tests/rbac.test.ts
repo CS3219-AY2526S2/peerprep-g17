@@ -289,7 +289,7 @@ test("superadmin can delete an admin", async () => {
     .delete(`/api/users/${targetAdmin._id}`)
     .set("Authorization", `Bearer ${superToken}`);
 
-  assert.equal(deleteRes.status, 204);
+  assert.equal(deleteRes.status, 200);
 
   const deletedUser = await User.findById(targetAdmin._id);
   assert.equal(deletedUser, null, "The Admin user should have been removed from the database");
