@@ -74,7 +74,7 @@ export async function comparePasswords(
 /* ── Identity helpers ────────────────────────────────── */
 
 export function isAdmin(req: AuthRequest): boolean {
-  return req.role === Role.ADMIN;
+  return req.role === Role.ADMIN || req.role === Role.SUPERADMIN;
 }
 
 export function isOwner(req: AuthRequest, targetUserId: string): boolean {
@@ -177,11 +177,22 @@ export async function findUserByIdOrRespond(
 }
 
 export async function isLastAdmin(targetUserId: string): Promise<boolean> {
-  const adminCount = await User.countDocuments({ role: Role.ADMIN });
-  if (adminCount > 1) return false;
-
   const target = await User.findById(targetUserId).select("role");
-  return !!target && target.role === Role.ADMIN;
+  if (!target) return false;
+
+  if (target.role === Role.SUPERADMIN) {
+    const superAdminCount = await User.countDocuments({ role: Role.SUPERADMIN });
+    return superAdminCount <= 1;
+  }
+
+  if (target.role === Role.ADMIN) {
+    const adminCount = await User.countDocuments({ role: Role.ADMIN });
+    const superAdminCount = await User.countDocuments({ role: Role.SUPERADMIN });
+
+    return adminCount <= 1 && superAdminCount === 0;
+  }
+
+  return false;
 }
 
 /* ── Profile validation ──────────────────────────────── */

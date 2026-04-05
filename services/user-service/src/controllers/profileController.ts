@@ -164,7 +164,7 @@ export async function deleteMyself(
   }
 
   if (await isLastAdmin(req.userId)) {
-    res.status(409).json({ error: "Cannot delete the last admin account." });
+    res.status(409).json({ error: "Cannot delete the last admin or superadmin account." });
     return;
   }
 

@@ -148,11 +148,11 @@ export default function AdminPage() {
 
   // Deleting other accounts
   async function handleDeleteUser(userId: string) {
-  if (!confirm("Are you sure you want to delete this user? Note that this cannot be undone.")) {
-    return;
-  }
+    if (!confirm("Are you sure you want to delete this user? Note that this cannot be undone.")) {
+      return;
+    }
 
-  setError("");
+    setError("");
     try {
       const res = await fetch(`${USER_API_URL}/${userId}`, {
         method: "DELETE",
@@ -169,8 +169,13 @@ export default function AdminPage() {
       setError("Could not connect to the User Service.")
     }
   }
- 
- 
+
+  const isAdminPageAllowed = currentUser?.role === "admin" || currentUser?.role === "superadmin";
+
+  if (!isAdminPageAllowed) {
+    return <div className="p-10 text-center">Access Denied.</div>;
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
@@ -222,77 +227,82 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr
-                    key={u._id}
-                    className="border-b border-border/30 last:border-0 hover:bg-muted/20"
-                  >
-                    <td className="px-4 py-3 font-medium">
-                      <Link
-                        to={`/users/${u._id}`}
-                        className="underline-offset-4 hover:underline"
-                      >
-                        {u.username}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {u.email}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-md px-2 py-0.5 text-xs font-medium ${
-                          u.role === "admin"
+                {users.map((u) => {
+                  const isTargetAdmin = u.role === "admin" || u.role === "superadmin";
+                  const canPromote = !isTargetAdmin;
+                  const canDemote = (currentUser?.role === "superadmin" && u.role === "admin");
+                  const canDelete = (currentUser?.role === "superadmin" && u.role !== "superadmin")
+                  || (currentUser?.role === "admin" && !isTargetAdmin);
+
+                  return (
+                    <tr
+                      key={u._id}
+                      className="border-b border-border/30 last:border-0 hover:bg-muted/20"
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        <Link
+                          to={`/users/${u._id}`}
+                          className="underline-offset-4 hover:underline"
+                        >
+                          {u.username}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {u.email}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-xs font-medium ${
+                            u.role === "superadmin" 
+                            ? "bg-purple-500/10 text-purple-600"
+                            : u.role === "admin"
                             ? "bg-primary/10 text-primary"
                             : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {new Date(u.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {u._id === currentUser?.id ? (
-                        <span className="text-xs text-muted-foreground">
-                          You
+                          }`}
+                        >
+                          {u.role}
                         </span>
-                      ) : u.role === "admin" ? (
-                        <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => handleRoleChange(u._id, "user")}
-                        >
-                          Demote
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="xs"
-                          onClick={() => handleDeleteUser(u._id)}>
-                            Delete
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {new Date(u.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {u._id === currentUser?.id ? (
+                          <span className="text-xs text-muted-foreground">
+                            You
+                          </span>
+                        ) : (
+                          <div className="flex justify-end gap-2">
+                          {canPromote && (
+                            <Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleRoleChange(u._id, "admin")}
+                            >
+                            Promote
+                            </Button>
+                          )}
+                          {canDemote && (<Button
+                            variant="outline"
+                            size="xs"
+                            onClick={() => handleRoleChange(u._id, "user")}
+                          >
+                            Demote
                           </Button>
-                          </div>
-                      ) : (
-                        <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => handleRoleChange(u._id, "admin")}
-                        >
-                          Promote
-                        </Button>
-                         <Button
-                          variant="destructive"
-                          size="xs"
-                          onClick={() => handleDeleteUser(u._id)}>
-                            Delete
-                          </Button>
-                          </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          )}
+                          {canDelete && (<Button
+                            variant="destructive"
+                            size="xs"
+                            onClick={() => handleDeleteUser(u._id)}>
+                              Delete
+                            </Button>
+                          )}
+                            </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

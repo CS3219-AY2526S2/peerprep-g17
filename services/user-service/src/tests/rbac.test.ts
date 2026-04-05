@@ -70,25 +70,26 @@ test("registration defaults to user role (no implicit first-admin bootstrap)", a
   assert.equal(res.body.data.role, "user");
 });
 
-test("role freshness uses DB role on every request", async () => {
+test("role freshness uses DB role on every request (Superadmin demotes Admin)", async () => {
   const adminA = await createUser({
     username: "admin-a",
     email: "admin-a@example.com",
     role: Role.ADMIN,
   });
+
   await createUser({
-    username: "admin-b",
-    email: "admin-b@example.com",
-    role: Role.ADMIN,
+    username: "super-b",
+    email: "super-b@example.com",
+    role: Role.SUPERADMIN,
   });
 
   const adminAToken = await login("admin-a");
-  const adminBToken = await login("admin-b");
+  const superBToken = await login("super-b");
 
   const demoteRes = await request(app)
     .patch(`/api/users/${adminA._id}/role`)
-    .set("Authorization", `Bearer ${adminBToken}`)
-    .send({ role: "user" });
+    .set("Authorization", `Bearer ${superBToken}`)
+    .send({ role: Role.USER });
 
   assert.equal(demoteRes.status, 200);
 
@@ -99,27 +100,27 @@ test("role freshness uses DB role on every request", async () => {
   assert.equal(staleTokenAdminListRes.status, 403);
 });
 
-test("last admin cannot delete self", async () => {
-  const admin = await createUser({
-    username: "sole-admin",
-    email: "sole-admin@example.com",
-    role: Role.ADMIN,
+test("last superadmin cannot delete self", async () => {
+  const superadmin = await createUser({
+    username: "sole-super",
+    email: "sole-super@example.com",
+    role: Role.SUPERADMIN,
   });
 
-  const adminToken = await login("sole-admin");
+  const superToken = await login("sole-super");
 
   const deleteRes = await request(app)
-    .delete(`/api/users/${admin._id}`)
-    .set("Authorization", `Bearer ${adminToken}`);
+    .delete(`/api/users/${superadmin._id}`)
+    .set("Authorization", `Bearer ${superToken}`);
 
   assert.equal(deleteRes.status, 409);
   assert.match(deleteRes.body.error, /last admin/i);
 });
 
-test("bootstrap-admin script promotes target email", async () => {
+test("bootstrap-admin script promotes target email (with role flag)", async () => {
   await createUser({
-    username: "bootstrap-target",
-    email: "bootstrap-target@example.com",
+    username: "super-target",
+    email: "super-target@example.com",
     role: Role.USER,
   });
 
@@ -128,16 +129,62 @@ test("bootstrap-admin script promotes target email", async () => {
     "dist/scripts/bootstrapAdmin.js",
   );
 
-  execFileSync(process.execPath, [scriptPath, "--email", "bootstrap-target@example.com"], {
+  execFileSync(process.execPath, [
+    scriptPath, 
+    "--email", "super-target@example.com", 
+    "--role", "superadmin"
+  ], {
     env: {
       ...process.env,
       MONGO_URI: mongoServer.getUri(),
     },
   });
 
-  const updated = await User.findOne({ email: "bootstrap-target@example.com" });
+  const updated = await User.findOne({ email: "super-target@example.com" });
+  assert.ok(updated);
+  assert.equal(updated.role, Role.SUPERADMIN);
+});
+
+test("bootstrap-admin script defaults to admin role when flag is omitted", async () => {
+  await createUser({
+    username: "default-admin-target",
+    email: "default@example.com",
+    role: Role.USER,
+  });
+
+  const scriptPath = path.resolve(
+    process.cwd(),
+    "dist/scripts/bootstrapAdmin.js",
+  );
+
+  execFileSync(process.execPath, [scriptPath, "--email", "default@example.com"], {
+    env: {
+      ...process.env,
+      MONGO_URI: mongoServer.getUri(),
+    },
+  });
+
+  const updated = await User.findOne({ email: "default@example.com" });
   assert.ok(updated);
   assert.equal(updated.role, Role.ADMIN);
+});
+
+test("bootstrap-admin script promotes target email to superadmin", async () => {
+  await createUser({
+    username: "super-target",
+    email: "super-target@example.com",
+    role: Role.USER,
+  });
+
+  const scriptPath = path.resolve(process.cwd(), "dist/scripts/bootstrapAdmin.js");
+
+  execFileSync(process.execPath, [scriptPath, "--email", "super-target@example.com", "--role", "superadmin"], {
+    env: { ...process.env, MONGO_URI: mongoServer.getUri() },
+  });
+
+  const updated = await User.findOne({ email: "super-target@example.com" });
+  assert.ok(updated);
+  assert.equal(updated.role, Role.SUPERADMIN);
 });
 
 test("admin request lifecycle: submit -> review -> promotion applies immediately", async () => {
@@ -195,4 +242,55 @@ test("admin request lifecycle: submit -> review -> promotion applies immediately
   const promotedRequester = await User.findById(requester._id);
   assert.ok(promotedRequester);
   assert.equal(promotedRequester.role, Role.ADMIN);
+});
+
+test("admin cannot delete another admin", async () => {
+  await createUser({
+    username: "attacker-admin",
+    email: "attacker@example.com",
+    role: Role.ADMIN,
+  });
+
+  const targetAdmin = await createUser({
+    username: "target-admin",
+    email: "target@example.com",
+    role: Role.ADMIN,
+  });
+
+  const attackerToken = await login("attacker-admin");
+
+  const deleteRes = await request(app)
+    .delete(`/api/users/${targetAdmin._id}`)
+    .set("Authorization", `Bearer ${attackerToken}`);
+
+  assert.equal(deleteRes.status, 403);
+  assert.match(deleteRes.body.error, /cannot delete other admins/i);
+
+  const stillExists = await User.findById(targetAdmin._id);
+  assert.ok(stillExists, "Target admin should not have been deleted from the database");
+});
+
+test("superadmin can delete an admin", async () => {
+  await createUser({
+    username: "power-super",
+    email: "super@example.com",
+    role: Role.SUPERADMIN,
+  });
+
+  const targetAdmin = await createUser({
+    username: "target-to-delete",
+    email: "target-admin@example.com",
+    role: Role.ADMIN,
+  });
+
+  const superToken = await login("power-super");
+
+  const deleteRes = await request(app)
+    .delete(`/api/users/${targetAdmin._id}`)
+    .set("Authorization", `Bearer ${superToken}`);
+
+  assert.equal(deleteRes.status, 204);
+
+  const deletedUser = await User.findById(targetAdmin._id);
+  assert.equal(deletedUser, null, "The Admin user should have been removed from the database");
 });
