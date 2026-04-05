@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { CollaborationService } from "../services/collaborationService";
 import { CollaborationSessionPayload, DIFFICULTIES } from "../types";
-import SessionModel from "../models/CollaborationSession"; 
+import SessionModel from "../models/CollaborationSession";
+import { sessionSocketManager } from "../services/sessionSocketManager";
 function formatSessionResponse(session: any) {
   return {
     sessionId: session.sessionId,
@@ -13,7 +14,7 @@ function formatSessionResponse(session: any) {
     questionId: session.questionId,
     language: session.language,
     status: session.status,
-    messages: session.messages || [], 
+    messages: session.messages || [],
     createdAt: session.createdAt.toISOString(),
     completedAt: session.completedAt?.toISOString(),
   };
@@ -56,8 +57,16 @@ export class CollaborationController {
 
   terminateSession = async (req: AuthRequest, res: Response) => {
     try {
-      const { sessionId } = req.params;
-      await SessionModel.deleteOne({ sessionId }); 
+      const sessionId = String(req.params.sessionId);
+      await SessionModel.deleteOne({ sessionId });
+
+      // Notify the remaining user that the session has ended
+      sessionSocketManager.broadcastToSession(sessionId, {
+        type: "session_terminated",
+        payload: { reason: "partner_left" },
+        timestamp: new Date().toISOString(),
+      });
+
       res.status(200).json({ message: "Session ended." });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete session." });
@@ -70,7 +79,11 @@ export class CollaborationController {
       return;
     }
 
-    const { code, language = "python", version = "3.10.0" } = req.body as {
+    const {
+      code,
+      language = "python",
+      version = "3.10.0",
+    } = req.body as {
       code?: string;
       language?: string;
       version?: string;
@@ -144,13 +157,18 @@ export class CollaborationController {
     }
   };
 
-  getAttemptHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+  getAttemptHistory = async (
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
     if (!req.userId) {
       res.status(401).json({ error: "Unauthorized." });
       return;
     }
     try {
-      const attempts = await this.collaborationService.getAttemptHistory(req.userId);
+      const attempts = await this.collaborationService.getAttemptHistory(
+        req.userId,
+      );
       res.status(200).json({ data: attempts });
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch attempt history." });
