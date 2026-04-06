@@ -15,68 +15,80 @@ export function handleWebSocketConnection(
   const pathParts = url.pathname.split("/").filter(Boolean);
   const sessionId = pathParts[pathParts.length - 1];
   const token = url.searchParams.get("token");
+  
+  // FIX 1: Extract username from URL params just like we did in Chat
+  const username = url.searchParams.get("username") || "User";
 
-  if (!sessionId || !token) { ws.close(4001, "Missing sessionId or token"); return; }
+  if (!sessionId || !token) { 
+    ws.close(4001, "Missing sessionId or token"); 
+    return; 
+  }
 
   let userId: string;
   try {
     userId = verifyTokenString(token);
   } catch {
-    ws.close(4003, "Invalid or expired token"); return;
+    ws.close(4003, "Invalid or expired token"); 
+    return;
   }
 
   collaborationService
     .getSessionForUser(sessionId, userId)
     .then(async (session) => {
-      if (!session) { ws.close(4004, "Session not found or access denied"); return; }
-sessionSocketManager.join(sessionId, `yjs:${userId}`, ws);
+      if (!session) { 
+        ws.close(4004, "Session not found or access denied"); 
+        return; 
+      }
+
+      // FIX 2: Now passing 4 arguments to join (session, id, ws, username)
+      sessionSocketManager.join(sessionId, `yjs:${userId}`, ws, username);
 
       await setupYjsConnection(ws, sessionId);
 
-      console.log(`[WS] User ${userId} connected to session ${sessionId}`);
+      console.log(`[WS] User ${username} (${userId}) connected to Yjs session ${sessionId}`);
 
-ws.on("message", async (data: any, isBinary: boolean) => {
-  if (isBinary) {
-    return;
-  }
+      ws.on("message", async (data: any, isBinary: boolean) => {
+        // Yjs handles binary data, we only handle JSON chat messages here
+        if (isBinary) return;
 
-  try {
-    const msgString = data.toString();
-    if (!msgString.startsWith('{')) {
-      return;
-    }
+        try {
+          const msgString = data.toString();
+          if (!msgString.startsWith('{')) return;
 
-    const parsedData = JSON.parse(msgString);
+          const parsedData = JSON.parse(msgString);
 
-    if (parsedData.type === "chat_message") {
-      const { text, username } = parsedData.payload;
-      await CollaborationSession.updateOne(
-        { sessionId },
-        { 
-          $push: { 
-            messages: { 
-              username, 
-              text, 
-              timestamp: new Date() 
-            } 
-          } 
+          if (parsedData.type === "chat_message") {
+            // FIX 3: Ensure we have fallback if payload username is missing
+            const msgUsername = parsedData.payload?.username || username;
+            const msgText = parsedData.payload?.text || "";
+
+            await CollaborationSession.updateOne(
+              { sessionId },
+              { 
+                $push: { 
+                  messages: { 
+                    username: msgUsername, 
+                    text: msgText, 
+                    timestamp: new Date() 
+                  } 
+                } 
+              }
+            );
+            sessionSocketManager.broadcastToSession(sessionId, parsedData);
+          }
+        } catch (err) {
+          // Quietly ignore malformed JSON (could be partial Yjs strings)
         }
-      );
-      sessionSocketManager.broadcastToSession(sessionId, parsedData);
-    }
-  } catch (err) {
-    console.error("[WS] Silently skipped malformed JSON or Yjs noise.");
-  }
-});
+      });
+
       ws.on("close", (code) => {
-        console.log(`[WS] User ${userId} disconnected (Code: ${code}) from session ${sessionId}`);
-        const wasGraceful = code === 1000;
-sessionSocketManager.leave(sessionId, `yjs:${userId}`);
+        console.log(`[WS] User ${userId} disconnected (Code: ${code})`);
+        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
 
       ws.on("error", (err) => {
         console.error(`[WS] Error for user ${userId}:`, err);
-sessionSocketManager.leave(sessionId, `yjs:${userId}`);
+        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
     })
     .catch((err) => {

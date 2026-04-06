@@ -68,17 +68,24 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
-     const provider = new WebsocketProvider(
-      `${wsUrl}/ws/sessions/`, 
+      // FIXED: Added username to params so the backend can extract it from the URL
+      const provider = new WebsocketProvider(
+        `${wsUrl}/ws/sessions/`, 
         sessionId,
         ydoc,
-        { params: { token } }
-    );
+        { 
+          params: { 
+            token,
+            username // This maps to ?username=... in the WebSocket URL
+          } 
+        }
+      );
 
       const setupWsFilter = () => {
         if (provider.ws) {
           const originalOnMessage = provider.ws.onmessage;
           provider.ws.onmessage = (event) => {
+            // Filter out JSON strings (chat) so they don't crash Yjs
             if (typeof event.data === "string" && event.data.startsWith("{")) {
               return;
             }
@@ -90,6 +97,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       setupWsFilter();
       provider.on("status", setupWsFilter);
       providerRef.current = provider;
+      
+      // Awareness shows the username for the cursor/presence
       provider.awareness.setLocalStateField("user", {
         name: username,
         color: "#" + Math.floor(Math.random() * 16777215).toString(16),
@@ -97,6 +106,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
+      
       const activityExtension = EditorView.updateListener.of((update) => {
         if (update.docChanged && onActivityRef.current) {
           onActivityRef.current();

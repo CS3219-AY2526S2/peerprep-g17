@@ -93,17 +93,21 @@ export default function CollaborationPage() {
     cancelCountdown();
   };
 
-  async function completeSession(shouldSave: boolean = true) {
-    if (!token || !sessionId || isRedirecting.current) return;
+ async function completeSession(shouldSave: boolean = true) {
+  if (!token || !sessionId || isRedirecting.current) return;
 
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({
-        type: "explicit_leave",
-        payload: { reason: shouldSave ? "Submitted" : "Exited" }
-      }));
-    }
-    isRedirecting.current = true;
-    terminatedRef.current = true;
+  // --- ADDED: Send explicit leave signal to the chat ---
+  if (socketRef.current?.readyState === WebSocket.OPEN) {
+    socketRef.current.send(JSON.stringify({
+      type: "explicit_leave",
+      payload: { 
+        reason: shouldSave ? "submitted the solution" : "left the session" 
+      }
+    }));
+  }
+
+  isRedirecting.current = true;
+  terminatedRef.current = true;
 
     try {
       setCompleting(true);
@@ -138,7 +142,9 @@ export default function CollaborationPage() {
   useEffect(() => {
     if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
     const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
-    const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);
+   const ws = new WebSocket(
+    `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username || "Guest"}`
+  );
     socketRef.current = ws;
     ws.onopen = () => console.log("[WS] Chat socket opened");
     ws.onmessage = (event) => {
@@ -194,7 +200,7 @@ export default function CollaborationPage() {
       finally { setLoading(false); }
     }
     load();
-  }, [sessionId, token]);
+  }, [sessionId, token, user?.username]);
 
   useEffect(() => {
     if (!session?.questionId || !token) return;
