@@ -71,22 +71,22 @@ export default function CollaborationPage() {
   }, []);
 
   const startCountdown = useCallback((seconds: number) => {
-  cancelCountdown();
-  setCountdown(seconds);
-  setWarningActive(true);
+    cancelCountdown();
+    setCountdown(seconds);
+    setWarningActive(true);
 
-  countdownTimerRef.current = setInterval(() => {
-    setCountdown((prev) => {
-      if (prev <= 1) {
-        clearInterval(countdownTimerRef.current!);
-        console.log("⏰ Timer hit zero. Auto-redirecting...");
-        window.location.href = "/match"; 
-        return 0;
-      }
-      return prev - 1;
-    });
-  }, 1000);
-}, [cancelCountdown]);
+    countdownTimerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownTimerRef.current!);
+          console.log("⏰ Timer hit zero. Auto-redirecting...");
+          window.location.href = "/match"; 
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [cancelCountdown]);
 
   const handleKeepAlive = () => {
     sendKeepAlive();
@@ -95,7 +95,13 @@ export default function CollaborationPage() {
 
   async function completeSession(shouldSave: boolean = true) {
     if (!token || !sessionId || isRedirecting.current) return;
-    
+
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: "explicit_leave",
+        payload: { reason: shouldSave ? "Submitted" : "Exited" }
+      }));
+    }
     isRedirecting.current = true;
     terminatedRef.current = true;
 
@@ -131,8 +137,9 @@ export default function CollaborationPage() {
 
   useEffect(() => {
     if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
-const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
-const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    socketRef.current = ws;
+    const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
+    const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);
+    socketRef.current = ws;
     ws.onopen = () => console.log("[WS] Chat socket opened");
     ws.onmessage = (event) => {
       if (typeof event.data !== 'string') return;
@@ -143,6 +150,9 @@ const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    soc
           data.payload.cancelled ? cancelCountdown() : startCountdown(data.payload.countdownSeconds);
         } else if (data.type === "chat_message") {
           setMessages((prev) => [...prev, data.payload]);
+        } else if (data.type === "chat_history") {
+          // --- HANDLES PERSISTED MESSAGES ON RELOAD ---
+          setMessages(data.payload);
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
@@ -165,6 +175,7 @@ const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    soc
     setSocket(ws);
     return () => { ws.close(); socketRef.current = null; cancelCountdown(); };
   }, [sessionId, token, navigate, startCountdown, cancelCountdown, user?.username]);
+
   useEffect(() => {
     if (!token || !sessionId || isRedirecting.current) return;
     async function load() {
@@ -174,6 +185,7 @@ const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    soc
         if (res.ok) {
           const json = await res.json();
           setSession(json.data);
+          // --- HYDRATE MESSAGES FROM INITIAL API LOAD ---
           if (json.data?.messages) setMessages(json.data.messages);
         } else if (res.status === 404 && !isRedirecting.current) {
           setTerminated(true);
@@ -188,8 +200,7 @@ const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    soc
     if (!session?.questionId || !token) return;
     async function loadQuestion() {
       try {
-
-const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
+        const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {

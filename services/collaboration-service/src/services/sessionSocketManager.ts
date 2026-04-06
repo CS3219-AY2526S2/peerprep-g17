@@ -151,6 +151,11 @@ export class SessionSocketManager {
       if (u.ws.readyState === WebSocket.OPEN) u.ws.send(JSON.stringify(message));
     });
   }
+
+  public isUserConnected(sessionId: string, userId: string): boolean {
+    const room = this.rooms.get(sessionId);
+    return !!(room && room.users.has(userId));
+  }
 }
 
 export const sessionSocketManager = new SessionSocketManager();
