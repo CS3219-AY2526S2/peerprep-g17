@@ -37,21 +37,12 @@ export async function handleChatConnection(
   const room = chatRooms.get(sessionId)!;
   room.set(ws, username);
 
-  let isAlive = true;
+  // Keepalive ping only — no termination on missed pong
   const pingTimer = setInterval(() => {
-    if (!isAlive) {
-      console.log(`[Chat] User ${userId} ping timeout, terminating`);
-      sessionSocketManager.leave(sessionId, `chat:${userId}`);
-      room.delete(ws);
-      ws.terminate();
-      clearInterval(pingTimer);
-      return;
-    }
-    isAlive = false;
-    ws.ping();
-  }, 10000);
+    if (ws.readyState === WebSocket.OPEN) ws.ping();
+  }, 30000);
 
-  ws.on("pong", () => { isAlive = true; });
+  ws.on("pong", () => {});
 
   // HYDRATION: Load previous messages from MongoDB
   try {
@@ -65,8 +56,6 @@ export async function handleChatConnection(
   } catch (err) {
     console.error(`[Chat] History load failed:`, err);
   }
-
-  // NO AUTOMATIC JOIN MESSAGE (Quiet Join)
 
   ws.on("message", async (data) => {
     try {
@@ -133,7 +122,6 @@ export async function handleChatConnection(
     room.delete(ws);
     sessionSocketManager.leave(sessionId, `chat:${userId}`);
 
-    // QUIET RELOAD: Wait 3 seconds to check if they reconnected before announcing departure
     setTimeout(() => {
       const reconnected = sessionSocketManager.isUserConnected(sessionId, `chat:${userId}`);
       if (!reconnected) {

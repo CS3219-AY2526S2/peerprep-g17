@@ -19,8 +19,6 @@ interface SessionRoom {
 export class SessionSocketManager {
   private rooms = new Map<string, SessionRoom>();
   private terminatedSessions = new Set<string>(); 
-
-  // FIXED: Added username as the 4th parameter
   join(sessionId: string, userId: string, ws: WebSocket, username: string): void {
     if (this.terminatedSessions.has(sessionId)) {
       console.log(`[WS] Hard Blocking User ${userId} from Terminated Session ${sessionId}`);
@@ -46,39 +44,52 @@ export class SessionSocketManager {
     }
 
     const room = this.rooms.get(sessionId)!;
-    // FIXED: Correctly mapping the 3 properties into the user object
+    const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
+    const wasAlreadyConnected =
+      room.users.has(`yjs:${baseUserId}`) ||
+      room.users.has(`chat:${baseUserId}`);
     room.users.set(userId, { ws, userId, username });
+
+    if (!wasAlreadyConnected) {
+      room.users.forEach((u, id) => {
+        if (id !== userId && u.ws.readyState === WebSocket.OPEN) {
+          u.ws.send(JSON.stringify({
+            type: "peer_status_change",
+            payload: { userId: baseUserId, isConnected: true }
+          }));
+        }
+      });
+    }
   }
 
   leave(sessionId: string, userId: string, isManual: boolean = false): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;
-    
-    console.log(`[Inactivity] User left, room size: ${room.users.size}, lastActivityAt: ${room.lastActivityAt}`);
     room.users.delete(userId);
-
-    this.broadcastToSession(sessionId, {
-      type: "peer_status_change",
-      payload: { userId, isConnected: false, reason: isManual ? "manual" : "disconnect" }
-    });
-
+    const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
+    const stillConnected =
+      room.users.has(`yjs:${baseUserId}`) ||
+      room.users.has(`chat:${baseUserId}`);
+    console.log(`[Inactivity] User left, room size: ${room.users.size}, lastActivityAt: ${room.lastActivityAt}`);
+    if (!stillConnected) {
+      this.broadcastToSession(sessionId, {
+        type: "peer_status_change",
+        payload: { userId: baseUserId, isConnected: false, reason: isManual ? "manual" : "disconnect" }
+      });
+    }
     if (room.users.size === 0) {
       setTimeout(() => {
         const r = this.rooms.get(sessionId);
-        if (r && r.users.size === 0) {
-          this.cleanupRoom(sessionId);
-        }
+        if (r && r.users.size === 0) this.cleanupRoom(sessionId);
       }, 30000);
     }
   }
-
   handlePong(sessionId: string, userId: string): void {
     const room = this.rooms.get(sessionId);
     if (room && room.users.has(userId)) {
       room.lastActivityAt = Date.now();
     }
   }
-
   recordActivity(sessionId: string): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;
@@ -88,7 +99,7 @@ export class SessionSocketManager {
       clearTimeout(room.terminationTimer);
       this.broadcastToSession(sessionId, {
         type: "session_warning",
-        payload: { countdownSeconds: 60, cancelled: true }, // Fixed typo: cancelled should be true here
+        payload: { countdownSeconds: 60, cancelled: true },
       });
     }
   }

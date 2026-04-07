@@ -3,7 +3,7 @@ import { IncomingMessage } from "http";
 import { CollaborationService } from "./collaborationService";
 import { verifyTokenString } from "../middleware/authMiddleware";
 import { setupYjsConnection } from "./yjsUtils";
-import { sessionSocketManager } from "./sessionSocketManager"; 
+import { sessionSocketManager } from "./sessionSocketManager";
 import CollaborationSession from "../models/CollaborationSession";
 
 export function handleWebSocketConnection(
@@ -15,58 +15,49 @@ export function handleWebSocketConnection(
   const pathParts = url.pathname.split("/").filter(Boolean);
   const sessionId = pathParts[pathParts.length - 1];
   const token = url.searchParams.get("token");
-  
-  // FIX 1: Extract username from URL params just like we did in Chat
   const username = url.searchParams.get("username") || "User";
 
-  if (!sessionId || !token) { 
-    ws.close(4001, "Missing sessionId or token"); 
-    return; 
+  if (!sessionId || !token) {
+    ws.close(4001, "Missing sessionId or token");
+    return;
   }
 
   let userId: string;
   try {
     userId = verifyTokenString(token);
   } catch {
-    ws.close(4003, "Invalid or expired token"); 
+    ws.close(4003, "Invalid or expired token");
     return;
   }
 
   collaborationService
     .getSessionForUser(sessionId, userId)
     .then(async (session) => {
-      if (!session) { 
-        ws.close(4004, "Session not found or access denied"); 
-        return; 
+      if (!session) {
+        ws.close(4004, "Session not found or access denied");
+        return;
       }
 
-      // FIX 2: Now passing 4 arguments to join (session, id, ws, username)
       sessionSocketManager.join(sessionId, `yjs:${userId}`, ws, username);
 
       await setupYjsConnection(ws, sessionId);
 
-      let isAlive = true;
+      // Keepalive ping only — no termination on missed pong
       const pingTimer = setInterval(() => {
-      if (!isAlive) {
-        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
-        ws.terminate();
+        if (ws.readyState === WebSocket.OPEN) ws.ping();
+      }, 30000);
+
+      ws.on("pong", () => {});
+
+      ws.on("close", (code) => {
         clearInterval(pingTimer);
-        return;
-      }
-      isAlive = false;
-      ws.ping();
-    }, 10000);
-    ws.on("pong", () => { isAlive = true; });
-    ws.on("close", (code) => {
-      clearInterval(pingTimer);
-      console.log(`[WS] User ${userId} disconnected (Code: ${code})`);
-    sessionSocketManager.leave(sessionId, `yjs:${userId}`);
-});
+        console.log(`[WS] User ${userId} disconnected (Code: ${code})`);
+        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
+      });
 
       console.log(`[WS] User ${username} (${userId}) connected to Yjs session ${sessionId}`);
 
       ws.on("message", async (data: any, isBinary: boolean) => {
-        // Yjs handles binary data, we only handle JSON chat messages here
         if (isBinary) return;
 
         try {
@@ -76,20 +67,19 @@ export function handleWebSocketConnection(
           const parsedData = JSON.parse(msgString);
 
           if (parsedData.type === "chat_message") {
-            // FIX 3: Ensure we have fallback if payload username is missing
             const msgUsername = parsedData.payload?.username || username;
             const msgText = parsedData.payload?.text || "";
 
             await CollaborationSession.updateOne(
               { sessionId },
-              { 
-                $push: { 
-                  messages: { 
-                    username: msgUsername, 
-                    text: msgText, 
-                    timestamp: new Date() 
-                  } 
-                } 
+              {
+                $push: {
+                  messages: {
+                    username: msgUsername,
+                    text: msgText,
+                    timestamp: new Date(),
+                  },
+                },
               }
             );
             sessionSocketManager.broadcastToSession(sessionId, parsedData);
