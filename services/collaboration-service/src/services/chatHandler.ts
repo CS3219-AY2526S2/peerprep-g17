@@ -29,7 +29,6 @@ export async function handleChatConnection(
     return;
   }
 
-  // FIXED: Passing all 4 arguments to match the new SessionSocketManager.join
   sessionSocketManager.join(sessionId, `chat:${userId}`, ws, username);
 
   if (!chatRooms.has(sessionId)) {
@@ -37,6 +36,22 @@ export async function handleChatConnection(
   }
   const room = chatRooms.get(sessionId)!;
   room.set(ws, username);
+
+  let isAlive = true;
+  const pingTimer = setInterval(() => {
+    if (!isAlive) {
+      console.log(`[Chat] User ${userId} ping timeout, terminating`);
+      sessionSocketManager.leave(sessionId, `chat:${userId}`);
+      room.delete(ws);
+      ws.terminate();
+      clearInterval(pingTimer);
+      return;
+    }
+    isAlive = false;
+    ws.ping();
+  }, 10000);
+
+  ws.on("pong", () => { isAlive = true; });
 
   // HYDRATION: Load previous messages from MongoDB
   try {
@@ -59,7 +74,7 @@ export async function handleChatConnection(
 
       if (parsed.type === "chat_message") {
         sessionSocketManager.recordActivity(sessionId);
-        
+
         const messagePayload = {
           fromUserId: userId,
           text: parsed.payload?.text,
@@ -69,11 +84,15 @@ export async function handleChatConnection(
 
         await CollaborationSession.findOneAndUpdate(
           { sessionId },
-          { $push: { messages: { 
-              username: messagePayload.username, 
-              text: messagePayload.text || "", 
-              timestamp: new Date(messagePayload.timestamp) 
-          } } }
+          {
+            $push: {
+              messages: {
+                username: messagePayload.username,
+                text: messagePayload.text || "",
+                timestamp: new Date(messagePayload.timestamp),
+              },
+            },
+          }
         );
 
         const outgoing = JSON.stringify({ type: "chat_message", payload: messagePayload });
@@ -105,10 +124,11 @@ export async function handleChatConnection(
         sessionSocketManager.handlePong(sessionId, userId);
         ws.send(JSON.stringify({ type: "pong", payload: {}, timestamp: new Date().toISOString() }));
       }
-    } catch (err) { }
+    } catch (err) {}
   });
 
   ws.on("close", () => {
+    clearInterval(pingTimer);
     const leavingUsername = room.get(ws) || username;
     room.delete(ws);
     sessionSocketManager.leave(sessionId, `chat:${userId}`);

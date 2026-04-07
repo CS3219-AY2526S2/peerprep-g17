@@ -68,7 +68,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
-      // FIXED: Added username to params so the backend can extract it from the URL
       const provider = new WebsocketProvider(
         `${wsUrl}/ws/sessions/`, 
         sessionId,
@@ -76,7 +75,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         { 
           params: { 
             token,
-            username // This maps to ?username=... in the WebSocket URL
+            username 
           } 
         }
       );
@@ -85,7 +84,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         if (provider.ws) {
           const originalOnMessage = provider.ws.onmessage;
           provider.ws.onmessage = (event) => {
-            // Filter out JSON strings (chat) so they don't crash Yjs
             if (typeof event.data === "string" && event.data.startsWith("{")) {
               return;
             }

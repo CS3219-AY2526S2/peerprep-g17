@@ -4,7 +4,7 @@ import { config } from "../config";
 interface ConnectedUser {
   ws: WebSocket;
   userId: string;
-  username: string; // Interface requires this
+  username: string;
 }
 
 interface SessionRoom {

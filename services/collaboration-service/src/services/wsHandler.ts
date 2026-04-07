@@ -45,6 +45,24 @@ export function handleWebSocketConnection(
 
       await setupYjsConnection(ws, sessionId);
 
+      let isAlive = true;
+      const pingTimer = setInterval(() => {
+      if (!isAlive) {
+        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
+        ws.terminate();
+        clearInterval(pingTimer);
+        return;
+      }
+      isAlive = false;
+      ws.ping();
+    }, 10000);
+    ws.on("pong", () => { isAlive = true; });
+    ws.on("close", (code) => {
+      clearInterval(pingTimer);
+      console.log(`[WS] User ${userId} disconnected (Code: ${code})`);
+    sessionSocketManager.leave(sessionId, `yjs:${userId}`);
+});
+
       console.log(`[WS] User ${username} (${userId}) connected to Yjs session ${sessionId}`);
 
       ws.on("message", async (data: any, isBinary: boolean) => {
@@ -79,11 +97,6 @@ export function handleWebSocketConnection(
         } catch (err) {
           // Quietly ignore malformed JSON (could be partial Yjs strings)
         }
-      });
-
-      ws.on("close", (code) => {
-        console.log(`[WS] User ${userId} disconnected (Code: ${code})`);
-        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
 
       ws.on("error", (err) => {

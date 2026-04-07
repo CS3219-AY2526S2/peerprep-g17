@@ -50,7 +50,7 @@ export default function CollaborationPage() {
   const [completing, setCompleting] = useState(false);
   const [question, setQuestion] = useState<any>(null);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(null);
-
+  const [peerOnline, setPeerOnline] = useState(true)
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -157,8 +157,9 @@ export default function CollaborationPage() {
         } else if (data.type === "chat_message") {
           setMessages((prev) => [...prev, data.payload]);
         } else if (data.type === "chat_history") {
-          // --- HANDLES PERSISTED MESSAGES ON RELOAD ---
           setMessages(data.payload);
+        } else if (data.type === "peer_status_change") {
+          setPeerOnline(data.payload.isConnected);
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
@@ -400,7 +401,13 @@ export default function CollaborationPage() {
         </div>
 
         <div className="w-full md:w-80 flex flex-col border rounded-xl bg-card shadow-lg h-[600px]">
-          <div className="p-4 border-b font-bold text-[10px] uppercase text-muted-foreground">Session Chat</div>
+          <div className="p-4 border-b font-bold text-[10px] uppercase text-muted-foreground flex items-center justify-between">
+            Session Chat
+            <span className="flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-full ${peerOnline ? "bg-green-500" : "bg-zinc-500"}`} />
+              <span className="normal-case font-normal">{peerOnline ? "Peer online" : "Peer offline"}</span>
+            </span>
+          </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages?.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.username === user?.username ? "items-end" : "items-start"}`}>
