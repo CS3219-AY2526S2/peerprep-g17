@@ -32,7 +32,6 @@ export class SessionSocketManager {
       setTimeout(() => ws.close(4000, "Session terminated"), 150);
       return;
     }
-
     if (!this.rooms.has(sessionId)) {
       this.rooms.set(sessionId, {
         sessionId,
@@ -42,14 +41,12 @@ export class SessionSocketManager {
       });
       this.startInactivityCheck(sessionId);
     }
-
     const room = this.rooms.get(sessionId)!;
     const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
     const wasAlreadyConnected =
       room.users.has(`yjs:${baseUserId}`) ||
       room.users.has(`chat:${baseUserId}`);
     room.users.set(userId, { ws, userId, username });
-
     if (!wasAlreadyConnected) {
       room.users.forEach((u, id) => {
         if (id !== userId && u.ws.readyState === WebSocket.OPEN) {
@@ -60,8 +57,22 @@ export class SessionSocketManager {
         }
       });
     }
+    if (userId.startsWith("chat:")) {
+      const onlineUsers = new Set<string>();
+      room.users.forEach((_, id) => {
+        const base = id.replace(/^(yjs:|chat:)/, "");
+        if (base !== baseUserId) onlineUsers.add(base);
+      });
+      onlineUsers.forEach(peerId => {
+        try {
+          ws.send(JSON.stringify({
+            type: "peer_status_change",
+            payload: { userId: peerId, isConnected: true }
+          }));
+        } catch (_) {}
+      });
+    }
   }
-
   leave(sessionId: string, userId: string, isManual: boolean = false): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;
@@ -77,6 +88,7 @@ export class SessionSocketManager {
         payload: { userId: baseUserId, isConnected: false, reason: isManual ? "manual" : "disconnect" }
       });
     }
+
     if (room.users.size === 0) {
       setTimeout(() => {
         const r = this.rooms.get(sessionId);
@@ -84,12 +96,14 @@ export class SessionSocketManager {
       }, 30000);
     }
   }
+
   handlePong(sessionId: string, userId: string): void {
     const room = this.rooms.get(sessionId);
     if (room && room.users.has(userId)) {
       room.lastActivityAt = Date.now();
     }
   }
+
   recordActivity(sessionId: string): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;

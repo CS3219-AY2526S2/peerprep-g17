@@ -50,7 +50,8 @@ export default function CollaborationPage() {
   const [completing, setCompleting] = useState(false);
   const [question, setQuestion] = useState<any>(null);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(null);
-  const [peerOnline, setPeerOnline] = useState(true)
+  const [peerOnline, setPeerOnline] = useState(false);
+
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -159,7 +160,9 @@ export default function CollaborationPage() {
         } else if (data.type === "chat_history") {
           setMessages(data.payload);
         } else if (data.type === "peer_status_change") {
-          setPeerOnline(data.payload.isConnected);
+          if (data.payload.userId !== user?.id) {
+            setPeerOnline(data.payload.isConnected);
+          }
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
