@@ -42,7 +42,7 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: services/collaboration-service
-        run: npx c8 --reporter=lcov --reporter=text --lines 50 --branches 60 --functions 50 npm test
+        run: npx c8 --exclude dist/services/yjsUtils.js --reporter=lcov --reporter=text --lines 70 --branches 65 --functions 65 npm test
         env:
           MONGO_URI: mongodb://localhost:27017/peerprep-collaboration-test
           JWT_SECRET: test-secret

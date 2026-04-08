@@ -311,7 +311,7 @@ test("allows matching the immediate previous partner after the rematch cooldown"
 
   const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
-    difficulty: "Medium",
+    difficulty: "Easy",
   });
 
   assert.equal(resultA.matched, true);
