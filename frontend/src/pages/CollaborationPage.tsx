@@ -10,6 +10,8 @@ import CodeEditor from "./CollaborationEditor";
 import type { CodeEditorHandle } from "./CollaborationEditor";
 import { QUESTION_API_URL } from "@/config";
 
+const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
+
 function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; onKeepAlive: () => void; }) {
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
@@ -29,6 +31,8 @@ function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; 
 }
 
 export default function CollaborationPage() {
+  const CHAT_RECONNECT_DELAY_MS = 2000;
+  const CHAT_MAX_RECONNECT_ATTEMPTS = 10;
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
@@ -37,7 +41,6 @@ export default function CollaborationPage() {
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [socket, setSocket] = useState<WebSocket | null>(null);
   const [terminated, setTerminated] = useState(false);
   const [warningActive, setWarningActive] = useState(false);
   const [countdown, setCountdown] = useState(0);
@@ -55,9 +58,19 @@ export default function CollaborationPage() {
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatCleanupRef = useRef(false);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const terminatedRef = useRef(false);
   const isRedirecting = useRef(false);
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
 
   const sendKeepAlive = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -90,8 +103,8 @@ export default function CollaborationPage() {
   }, [cancelCountdown]);
 
   const handleKeepAlive = () => {
-    sendKeepAlive();
     cancelCountdown();
+    sendKeepAlive();
   };
 
  async function completeSession(shouldSave: boolean = true) {
@@ -115,21 +128,41 @@ export default function CollaborationPage() {
       const collabUrl = shouldSave 
         ? `${COLLABORATION_API_URL}/sessions/${sessionId}/complete`
         : `${COLLABORATION_API_URL}/sessions/${sessionId}`;
+      const code = editorRef.current?.getCode() ?? "";
 
-      await fetch(collabUrl, {
+      const collabRes = await fetch(collabUrl, {
         method: shouldSave ? "POST" : "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code }),
       });
-      await fetch(`${MATCHING_API_URL}/requests/me/session`, {
+      if (!collabRes.ok) {
+        const json = await collabRes.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to complete session.");
+      }
+
+      const matchingRes = await fetch(`${MATCHING_API_URL}/requests/me/session`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!matchingRes.ok) {
+        const json = await matchingRes.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to clear match state.");
+      }
 
     } catch (err) {
       console.error("Cleanup failed:", err);
+      setError(err instanceof Error ? err.message : "Failed to end session.");
+      isRedirecting.current = false;
+      terminatedRef.current = false;
     } finally {
       setCompleting(false);
-      window.location.href = "/match";
+      if (isRedirecting.current) {
+        localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+        window.location.href = "/match";
+      }
     }
   }
 
@@ -140,14 +173,36 @@ export default function CollaborationPage() {
     else if (mode === "leave") await completeSession(false);
   };
 
-  useEffect(() => {
-    if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
+  const connectChatSocket = useCallback(() => {
+    if (
+      !token ||
+      !sessionId ||
+      terminatedRef.current ||
+      isRedirecting.current ||
+      chatCleanupRef.current
+    ) {
+      return;
+    }
+
+    const currentSocket = socketRef.current;
+    if (
+      currentSocket &&
+      (currentSocket.readyState === WebSocket.OPEN ||
+        currentSocket.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
     const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
-   const ws = new WebSocket(
-    `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username || "Guest"}`
-  );
+    const ws = new WebSocket(
+      `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username || "Guest"}`
+    );
     socketRef.current = ws;
-    ws.onopen = () => console.log("[WS] Chat socket opened");
+    ws.onopen = () => {
+      reconnectAttemptsRef.current = 0;
+      clearReconnectTimer();
+      console.log("[WS] Chat socket opened");
+    };
     ws.onmessage = (event) => {
       if (typeof event.data !== 'string') return;
       try {
@@ -166,6 +221,7 @@ export default function CollaborationPage() {
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
+          localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
           editorRef.current?.disconnect();
           setTerminated(true);
           setTimeout(() => navigate("/match"), 3000);
@@ -175,16 +231,58 @@ export default function CollaborationPage() {
 
     ws.onclose = (e) => {
       console.log("[WS] Chat socket closed", e.code, e.reason);
-      setSocket(null);
+      if (socketRef.current === ws) {
+        socketRef.current = null;
+      }
       if (terminatedRef.current && !isRedirecting.current) {
         isRedirecting.current = true;
         navigate("/match");
+        return;
       }
+
+      if (
+        chatCleanupRef.current ||
+        isRedirecting.current ||
+        terminatedRef.current ||
+        reconnectAttemptsRef.current >= CHAT_MAX_RECONNECT_ATTEMPTS
+      ) {
+        return;
+      }
+
+      reconnectAttemptsRef.current += 1;
+      clearReconnectTimer();
+      reconnectTimerRef.current = setTimeout(() => {
+        connectChatSocket();
+      }, CHAT_RECONNECT_DELAY_MS * reconnectAttemptsRef.current);
     };
-    ws.onerror = (e) => console.log("[WS] Chat socket error", e);
-    setSocket(ws);
-    return () => { ws.close(); socketRef.current = null; cancelCountdown(); };
-  }, [sessionId, token, navigate, startCountdown, cancelCountdown, user?.username]);
+    ws.onerror = (e) => {
+      console.log("[WS] Chat socket error", e);
+      ws.close();
+    };
+  }, [clearReconnectTimer, navigate, sessionId, token, user?.username]);
+
+  useEffect(() => {
+    if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
+    chatCleanupRef.current = false;
+    localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, sessionId);
+    connectChatSocket();
+
+    const handleOnline = () => {
+      reconnectAttemptsRef.current = 0;
+      connectChatSocket();
+    };
+
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      chatCleanupRef.current = true;
+      window.removeEventListener("online", handleOnline);
+      clearReconnectTimer();
+      socketRef.current?.close();
+      socketRef.current = null;
+      cancelCountdown();
+    };
+  }, [cancelCountdown, clearReconnectTimer, connectChatSocket, sessionId, token]);
 
   useEffect(() => {
     if (!token || !sessionId || isRedirecting.current) return;
@@ -198,6 +296,7 @@ export default function CollaborationPage() {
           // --- HYDRATE MESSAGES FROM INITIAL API LOAD ---
           if (json.data?.messages) setMessages(json.data.messages);
         } else if (res.status === 404 && !isRedirecting.current) {
+          localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
           setTerminated(true);
         }
       } catch (_) { setError("Failed to load session."); }
@@ -221,12 +320,18 @@ export default function CollaborationPage() {
     }
     loadQuestion();
   }, [session?.questionId, token]);
+
+  useEffect(() => {
+    if (terminated) {
+      localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+    }
+  }, [terminated]);
   
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const sendMessage = () => {
-    if (socket && chatInput.trim() && !terminated) {
-      socket.send(JSON.stringify({ type: "chat_message", payload: { text: chatInput, username: user?.username } }));
+    if (socketRef.current?.readyState === WebSocket.OPEN && chatInput.trim() && !terminated) {
+      socketRef.current.send(JSON.stringify({ type: "chat_message", payload: { text: chatInput, username: user?.username } }));
       setChatInput("");
       handleKeepAlive();
     }

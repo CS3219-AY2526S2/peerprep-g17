@@ -118,26 +118,10 @@ export async function handleChatConnection(
 
   ws.on("close", () => {
     clearInterval(pingTimer);
-    const leavingUsername = room.get(ws) || username;
     room.delete(ws);
     sessionSocketManager.leave(sessionId, `chat:${userId}`);
 
     setTimeout(() => {
-      const reconnected = sessionSocketManager.isUserConnected(sessionId, `chat:${userId}`);
-      if (!reconnected) {
-        const leaveMsg = JSON.stringify({
-          type: "chat_message",
-          payload: {
-            fromUserId: "SYSTEM",
-            username: "System",
-            text: `${leavingUsername} has left the chat`,
-            timestamp: new Date().toISOString(),
-          },
-        });
-        room.forEach((_, client) => {
-          if (client.readyState === WebSocket.OPEN) client.send(leaveMsg);
-        });
-      }
       if (room.size === 0) chatRooms.delete(sessionId);
     }, 3000);
   });

@@ -66,6 +66,11 @@ export function handleWebSocketConnection(
 
           const parsedData = JSON.parse(msgString);
 
+          if (parsedData.type === "keep_alive") {
+            sessionSocketManager.recordActivity(sessionId);
+            return;
+          }
+
           if (parsedData.type === "chat_message") {
             const msgUsername = parsedData.payload?.username || username;
             const msgText = parsedData.payload?.text || "";

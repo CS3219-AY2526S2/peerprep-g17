@@ -19,6 +19,29 @@ interface SessionRoom {
 export class SessionSocketManager {
   private rooms = new Map<string, SessionRoom>();
   private terminatedSessions = new Set<string>(); 
+
+  private getDistinctConnectedUserCount(room: SessionRoom): number {
+    const baseUsers = new Set<string>();
+    room.users.forEach((_, id) => {
+      baseUsers.add(id.replace(/^(yjs:|chat:)/, ""));
+    });
+    return baseUsers.size;
+  }
+
+  private cancelWarning(sessionId: string, room: SessionRoom): void {
+    if (!room.warningActive) {
+      return;
+    }
+
+    room.warningActive = false;
+    clearTimeout(room.terminationTimer);
+    room.terminationTimer = undefined;
+    this.broadcastToSession(sessionId, {
+      type: "session_warning",
+      payload: { countdownSeconds: 0, cancelled: true },
+    });
+  }
+
   join(sessionId: string, userId: string, ws: WebSocket, username: string): void {
     if (this.terminatedSessions.has(sessionId)) {
       console.log(`[WS] Hard Blocking User ${userId} from Terminated Session ${sessionId}`);
@@ -47,6 +70,10 @@ export class SessionSocketManager {
       room.users.has(`yjs:${baseUserId}`) ||
       room.users.has(`chat:${baseUserId}`);
     room.users.set(userId, { ws, userId, username });
+    room.lastActivityAt = Date.now();
+    if (this.getDistinctConnectedUserCount(room) >= 2) {
+      this.cancelWarning(sessionId, room);
+    }
     if (!wasAlreadyConnected) {
       room.users.forEach((u, id) => {
         if (id !== userId && u.ws.readyState === WebSocket.OPEN) {
@@ -89,6 +116,10 @@ export class SessionSocketManager {
       });
     }
 
+    if (this.getDistinctConnectedUserCount(room) < 2) {
+      this.cancelWarning(sessionId, room);
+    }
+
     if (room.users.size === 0) {
       setTimeout(() => {
         const r = this.rooms.get(sessionId);
@@ -108,14 +139,7 @@ export class SessionSocketManager {
     const room = this.rooms.get(sessionId);
     if (!room) return;
     room.lastActivityAt = Date.now();
-    if (room.warningActive) {
-      room.warningActive = false;
-      clearTimeout(room.terminationTimer);
-      this.broadcastToSession(sessionId, {
-        type: "session_warning",
-        payload: { countdownSeconds: 60, cancelled: true },
-      });
-    }
+    this.cancelWarning(sessionId, room);
   }
 
   private startInactivityCheck(sessionId: string): void {
@@ -124,6 +148,10 @@ export class SessionSocketManager {
     room.inactivityCheckTimer = setInterval(() => {
       const r = this.rooms.get(sessionId);
       if (!r || r.users.size === 0) return;
+      if (this.getDistinctConnectedUserCount(r) < 2) {
+        this.cancelWarning(sessionId, r);
+        return;
+      }
       const idleMs = Date.now() - r.lastActivityAt;
       if (idleMs > 25 * 60 * 1000 && !r.warningActive) { 
         r.warningActive = true;

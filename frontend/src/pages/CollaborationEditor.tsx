@@ -6,6 +6,7 @@ import { EditorView, basicSetup } from "codemirror";
 import { python } from "@codemirror/lang-python";
 import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
+import type { Awareness } from "y-protocols/awareness";
 
 interface EditorProps {
   sessionId: string;
@@ -102,6 +103,28 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         color: "#" + Math.floor(Math.random() * 16777215).toString(16),
       });
 
+      const filteredAwareness = new Proxy(provider.awareness as Awareness, {
+        get(target, prop, receiver) {
+          if (prop === "getStates") {
+            return () => {
+              const states = target.getStates();
+              const filtered = new Map(states);
+              filtered.forEach((state, clientId) => {
+                if (
+                  clientId !== target.doc.clientID &&
+                  state?.user?.name === username
+                ) {
+                  filtered.delete(clientId);
+                }
+              });
+              return filtered;
+            };
+          }
+
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
       
@@ -116,7 +139,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
           basicSetup,
           python(),
           oneDark,
-          yCollab(ytext, provider.awareness),
+          yCollab(ytext, filteredAwareness),
           activityExtension,
           EditorView.theme({ "&": { height: "450px" } }),
         ],
