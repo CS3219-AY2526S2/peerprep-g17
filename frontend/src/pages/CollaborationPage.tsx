@@ -42,6 +42,7 @@ export default function CollaborationPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [terminated, setTerminated] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [warningActive, setWarningActive] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [output, setOutput] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export default function CollaborationPage() {
   const [chatStatus, setChatStatus] = useState<"connecting" | "connected" | "reconnecting" | "offline">(
     typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting"
   );
+  const [editorStatus, setEditorStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
 
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -234,6 +236,7 @@ export default function CollaborationPage() {
           isRedirecting.current = true;
           localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
           editorRef.current?.disconnect();
+          setSessionUnavailable(false);
           setTerminated(true);
           setTimeout(() => navigate("/match"), 3000);
         }
@@ -314,17 +317,29 @@ export default function CollaborationPage() {
     async function load() {
       try {
         setLoading(true);
+        setSessionUnavailable(false);
+        setError("");
         const res = await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           const json = await res.json();
           setSession(json.data);
+          setSessionUnavailable(false);
           // --- HYDRATE MESSAGES FROM INITIAL API LOAD ---
           if (json.data?.messages) setMessages(json.data.messages);
         } else if (res.status === 404 && !isRedirecting.current) {
-          localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
-          setTerminated(true);
+          setSession(null);
+          setSessionUnavailable(true);
+          setError("The collaboration session is unavailable right now.");
+        } else {
+          setSession(null);
+          setSessionUnavailable(true);
+          setError("Unable to reach the collaboration service right now.");
         }
-      } catch (_) { setError("Failed to load session."); }
+      } catch (_) {
+        setSession(null);
+        setSessionUnavailable(true);
+        setError("Unable to reach the collaboration service right now.");
+      }
       finally { setLoading(false); }
     }
     load();
@@ -491,8 +506,16 @@ export default function CollaborationPage() {
                       sessionId={session.sessionId} 
                       username={user?.username || "Guest"} 
                       token={token || ""} 
-                      onActivity={sendActivity} 
+                      onActivity={sendActivity}
+                      onConnectionStatusChange={setEditorStatus}
                     />
+                    {editorStatus !== "connected" && (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                        {editorStatus === "connecting"
+                          ? "Shared editor connecting..."
+                          : "Shared editor disconnected. Your chat may still work while code sync reconnects."}
+                      </div>
+                    )}
                   </div>
 
                   {(output || runError) && (
@@ -516,6 +539,16 @@ export default function CollaborationPage() {
                       {explanation && <div className="text-foreground/80 whitespace-pre-wrap">{explanation}</div>}
                     </div>
                   )}
+                </div>
+              ) : sessionUnavailable ? (
+                <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">
+                  <p className="text-xl font-black uppercase text-zinc-500">Connection Lost</p>
+                  <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+                    The collaboration service is unavailable right now. This session has not been confirmed as ended.
+                  </p>
+                  <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                    Retry Connection
+                  </Button>
                 </div>
               ) : (
                 <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">

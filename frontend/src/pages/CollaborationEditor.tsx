@@ -13,6 +13,7 @@ interface EditorProps {
   username: string;
   token: string;
   onActivity?: () => void;
+  onConnectionStatusChange?: (status: "connecting" | "connected" | "disconnected") => void;
 }
 
 export interface CodeEditorHandle {
@@ -22,7 +23,7 @@ export interface CodeEditorHandle {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
-  ({ sessionId, username, token, onActivity }, ref) => {
+  ({ sessionId, username, token, onActivity, onConnectionStatusChange }, ref) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
@@ -81,6 +82,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         }
       );
 
+      onConnectionStatusChange?.("connecting");
+
       const setupWsFilter = () => {
         if (provider.ws) {
           const originalOnMessage = provider.ws.onmessage;
@@ -93,8 +96,13 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         }
       };
 
+      const handleProviderStatus = (event: { status: "connected" | "disconnected" | "connecting" }) => {
+        onConnectionStatusChange?.(event.status);
+      };
+
       setupWsFilter();
       provider.on("status", setupWsFilter);
+      provider.on("status", handleProviderStatus);
       providerRef.current = provider;
       
       // Awareness shows the username for the cursor/presence
@@ -150,12 +158,14 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       return () => {
         provider.off("status", setupWsFilter);
+        provider.off("status", handleProviderStatus);
+        onConnectionStatusChange?.("disconnected");
         provider.disconnect();
         provider.destroy();
         ydoc.destroy();
         view.destroy();
       };
-    }, [sessionId, username, token]);
+    }, [sessionId, username, token, onConnectionStatusChange]);
 
     return (
       <div
