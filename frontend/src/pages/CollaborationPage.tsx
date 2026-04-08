@@ -33,6 +33,7 @@ function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; 
 export default function CollaborationPage() {
   const CHAT_RECONNECT_DELAY_MS = 2000;
   const CHAT_MAX_RECONNECT_ATTEMPTS = 10;
+  const SESSION_RETRY_DELAY_MS = 3000;
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
@@ -65,6 +66,7 @@ export default function CollaborationPage() {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatCleanupRef = useRef(false);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const terminatedRef = useRef(false);
@@ -74,6 +76,13 @@ export default function CollaborationPage() {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const clearSessionRetryTimer = useCallback(() => {
+    if (sessionRetryTimerRef.current) {
+      clearTimeout(sessionRetryTimerRef.current);
+      sessionRetryTimerRef.current = null;
     }
   }, []);
 
@@ -227,6 +236,11 @@ export default function CollaborationPage() {
           setMessages((prev) => [...prev, data.payload]);
         } else if (data.type === "chat_history") {
           setMessages(data.payload);
+        } else if (data.type === "peer_status_snapshot") {
+          const onlineUserIds: string[] = data.payload?.onlineUserIds ?? [];
+          setPeerOnline(
+            onlineUserIds.some((onlineUserId) => onlineUserId !== user?.id),
+          );
         } else if (data.type === "peer_status_change") {
           if (data.payload.userId !== user?.id) {
             setPeerOnline(data.payload.isConnected);
@@ -307,43 +321,65 @@ export default function CollaborationPage() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       clearReconnectTimer();
+      clearSessionRetryTimer();
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [clearReconnectTimer, connectChatSocket, sessionId, token]);
+  }, [clearReconnectTimer, clearSessionRetryTimer, connectChatSocket, sessionId, token]);
 
-  useEffect(() => {
+  const loadSession = useCallback(async () => {
     if (!token || !sessionId || isRedirecting.current) return;
-    async function load() {
-      try {
-        setLoading(true);
+
+    try {
+      setLoading(true);
+      setSessionUnavailable(false);
+      setError("");
+      const res = await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSession(json.data);
         setSessionUnavailable(false);
-        setError("");
-        const res = await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const json = await res.json();
-          setSession(json.data);
-          setSessionUnavailable(false);
-          // --- HYDRATE MESSAGES FROM INITIAL API LOAD ---
-          if (json.data?.messages) setMessages(json.data.messages);
-        } else if (res.status === 404 && !isRedirecting.current) {
-          setSession(null);
-          setSessionUnavailable(true);
-          setError("The collaboration session is unavailable right now.");
-        } else {
-          setSession(null);
-          setSessionUnavailable(true);
-          setError("Unable to reach the collaboration service right now.");
-        }
-      } catch (_) {
+        clearSessionRetryTimer();
+        if (json.data?.messages) setMessages(json.data.messages);
+      } else if (res.status === 404 && !isRedirecting.current) {
+        setSession(null);
+        setSessionUnavailable(true);
+        setError("The collaboration session is unavailable right now.");
+      } else {
         setSession(null);
         setSessionUnavailable(true);
         setError("Unable to reach the collaboration service right now.");
       }
-      finally { setLoading(false); }
+    } catch (_) {
+      setSession(null);
+      setSessionUnavailable(true);
+      setError("Unable to reach the collaboration service right now.");
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, [sessionId, token, user?.username]);
+  }, [clearSessionRetryTimer, sessionId, token]);
+
+  useEffect(() => {
+    void loadSession();
+  }, [loadSession, user?.username]);
+
+  useEffect(() => {
+    if (!sessionUnavailable || terminated || isRedirecting.current) {
+      clearSessionRetryTimer();
+      return;
+    }
+
+    clearSessionRetryTimer();
+    sessionRetryTimerRef.current = setTimeout(() => {
+      void loadSession();
+    }, SESSION_RETRY_DELAY_MS);
+
+    return () => {
+      clearSessionRetryTimer();
+    };
+  }, [clearSessionRetryTimer, loadSession, sessionUnavailable, terminated]);
 
   useEffect(() => {
     if (!session?.questionId || !token) return;
@@ -540,15 +576,21 @@ export default function CollaborationPage() {
                     </div>
                   )}
                 </div>
-              ) : sessionUnavailable ? (
+              ) : !terminated && (loading || sessionUnavailable) ? (
                 <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">
-                  <p className="text-xl font-black uppercase text-zinc-500">Connection Lost</p>
-                  <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
-                    The collaboration service is unavailable right now. This session has not been confirmed as ended.
+                  <p className="text-xl font-black uppercase text-zinc-500">
+                    {loading ? "Reconnecting" : "Connection Lost"}
                   </p>
-                  <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
-                    Retry Connection
-                  </Button>
+                  <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+                    {loading
+                      ? "Trying to restore the collaboration session..."
+                      : "The collaboration service is unavailable right now. This session has not been confirmed as ended."}
+                  </p>
+                  {!loading && (
+                    <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                      Retry Connection
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">

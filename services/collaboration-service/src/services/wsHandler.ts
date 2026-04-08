@@ -6,6 +6,8 @@ import { setupYjsConnection } from "./yjsUtils";
 import { sessionSocketManager } from "./sessionSocketManager";
 import CollaborationSession from "../models/CollaborationSession";
 
+const HEARTBEAT_INTERVAL_MS = 10000;
+
 export function handleWebSocketConnection(
   ws: WebSocket,
   req: IncomingMessage,
@@ -55,7 +57,7 @@ export function handleWebSocketConnection(
 
         isAlive = false;
         ws.ping();
-      }, 30000);
+      }, HEARTBEAT_INTERVAL_MS);
 
       ws.on("pong", () => {
         isAlive = true;

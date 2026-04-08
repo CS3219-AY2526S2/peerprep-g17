@@ -5,6 +5,7 @@ import { sessionSocketManager } from "./sessionSocketManager";
 import CollaborationSession from "../models/CollaborationSession";
 
 const chatRooms = new Map<string, Map<WebSocket, string>>();
+const HEARTBEAT_INTERVAL_MS = 10000;
 
 export async function handleChatConnection(
   ws: WebSocket,
@@ -50,7 +51,7 @@ export async function handleChatConnection(
 
     isAlive = false;
     ws.ping();
-  }, 30000);
+  }, HEARTBEAT_INTERVAL_MS);
 
   ws.on("pong", () => {
     isAlive = true;
@@ -65,6 +66,18 @@ export async function handleChatConnection(
         payload: session.messages,
       }));
     }
+
+    ws.send(
+      JSON.stringify({
+        type: "peer_status_snapshot",
+        payload: {
+          onlineUserIds: sessionSocketManager.getConnectedPeerIds(
+            sessionId,
+            `chat:${userId}`,
+          ),
+        },
+      }),
+    );
   } catch (err) {
     console.error(`[Chat] History load failed:`, err);
   }

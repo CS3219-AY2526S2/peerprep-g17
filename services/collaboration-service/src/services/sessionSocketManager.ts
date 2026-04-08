@@ -217,6 +217,23 @@ export class SessionSocketManager {
     const room = this.rooms.get(sessionId);
     return !!(room && room.users.has(userId));
   }
+
+  public getConnectedPeerIds(sessionId: string, userId: string): string[] {
+    const room = this.rooms.get(sessionId);
+    if (!room) return [];
+
+    const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
+    const peerIds = new Set<string>();
+
+    room.users.forEach((_, id) => {
+      const peerId = id.replace(/^(yjs:|chat:)/, "");
+      if (peerId !== baseUserId) {
+        peerIds.add(peerId);
+      }
+    });
+
+    return Array.from(peerIds);
+  }
 }
 
 export const sessionSocketManager = new SessionSocketManager();
