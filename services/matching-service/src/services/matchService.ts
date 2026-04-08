@@ -589,10 +589,6 @@ export class MatchService {
         return null;
       }
 
-      if (recentPartnerId && candidate.userId === recentPartnerId) {
-        return null;
-      }
-
       const elapsedRequesterMs = Date.now() - requester.createdAt;
       const elapsedCandidateMs = Date.now() - candidate.createdAt;
       const requiredDistance = difficultyDistance(
@@ -603,6 +599,14 @@ export class MatchService {
         getAllowedDistance(elapsedRequesterMs),
         getAllowedDistance(elapsedCandidateMs),
       );
+
+      if (
+        recentPartnerId &&
+        candidate.userId === recentPartnerId &&
+        allowedDistance === 0
+      ) {
+        return null;
+      }
 
       if (requiredDistance > allowedDistance) {
         return null;

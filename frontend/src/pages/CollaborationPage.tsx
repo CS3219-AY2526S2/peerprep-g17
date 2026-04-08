@@ -54,6 +54,9 @@ export default function CollaborationPage() {
   const [question, setQuestion] = useState<any>(null);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(null);
   const [peerOnline, setPeerOnline] = useState(false);
+  const [chatStatus, setChatStatus] = useState<"connecting" | "connected" | "reconnecting" | "offline">(
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting"
+  );
 
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -201,6 +204,8 @@ export default function CollaborationPage() {
     ws.onopen = () => {
       reconnectAttemptsRef.current = 0;
       clearReconnectTimer();
+      setPeerOnline(false);
+      setChatStatus("connected");
       console.log("[WS] Chat socket opened");
     };
     ws.onmessage = (event) => {
@@ -234,6 +239,12 @@ export default function CollaborationPage() {
       if (socketRef.current === ws) {
         socketRef.current = null;
       }
+      setPeerOnline(false);
+      if (!navigator.onLine) {
+        setChatStatus("offline");
+      } else {
+        setChatStatus("reconnecting");
+      }
       if (terminatedRef.current && !isRedirecting.current) {
         isRedirecting.current = true;
         navigate("/match");
@@ -257,6 +268,7 @@ export default function CollaborationPage() {
     };
     ws.onerror = (e) => {
       console.log("[WS] Chat socket error", e);
+      setPeerOnline(false);
       ws.close();
     };
   }, [clearReconnectTimer, navigate, sessionId, token, user?.username]);
@@ -269,14 +281,22 @@ export default function CollaborationPage() {
 
     const handleOnline = () => {
       reconnectAttemptsRef.current = 0;
+      setChatStatus("reconnecting");
       connectChatSocket();
     };
 
+    const handleOffline = () => {
+      setChatStatus("offline");
+      setPeerOnline(false);
+    };
+
     window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
       chatCleanupRef.current = true;
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       clearReconnectTimer();
       socketRef.current?.close();
       socketRef.current = null;
@@ -511,10 +531,27 @@ export default function CollaborationPage() {
         <div className="w-full md:w-80 flex flex-col border rounded-xl bg-card shadow-lg h-[600px]">
           <div className="p-4 border-b font-bold text-[10px] uppercase text-muted-foreground flex items-center justify-between">
             Session Chat
-            <span className="flex items-center gap-1">
-              <span className={`w-2 h-2 rounded-full ${peerOnline ? "bg-green-500" : "bg-zinc-500"}`} />
-              <span className="normal-case font-normal">{peerOnline ? "Peer online" : "Peer offline"}</span>
-            </span>
+            <div className="flex flex-col items-end gap-1">
+              <span className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${chatStatus === "connected" && peerOnline ? "bg-green-500" : "bg-zinc-500"}`} />
+                <span className="normal-case font-normal">
+                  {chatStatus !== "connected"
+                    ? "Peer status unavailable"
+                    : peerOnline
+                    ? "Peer online"
+                    : "Peer offline"}
+                </span>
+              </span>
+              <span className="normal-case text-[10px] font-normal text-muted-foreground">
+                {chatStatus === "connected"
+                  ? "Chat connected"
+                  : chatStatus === "reconnecting"
+                  ? "Chat reconnecting..."
+                  : chatStatus === "offline"
+                  ? "You are offline"
+                  : "Chat connecting..."}
+              </span>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages?.map((m, i) => (
@@ -528,10 +565,25 @@ export default function CollaborationPage() {
             <div ref={scrollRef} />
           </div>
           <div className="p-4 border-t">
+            {chatStatus !== "connected" && !terminated && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {chatStatus === "offline"
+                  ? "Chat is unavailable while offline. It will reconnect when your internet comes back."
+                  : "Chat is reconnecting. Messages can be sent again once the connection is restored."}
+              </p>
+            )}
             <input 
-              disabled={terminated} 
+              disabled={terminated || chatStatus !== "connected"} 
               className="w-full bg-background border rounded px-3 py-2 text-sm" 
-              placeholder="Message..." 
+              placeholder={
+                terminated
+                  ? "Session ended"
+                  : chatStatus === "offline"
+                  ? "Offline..."
+                  : chatStatus === "connected"
+                  ? "Message..."
+                  : "Reconnecting..."
+              } 
               value={chatInput} 
               onChange={(e) => setChatInput(e.target.value)} 
               onKeyDown={(e) => e.key === "Enter" && sendMessage()} 

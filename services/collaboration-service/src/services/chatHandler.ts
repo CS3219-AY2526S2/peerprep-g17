@@ -37,12 +37,24 @@ export async function handleChatConnection(
   const room = chatRooms.get(sessionId)!;
   room.set(ws, username);
 
-  // Keepalive ping only — no termination on missed pong
+  let isAlive = true;
   const pingTimer = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) ws.ping();
+    if (ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    if (!isAlive) {
+      ws.terminate();
+      return;
+    }
+
+    isAlive = false;
+    ws.ping();
   }, 30000);
 
-  ws.on("pong", () => {});
+  ws.on("pong", () => {
+    isAlive = true;
+  });
 
   // HYDRATION: Load previous messages from MongoDB
   try {

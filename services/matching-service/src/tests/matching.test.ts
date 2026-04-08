@@ -248,6 +248,41 @@ test("does not match the immediate previous partner when they are at the FIFO he
   assert.equal(activeSession, null);
 });
 
+test("allows matching the immediate previous partner after relaxation begins", async () => {
+  await Session.create({
+    sessionId: "completed-session",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-arrays-easy",
+    status: "completed",
+    completedAt: new Date(),
+  });
+
+  const resultB = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  assert.equal(resultB.matched, false);
+
+  const requestIdB = await redis.get("match:user-request:user-b");
+  assert.ok(requestIdB);
+  await redis.hset(
+    `match:request:${requestIdB}`,
+    "createdAt",
+    String(Date.now() - 61000),
+  );
+
+  const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Medium",
+  });
+
+  assert.equal(resultA.matched, true);
+  assert.equal(resultA.state.status, "matched");
+});
+
 test("cancels a queued request and removes it from active state", async () => {
   await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",

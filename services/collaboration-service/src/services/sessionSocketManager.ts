@@ -153,14 +153,14 @@ export class SessionSocketManager {
         return;
       }
       const idleMs = Date.now() - r.lastActivityAt;
-      if (idleMs > 25 * 60 * 1000 && !r.warningActive) { 
+      if (idleMs > 0.5 * 60 * 1000 && !r.warningActive) { 
         r.warningActive = true;
         this.broadcastToSession(sessionId, {
           type: "session_warning",
-          payload: { countdownSeconds: 300, cancelled: false },
+          payload: { countdownSeconds: 30, cancelled: false },
           timestamp: new Date().toISOString()
         });
-        r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 5 * 60 * 1000);
+        r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 30 * 1000);
       }
     }, 10000);
   }
