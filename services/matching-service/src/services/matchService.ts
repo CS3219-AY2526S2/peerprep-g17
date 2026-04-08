@@ -613,8 +613,8 @@ export class MatchService {
         getAllowedDistance(elapsedCandidateMs),
       );
       const recentPartnerRelaxed =
-        Math.max(elapsedRequesterMs, elapsedCandidateMs) >=
-        config.recentPartnerRelaxationMs;
+        Date.now() >=
+        Math.min(requester.recentPartnerAt, candidate.recentPartnerAt);
 
       if (
         recentPartnerId &&

@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import request from "supertest";
+import jwt from "jsonwebtoken";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { createApp } from "../app";
 import { CollaborationController } from "../controllers/collaborationController";
 import CollaborationSession from "../models/CollaborationSession";
 import Attempt from "../models/Attempt";
 import { CollaborationService } from "../services/collaborationService";
+import { config } from "../config";
 
 const originalFetch = global.fetch;
 
@@ -59,6 +61,10 @@ function createFetchMock() {
 
     throw new Error(`Unexpected fetch call: ${url}`);
   }) as typeof fetch;
+}
+
+function tokenFor(userId: string): string {
+  return jwt.sign({ id: userId }, config.jwtSecret);
 }
 
 function createTestApp() {
@@ -201,13 +207,13 @@ test("GET /api/sessions/:sessionId only returns sessions for participants", asyn
 
   const res = await request(app)
     .get("/api/sessions/session-1")
-    .set("Authorization", "Bearer user-a-token");
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`);
 
   assert.equal(res.status, 200);
 
   const forbidden = await request(app)
     .get("/api/sessions/session-1")
-    .set("Authorization", "Bearer stranger-token");
+    .set("Authorization", `Bearer ${tokenFor("stranger")}`);
 
   assert.equal(forbidden.status, 401);
 });
@@ -217,7 +223,7 @@ test("GET /api/sessions/:sessionId returns 404 for a missing session", async () 
 
   const res = await request(app)
     .get("/api/sessions/missing-session")
-    .set("Authorization", "Bearer user-a-token");
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`);
 
   assert.equal(res.status, 404);
 });
@@ -238,7 +244,7 @@ test("POST /api/sessions/:sessionId/complete completes the session", async () =>
 
   const res = await request(app)
     .post("/api/sessions/session-1/complete")
-    .set("Authorization", "Bearer user-a-token");
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`);
 
   assert.equal(res.status, 200);
   assert.equal(res.body.data.status, "completed");
@@ -264,7 +270,7 @@ test("POST /api/sessions/:sessionId/complete returns 404 for a non-participant",
 
   const res = await request(app)
     .post("/api/sessions/session-404/complete")
-    .set("Authorization", "Bearer stranger-token")
+    .set("Authorization", `Bearer ${tokenFor("stranger")}`)
     .send({ code: "print('nope')" });
 
   assert.equal(res.status, 401);
@@ -286,7 +292,7 @@ test("POST /api/sessions/:sessionId/complete saves an attempt only for the submi
 
   const res = await request(app)
     .post("/api/sessions/session-1/complete")
-    .set("Authorization", "Bearer user-a-token")
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`)
     .send({ code: "print('saved by user a')" });
 
   assert.equal(res.status, 200);
@@ -313,7 +319,7 @@ test("DELETE /api/sessions/:sessionId ends the session without creating an attem
 
   const res = await request(app)
     .delete("/api/sessions/session-2")
-    .set("Authorization", "Bearer user-b-token")
+    .set("Authorization", `Bearer ${tokenFor("user-b")}`)
     .send({ code: "print('should not be saved')" });
 
   assert.equal(res.status, 200);
@@ -354,7 +360,7 @@ test("GET /api/sessions/history only returns attempts for the authenticated user
 
   const res = await request(app)
     .get("/api/sessions/history")
-    .set("Authorization", "Bearer user-a-token");
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`);
 
   assert.equal(res.status, 200);
   assert.equal(res.body.data.length, 1);
@@ -377,7 +383,7 @@ test("POST /api/sessions/execute rejects an empty code payload", async () => {
 
   const res = await request(app)
     .post("/api/sessions/execute")
-    .set("Authorization", "Bearer user-a-token")
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`)
     .send({ code: "   " });
 
   assert.equal(res.status, 400);
@@ -406,7 +412,7 @@ test("POST /api/sessions/execute returns runtime output from piston", async () =
 
   const res = await request(app)
     .post("/api/sessions/execute")
-    .set("Authorization", "Bearer user-a-token")
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`)
     .send({ code: "print('hello')" });
 
   assert.equal(res.status, 200);
@@ -436,7 +442,7 @@ test("POST /api/sessions/execute maps piston failures to 502", async () => {
 
   const res = await request(app)
     .post("/api/sessions/execute")
-    .set("Authorization", "Bearer user-a-token")
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`)
     .send({ code: "print('hello')" });
 
   assert.equal(res.status, 502);
