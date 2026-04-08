@@ -215,7 +215,7 @@ test("GET /api/sessions/:sessionId only returns sessions for participants", asyn
     .get("/api/sessions/session-1")
     .set("Authorization", `Bearer ${tokenFor("stranger")}`);
 
-  assert.equal(forbidden.status, 401);
+  assert.equal(forbidden.status, 404);
 });
 
 test("GET /api/sessions/:sessionId returns 404 for a missing session", async () => {
@@ -244,7 +244,8 @@ test("POST /api/sessions/:sessionId/complete completes the session", async () =>
 
   const res = await request(app)
     .post("/api/sessions/session-1/complete")
-    .set("Authorization", `Bearer ${tokenFor("user-a")}`);
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`)
+    .send({});
 
   assert.equal(res.status, 200);
   assert.equal(res.body.data.status, "completed");
@@ -273,7 +274,7 @@ test("POST /api/sessions/:sessionId/complete returns 404 for a non-participant",
     .set("Authorization", `Bearer ${tokenFor("stranger")}`)
     .send({ code: "print('nope')" });
 
-  assert.equal(res.status, 401);
+  assert.equal(res.status, 404);
 });
 
 test("POST /api/sessions/:sessionId/complete saves an attempt only for the submitting user", async () => {

@@ -305,7 +305,7 @@ test("allows matching the immediate previous partner after the rematch cooldown"
   assert.ok(requestIdB);
   await redis.hset(
     `match:request:${requestIdB}`,
-    "createdAt",
+    "recentPartnerAt",
     String(Date.now() - 121000),
   );
 

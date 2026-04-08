@@ -139,7 +139,7 @@ export class CollaborationController {
       return;
     }
 
-    const { code } = req.body as {
+    const { code } = (req.body ?? {}) as {
       code?: string;
     };
 

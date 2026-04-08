@@ -527,6 +527,16 @@ export class MatchService {
     );
   }
 
+  private async scheduleRecentPartnerRelaxation(
+    request: RequestRecord,
+  ): Promise<void> {
+    await this.redis.zadd(
+      relaxationRecentPartnerZsetKey,
+      String(request.recentPartnerAt),
+      request.id,
+    );
+  }
+
   private async getRequest(requestId: string): Promise<RequestRecord | null> {
     const raw = await this.redis.hgetall(requestKey(requestId));
     if (Object.keys(raw).length === 0) {
@@ -621,6 +631,8 @@ export class MatchService {
         candidate.userId === recentPartnerId &&
         !recentPartnerRelaxed
       ) {
+        await this.scheduleRecentPartnerRelaxation(requester);
+        await this.scheduleRecentPartnerRelaxation(candidate);
         return null;
       }
 
