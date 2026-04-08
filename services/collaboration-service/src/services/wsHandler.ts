@@ -79,6 +79,11 @@ export function handleWebSocketConnection(
           const parsedData = JSON.parse(msgString);
 
           if (parsedData.type === "keep_alive") {
+            sessionSocketManager.acknowledgeWarning(sessionId);
+            return;
+          }
+
+          if (parsedData.type === "activity") {
             sessionSocketManager.recordActivity(sessionId);
             return;
           }

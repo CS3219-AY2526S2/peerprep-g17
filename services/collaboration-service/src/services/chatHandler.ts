@@ -118,6 +118,10 @@ export async function handleChatConnection(
       }
 
       if (parsed.type === "keep_alive") {
+        sessionSocketManager.acknowledgeWarning(sessionId);
+      }
+
+      if (parsed.type === "activity") {
         sessionSocketManager.recordActivity(sessionId);
       }
 

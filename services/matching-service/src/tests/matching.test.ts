@@ -248,7 +248,7 @@ test("does not match the immediate previous partner when they are at the FIFO he
   assert.equal(activeSession, null);
 });
 
-test("allows matching the immediate previous partner after relaxation begins", async () => {
+test("keeps the immediate previous partner blocked before the rematch cooldown expires", async () => {
   await Session.create({
     sessionId: "completed-session",
     userAId: "user-a",
@@ -276,11 +276,91 @@ test("allows matching the immediate previous partner after relaxation begins", a
 
   const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(resultA.matched, false);
+  assert.equal(resultA.state.status, "searching");
+});
+
+test("allows matching the immediate previous partner after the rematch cooldown", async () => {
+  await Session.create({
+    sessionId: "completed-session",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-arrays-easy",
+    status: "completed",
+    completedAt: new Date(),
+  });
+
+  const resultB = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  assert.equal(resultB.matched, false);
+
+  const requestIdB = await redis.get("match:user-request:user-b");
+  assert.ok(requestIdB);
+  await redis.hset(
+    `match:request:${requestIdB}`,
+    "createdAt",
+    String(Date.now() - 121000),
+  );
+
+  const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
     difficulty: "Medium",
   });
 
   assert.equal(resultA.matched, true);
   assert.equal(resultA.state.status, "matched");
+});
+
+test("retries queued same-partner requests when the rematch cooldown expires", async () => {
+  await Session.create({
+    sessionId: "completed-session",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-arrays-easy",
+    status: "completed",
+    completedAt: new Date(),
+  });
+
+  const resultB = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  assert.equal(resultB.matched, false);
+
+  const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  assert.equal(resultA.matched, false);
+
+  const requestIdA = await redis.get("match:user-request:user-a");
+  const requestIdB = await redis.get("match:user-request:user-b");
+  assert.ok(requestIdA);
+  assert.ok(requestIdB);
+
+  await redis.hset(`match:request:${requestIdA}`, "recentPartnerAt", String(Date.now() - 1));
+  await redis.hset(`match:request:${requestIdB}`, "recentPartnerAt", String(Date.now() - 1));
+  await redis.zadd("match:relaxation:recent-partner", String(Date.now() - 1), requestIdA!);
+  await redis.zadd("match:relaxation:recent-partner", String(Date.now() - 1), requestIdB!);
+
+  const processed = await matchService.processDueRelaxations(Date.now());
+  assert.equal(processed > 0, true);
+
+  const activeSession = await Session.findOne({ status: "active" }).sort({ createdAt: -1 });
+  assert.ok(activeSession);
+  assert.equal(
+    [activeSession.userAId, activeSession.userBId].sort().join(","),
+    ["user-a", "user-b"].sort().join(","),
+  );
 });
 
 test("cancels a queued request and removes it from active state", async () => {

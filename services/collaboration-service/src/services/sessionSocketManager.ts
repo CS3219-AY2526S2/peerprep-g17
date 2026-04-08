@@ -71,9 +71,6 @@ export class SessionSocketManager {
       room.users.has(`chat:${baseUserId}`);
     room.users.set(userId, { ws, userId, username });
     room.lastActivityAt = Date.now();
-    if (this.getDistinctConnectedUserCount(room) >= 2) {
-      this.cancelWarning(sessionId, room);
-    }
     if (!wasAlreadyConnected) {
       room.users.forEach((u, id) => {
         if (id !== userId && u.ws.readyState === WebSocket.OPEN) {
@@ -116,10 +113,6 @@ export class SessionSocketManager {
       });
     }
 
-    if (this.getDistinctConnectedUserCount(room) < 2) {
-      this.cancelWarning(sessionId, room);
-    }
-
     if (room.users.size === 0) {
       setTimeout(() => {
         const r = this.rooms.get(sessionId);
@@ -138,6 +131,15 @@ export class SessionSocketManager {
   recordActivity(sessionId: string): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;
+    if (room.warningActive) {
+      return;
+    }
+    room.lastActivityAt = Date.now();
+  }
+
+  acknowledgeWarning(sessionId: string): void {
+    const room = this.rooms.get(sessionId);
+    if (!room) return;
     room.lastActivityAt = Date.now();
     this.cancelWarning(sessionId, room);
   }
@@ -149,20 +151,19 @@ export class SessionSocketManager {
       const r = this.rooms.get(sessionId);
       if (!r || r.users.size === 0) return;
       if (this.getDistinctConnectedUserCount(r) < 2) {
-        this.cancelWarning(sessionId, r);
         return;
       }
       const idleMs = Date.now() - r.lastActivityAt;
-      if (idleMs > 0.5 * 60 * 1000 && !r.warningActive) { 
+      if (idleMs > 25 * 60 * 1000 && !r.warningActive) { 
         r.warningActive = true;
         this.broadcastToSession(sessionId, {
           type: "session_warning",
-          payload: { countdownSeconds: 30, cancelled: false },
+          payload: { countdownSeconds: 300, cancelled: false },
           timestamp: new Date().toISOString()
         });
-        r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 30 * 1000);
+        r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 5 * 60 * 1000);
       }
-    }, 10000);
+    }, 1000);
   }
 
   private async terminateSession(sessionId: string): Promise<void> {

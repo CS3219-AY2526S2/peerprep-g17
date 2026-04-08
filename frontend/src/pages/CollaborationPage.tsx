@@ -81,6 +81,12 @@ export default function CollaborationPage() {
     }
   }, []);
 
+  const sendActivity = useCallback(() => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "activity", payload: {} }));
+    }
+  }, []);
+
   const cancelCountdown = useCallback(() => {
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     setWarningActive(false);
@@ -300,9 +306,8 @@ export default function CollaborationPage() {
       clearReconnectTimer();
       socketRef.current?.close();
       socketRef.current = null;
-      cancelCountdown();
     };
-  }, [cancelCountdown, clearReconnectTimer, connectChatSocket, sessionId, token]);
+  }, [clearReconnectTimer, connectChatSocket, sessionId, token]);
 
   useEffect(() => {
     if (!token || !sessionId || isRedirecting.current) return;
@@ -353,7 +358,7 @@ export default function CollaborationPage() {
     if (socketRef.current?.readyState === WebSocket.OPEN && chatInput.trim() && !terminated) {
       socketRef.current.send(JSON.stringify({ type: "chat_message", payload: { text: chatInput, username: user?.username } }));
       setChatInput("");
-      handleKeepAlive();
+      sendActivity();
     }
   };
 
@@ -486,7 +491,7 @@ export default function CollaborationPage() {
                       sessionId={session.sessionId} 
                       username={user?.username || "Guest"} 
                       token={token || ""} 
-                      onActivity={handleKeepAlive} 
+                      onActivity={sendActivity} 
                     />
                   </div>
 
