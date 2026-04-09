@@ -464,6 +464,11 @@ class PistonExecutionRunner implements ExecutionRunner {
     source: string,
     limits: { timeLimitMs: number; memoryLimitMb: number },
   ): Promise<ExecutionRunnerResult> {
+    const effectiveTimeLimitMs = Math.min(
+      limits.timeLimitMs,
+      config.pistonMaxTimeoutMs,
+    );
+
     const response = await fetch(`${config.pistonUrl}/api/v2/execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -471,15 +476,23 @@ class PistonExecutionRunner implements ExecutionRunner {
         language: "python",
         version: "3.10.0",
         files: [{ content: source }],
-        compile_timeout: limits.timeLimitMs,
-        run_timeout: limits.timeLimitMs,
+        compile_timeout: effectiveTimeLimitMs,
+        run_timeout: effectiveTimeLimitMs,
         compile_memory_limit: limits.memoryLimitMb * 1024 * 1024,
         run_memory_limit: limits.memoryLimitMb * 1024 * 1024,
       }),
     });
 
     if (!response.ok) {
-      throw new Error("Code execution service unavailable.");
+      const errorText = truncateText(
+        normalizeRunnerText(await response.text()),
+        config.executionOutputLimitBytes,
+      );
+      throw new Error(
+        errorText
+          ? `Code execution service unavailable: ${errorText}`
+          : "Code execution service unavailable.",
+      );
     }
 
     const json = (await response.json()) as {

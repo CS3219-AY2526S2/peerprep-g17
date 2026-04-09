@@ -20,6 +20,7 @@ export const config = {
     process.env.INTERNAL_SERVICE_TOKEN || "dev-internal-service-token",
 
   pistonUrl: process.env.PISTON_URL || "http://localhost:2000",
+  pistonMaxTimeoutMs: Number(process.env.PISTON_MAX_TIMEOUT_MS) || 3_000,
   executionSourceSizeLimitBytes:
     Number(process.env.EXECUTION_SOURCE_SIZE_LIMIT_BYTES) || 100_000,
   executionOutputLimitBytes:

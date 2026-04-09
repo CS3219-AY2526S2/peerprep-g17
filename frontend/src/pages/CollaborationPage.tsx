@@ -304,6 +304,7 @@ export default function CollaborationPage() {
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const terminatedRef = useRef(false);
   const isRedirecting = useRef(false);
+  const executionStartedAtRef = useRef<string | null>(null);
 
   const sendKeepAlive = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -370,6 +371,7 @@ export default function CollaborationPage() {
             }
           : previous,
       );
+      setQuestion(null);
       setExecutionResult(null);
       setExecutionError(null);
       setExplainError(null);
@@ -378,6 +380,28 @@ export default function CollaborationPage() {
     },
     [],
   );
+
+  const applyExecutionResult = useCallback((result: ExecutionResult | null) => {
+    setExecutionResult(result);
+    setRunningMode(null);
+    setExecutionError(null);
+    if (result) {
+      executionStartedAtRef.current = result.initiatedAt;
+      setSession((previous) =>
+        previous
+          ? {
+              ...previous,
+              lastExecutionResult: result,
+              lastExecutionAt: result.initiatedAt,
+              lastSubmittedAt:
+                result.mode === "submit"
+                  ? result.initiatedAt
+                  : previous.lastSubmittedAt,
+            }
+          : previous,
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!question) {
@@ -481,13 +505,13 @@ export default function CollaborationPage() {
           setTerminated(true);
           setTimeout(() => navigate("/match"), 3000);
         } else if (data.type === "execution_started") {
+          executionStartedAtRef.current = data.payload?.initiatedAt || null;
           setRunningMode(data.payload?.mode || "run");
+          setExecutionResult(null);
           setExecutionError(null);
           setResultTab("result");
         } else if (data.type === "execution_result") {
-          setExecutionResult(data.payload);
-          setRunningMode(null);
-          setExecutionError(null);
+          applyExecutionResult(data.payload);
           setResultTab("result");
         } else if (data.type === "question_switched") {
           syncQuestionChange(
@@ -517,6 +541,7 @@ export default function CollaborationPage() {
       cancelCountdown();
     };
   }, [
+    applyExecutionResult,
     cancelCountdown,
     navigate,
     sessionId,
@@ -537,7 +562,11 @@ export default function CollaborationPage() {
         if (res.ok) {
           const json = await res.json();
           setSession(json.data);
-          setExecutionResult(json.data?.lastExecutionResult || null);
+          if (json.data?.lastExecutionResult) {
+            applyExecutionResult(json.data.lastExecutionResult);
+          } else {
+            setExecutionResult(null);
+          }
           if (json.data?.messages) setMessages(json.data.messages);
         } else if (res.status === 404 && !isRedirecting.current) {
           setTerminated(true);
@@ -550,7 +579,71 @@ export default function CollaborationPage() {
     }
 
     void load();
-  }, [sessionId, token]);
+  }, [applyExecutionResult, sessionId, token]);
+
+  useEffect(() => {
+    if (!runningMode || !token || !sessionId || terminatedRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const response = await fetch(
+          `${COLLABORATION_API_URL}/sessions/${sessionId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const json = await response.json();
+        const latestResult = json.data?.lastExecutionResult as
+          | ExecutionResult
+          | null
+          | undefined;
+
+        if (
+          latestResult &&
+          (!executionStartedAtRef.current ||
+            new Date(latestResult.initiatedAt).getTime() >=
+              new Date(executionStartedAtRef.current).getTime())
+        ) {
+          setSession(json.data);
+          applyExecutionResult(latestResult);
+          return;
+        }
+
+        if (attempts >= 12) {
+          setRunningMode(null);
+          setExecutionError(
+            "Execution finished but the shared result did not sync in time. Please run again.",
+          );
+        }
+      } catch {
+        if (attempts >= 12) {
+          setRunningMode(null);
+        }
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void poll();
+    }, 1500);
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [applyExecutionResult, runningMode, sessionId, token]);
 
   useEffect(() => {
     if (!session?.questionId || !token) return;
@@ -558,6 +651,7 @@ export default function CollaborationPage() {
 
     async function loadQuestion() {
       try {
+        setQuestion(null);
         const res = await fetch(`${QUESTION_API_URL}/${questionId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -690,7 +784,7 @@ export default function CollaborationPage() {
         return;
       }
 
-      setExecutionResult(json.data);
+      applyExecutionResult(json.data);
     } catch (err) {
       setExecutionError(
         err instanceof Error ? err.message : `Failed to ${mode} code.`,
@@ -961,14 +1055,21 @@ export default function CollaborationPage() {
                         </Button>
                       </div>
                     </div>
-                    <CodeEditor
-                      ref={editorRef}
-                      sessionId={session.sessionId}
-                      username={user?.username || "Guest"}
-                      token={token || ""}
-                      initialCode={question?.starterCode?.python ?? ""}
-                      onActivity={handleKeepAlive}
-                    />
+                    {question ? (
+                      <CodeEditor
+                        key={`${session.sessionId}:${question.id}`}
+                        ref={editorRef}
+                        sessionId={session.sessionId}
+                        username={user?.username || "Guest"}
+                        token={token || ""}
+                        initialCode={question.starterCode?.python ?? ""}
+                        onActivity={handleKeepAlive}
+                      />
+                    ) : (
+                      <div className="flex h-[450px] items-center justify-center rounded-md border bg-background text-sm text-muted-foreground shadow-inner">
+                        Loading shared starter code...
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4 rounded-xl border border-border/60 bg-card/70 p-4">
