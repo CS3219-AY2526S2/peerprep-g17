@@ -10,6 +10,7 @@ import {
   CollaborationSessionPayload,
   DIFFICULTIES,
   ExecutionRequestBody,
+  SessionQuestionSwitchBody,
 } from "../types";
 import SessionModel from "../models/CollaborationSession"; 
 function formatSessionResponse(session: any) {
@@ -201,6 +202,40 @@ export class CollaborationController {
     }
     await this.collaborationService.ensureSessionStarterCode(session);
     res.status(200).json({ data: formatSessionResponse(session) });
+  };
+
+  switchSessionQuestion = async (
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    try {
+      const session = await this.collaborationService.switchSessionQuestion(
+        String(req.params.sessionId),
+        req.userId,
+        req.body as SessionQuestionSwitchBody,
+      );
+      res.status(200).json({ data: formatSessionResponse(session) });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to switch collaboration question.",
+      });
+    }
   };
 
   completeSession = async (req: AuthRequest, res: Response): Promise<void> => {

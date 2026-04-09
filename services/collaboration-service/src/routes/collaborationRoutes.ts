@@ -11,6 +11,7 @@ export function createCollaborationRoutes(
   router.post("/execute", verifyToken, controller.executeCode);
   router.post("/:sessionId/run", verifyToken, controller.runCode);
   router.post("/:sessionId/submit", verifyToken, controller.submitCode);
+  router.patch("/:sessionId/question", verifyToken, controller.switchSessionQuestion);
   router.get("/history", verifyToken, controller.getAttemptHistory); 
   router.get("/:sessionId", verifyToken, controller.getSession);
   router.post("/:sessionId/complete", verifyToken, controller.completeSession);

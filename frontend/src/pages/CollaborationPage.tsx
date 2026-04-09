@@ -82,6 +82,14 @@ function toPrettyJson(value: unknown): string {
   }
 }
 
+function toDisplayJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
 function verdictStyles(verdict?: string) {
   switch (verdict) {
     case "Accepted":
@@ -114,12 +122,154 @@ function buildClassArgumentState(question: QuestionRecord | null): string {
   return toPrettyJson(firstCase?.arguments || []);
 }
 
+function ValuePreview({
+  label,
+  value,
+  emptyLabel = "(none)",
+}: {
+  label: string;
+  value: unknown;
+  emptyLabel?: string;
+}) {
+  const serialized =
+    value === undefined || value === null || value === ""
+      ? emptyLabel
+      : toDisplayJson(value);
+
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <pre className="overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-zinc-100">
+        {serialized}
+      </pre>
+    </div>
+  );
+}
+
+function FunctionTestCaseView({
+  testCase,
+  title,
+  showExpected = true,
+}: {
+  testCase: FunctionJudgeTestCase;
+  title?: string;
+  showExpected?: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-border/40 bg-background/70 p-3">
+      {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+      <div className="grid gap-3 md:grid-cols-2">
+        <ValuePreview label="Arguments" value={testCase.args} emptyLabel="[]" />
+        {showExpected && (
+          <ValuePreview
+            label="Expected Output"
+            value={testCase.expected}
+            emptyLabel="(not provided)"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClassTestCaseView({
+  testCase,
+  title,
+  showExpected = true,
+}: {
+  testCase: ClassJudgeTestCase;
+  title?: string;
+  showExpected?: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-border/40 bg-background/70 p-3">
+      {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+      <div className="grid gap-3 md:grid-cols-3">
+        <ValuePreview
+          label="Operations"
+          value={testCase.operations}
+          emptyLabel="[]"
+        />
+        <ValuePreview
+          label="Arguments"
+          value={testCase.arguments}
+          emptyLabel="[]"
+        />
+        {showExpected && (
+          <ValuePreview
+            label="Expected Output"
+            value={testCase.expected}
+            emptyLabel="(not provided)"
+          />
+        )}
+      </div>
+      <div className="overflow-hidden rounded-md border border-border/40">
+        <div className="bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Call Flow
+        </div>
+        <div className="divide-y divide-border/30">
+          {testCase.operations.map((operation, index) => (
+            <div
+              key={`${testCase.id}-${operation}-${index}`}
+              className="grid gap-2 px-3 py-2 text-xs md:grid-cols-[56px_1fr_1fr_1fr]"
+            >
+              <span className="font-semibold text-muted-foreground">
+                Step {index + 1}
+              </span>
+              <span className="font-mono text-foreground">{operation}</span>
+              <span className="font-mono text-muted-foreground">
+                {toDisplayJson(testCase.arguments[index] ?? [])}
+              </span>
+              {showExpected && (
+                <span className="font-mono text-emerald-300">
+                  {toDisplayJson(testCase.expected?.[index])}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TestCaseView({
+  testCase,
+  title,
+  showExpected = true,
+}: {
+  testCase: JudgeTestCase;
+  title?: string;
+  showExpected?: boolean;
+}) {
+  if (isFunctionCase(testCase)) {
+    return (
+      <FunctionTestCaseView
+        testCase={testCase}
+        title={title}
+        showExpected={showExpected}
+      />
+    );
+  }
+
+  return (
+    <ClassTestCaseView
+      testCase={testCase}
+      title={title}
+      showExpected={showExpected}
+    />
+  );
+}
+
 export default function CollaborationPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
   const [session, setSession] = useState<CollaborationSessionRecord | null>(null);
   const [question, setQuestion] = useState<QuestionRecord | null>(null);
+  const [questionCatalog, setQuestionCatalog] = useState<QuestionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
@@ -143,6 +293,7 @@ export default function CollaborationPage() {
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [switchingQuestion, setSwitchingQuestion] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(
     null,
   );
@@ -197,6 +348,37 @@ export default function CollaborationPage() {
     return question.visibleTestCases[index] || null;
   }, [question, selectedTestCase]);
 
+  const currentQuestionIndex = useMemo(() => {
+    if (!session?.questionId) return -1;
+    return questionCatalog.findIndex(
+      (catalogQuestion) => catalogQuestion.id === session.questionId,
+    );
+  }, [questionCatalog, session?.questionId]);
+
+  const syncQuestionChange = useCallback(
+    (nextQuestionId: string, nextTopic?: string, nextDifficulty?: string) => {
+      setSession((previous) =>
+        previous
+          ? {
+              ...previous,
+              questionId: nextQuestionId,
+              topic: nextTopic || previous.topic,
+              difficulty: nextDifficulty || previous.difficulty,
+              lastExecutionResult: null,
+              lastExecutionAt: undefined,
+              lastSubmittedAt: undefined,
+            }
+          : previous,
+      );
+      setExecutionResult(null);
+      setExecutionError(null);
+      setExplainError(null);
+      setExplanation(null);
+      setResultTab("testcase");
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!question) {
       return;
@@ -207,6 +389,32 @@ export default function CollaborationPage() {
     setCustomClassArguments(buildClassArgumentState(question));
     setSelectedTestCase("sample-0");
   }, [question?.id]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    async function loadQuestionCatalog() {
+      try {
+        const response = await fetch(
+          `${QUESTION_API_URL}?executionModes=python_function,python_class`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const json = await response.json();
+        setQuestionCatalog(Array.isArray(json.data) ? json.data : []);
+      } catch {
+        // Keep the collaboration page usable even if the temporary switcher fails.
+      }
+    }
+
+    void loadQuestionCatalog();
+  }, [token]);
 
   async function completeSession(shouldSave = true) {
     if (!token || !sessionId || isRedirecting.current) return;
@@ -281,6 +489,12 @@ export default function CollaborationPage() {
           setRunningMode(null);
           setExecutionError(null);
           setResultTab("result");
+        } else if (data.type === "question_switched") {
+          syncQuestionChange(
+            data.payload?.questionId,
+            data.payload?.topic,
+            data.payload?.difficulty,
+          );
         }
       } catch {
         // Ignore non-JSON noise.
@@ -486,6 +700,52 @@ export default function CollaborationPage() {
     }
   }
 
+  async function switchQuestion(nextQuestionId: string) {
+    if (
+      !token ||
+      !sessionId ||
+      !nextQuestionId ||
+      nextQuestionId === session?.questionId
+    ) {
+      return;
+    }
+
+    try {
+      setSwitchingQuestion(true);
+      setError("");
+      const response = await fetch(
+        `${COLLABORATION_API_URL}/sessions/${sessionId}/question`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ questionId: nextQuestionId }),
+        },
+      );
+
+      const json = await response.json();
+      if (!response.ok) {
+        setError(json.error || "Failed to switch question.");
+        return;
+      }
+
+      setSession(json.data);
+      syncQuestionChange(
+        json.data.questionId,
+        json.data.topic,
+        json.data.difficulty,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to switch question.",
+      );
+    } finally {
+      setSwitchingQuestion(false);
+    }
+  }
+
   const latestExecutionLabel = useMemo(() => {
     if (!executionResult) return "";
     return executionResult.initiatedByUserId === user?.id ? "You" : "Your partner";
@@ -519,6 +779,66 @@ export default function CollaborationPage() {
 
               {!terminated && session ? (
                 <div className="space-y-6">
+                  {questionCatalog.length > 0 && (
+                    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-primary/80">
+                            Temporary Question Browser
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Jump through supported questions without leaving this collaboration session.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              currentQuestionIndex > 0 &&
+                              switchQuestion(
+                                questionCatalog[currentQuestionIndex - 1].id,
+                              )
+                            }
+                            disabled={switchingQuestion || currentQuestionIndex <= 0}
+                          >
+                            Previous
+                          </Button>
+                          <select
+                            className="min-w-72 rounded-md border bg-background px-3 py-2 text-sm"
+                            value={session?.questionId || ""}
+                            onChange={(event) => void switchQuestion(event.target.value)}
+                            disabled={switchingQuestion}
+                          >
+                            {questionCatalog.map((catalogQuestion, index) => (
+                              <option key={catalogQuestion.id} value={catalogQuestion.id}>
+                                {index + 1}. {catalogQuestion.title}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              currentQuestionIndex >= 0 &&
+                              currentQuestionIndex < questionCatalog.length - 1 &&
+                              switchQuestion(
+                                questionCatalog[currentQuestionIndex + 1].id,
+                              )
+                            }
+                            disabled={
+                              switchingQuestion ||
+                              currentQuestionIndex < 0 ||
+                              currentQuestionIndex >= questionCatalog.length - 1
+                            }
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {question && (
                     <details className="rounded-lg border border-border/60 bg-muted/20 p-3" open>
                       <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold">
@@ -588,17 +908,11 @@ export default function CollaborationPage() {
                               Sample Testcases
                             </p>
                             {question.visibleTestCases.map((testCase, index) => (
-                              <div
+                              <TestCaseView
                                 key={testCase.id}
-                                className="rounded border border-border/20 bg-background/70 p-3 text-xs"
-                              >
-                                <div className="mb-1 font-semibold text-foreground">
-                                  Sample {index + 1}
-                                </div>
-                                <pre className="overflow-auto whitespace-pre-wrap text-muted-foreground">
-                                  {toPrettyJson(testCase)}
-                                </pre>
-                              </div>
+                                testCase={testCase}
+                                title={`Sample ${index + 1}`}
+                              />
                             ))}
                           </div>
                         )}
@@ -766,9 +1080,7 @@ export default function CollaborationPage() {
                               Run will execute all visible sample testcases.
                             </p>
                             {selectedVisibleCase && (
-                              <pre className="max-h-72 overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-zinc-100">
-                                {toPrettyJson(selectedVisibleCase)}
-                              </pre>
+                              <TestCaseView testCase={selectedVisibleCase} />
                             )}
                           </div>
                         )}

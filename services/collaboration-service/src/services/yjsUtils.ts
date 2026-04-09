@@ -237,6 +237,25 @@ export async function ensureStarterCode(
   return true;
 }
 
+export async function replaceSessionCode(
+  sessionId: string,
+  code: string,
+): Promise<void> {
+  const doc = await getOrCreateDoc(sessionId);
+  const text = doc.getText("codemirror");
+
+  doc.transact(() => {
+    if (text.length > 0) {
+      text.delete(0, text.length);
+    }
+    if (code) {
+      text.insert(0, code);
+    }
+  });
+
+  await persistDoc(sessionId, doc);
+}
+
 export async function getSessionCode(sessionId: string): Promise<string> {
   const doc = await getOrCreateDoc(sessionId);
   return doc.getText("codemirror").toString();

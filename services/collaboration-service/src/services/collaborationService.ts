@@ -7,11 +7,12 @@ import {
   ExecutionRequestBody,
   ExecutionResult,
   ExecutionResultMode,
+  SessionQuestionSwitchBody,
 } from "../types";
 import { MatchingServiceClient } from "./matchingServiceClient";
 import { QuestionServiceClient } from "./questionServiceClient";
 import { ExecutionService } from "./executionService";
-import { ensureStarterCode, getSessionCode } from "./yjsUtils";
+import { ensureStarterCode, getSessionCode, replaceSessionCode } from "./yjsUtils";
 import { sessionSocketManager } from "./sessionSocketManager";
 import { config } from "../config";
 
@@ -176,6 +177,57 @@ export class CollaborationService {
     } finally {
       sessionExecutionLocks.delete(sessionId);
     }
+  }
+
+  async switchSessionQuestion(
+    sessionId: string,
+    userId: string,
+    body: SessionQuestionSwitchBody,
+  ): Promise<ICollaborationSession> {
+    const session = await this.getSessionForUser(sessionId, userId);
+    if (!session) {
+      throw new NotFoundError("Session not found.");
+    }
+
+    const questionId = String(body.questionId || "").trim();
+    if (!questionId) {
+      throw new ValidationError("A questionId is required.");
+    }
+
+    const question = await this.questionServiceClient.getQuestion(questionId);
+    if (question.executionMode === "unsupported") {
+      throw new ValidationError("That question is not runnable in the collaboration judge yet.");
+    }
+
+    session.questionId = question.id;
+    if (question.difficulty && session.difficulty !== question.difficulty) {
+      session.difficulty = question.difficulty;
+    }
+
+    if (Array.isArray(question.categories) && question.categories.length > 0) {
+      session.topic = question.categories[0];
+    }
+
+    session.lastExecutionResult = null;
+    session.lastExecutionAt = null;
+    session.lastSubmittedAt = null;
+    session.starterCodeSeededAt = new Date();
+
+    await replaceSessionCode(session.sessionId, question.starterCode?.python || "");
+    await session.save();
+
+    sessionSocketManager.broadcastToSession(sessionId, {
+      type: "question_switched",
+      payload: {
+        sessionId: session.sessionId,
+        questionId: session.questionId,
+        topic: session.topic,
+        difficulty: session.difficulty,
+        starterCodeSeededAt: session.starterCodeSeededAt.toISOString(),
+      },
+    });
+
+    return session;
   }
 
   async completeSession(

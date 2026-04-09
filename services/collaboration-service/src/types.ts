@@ -60,6 +60,8 @@ export interface JudgeConfig {
 export interface JudgeQuestion {
   id: string;
   title: string;
+  difficulty?: Difficulty;
+  categories?: string[];
   executionMode: ExecutionMode | "unsupported";
   starterCode: { python: string };
   visibleTestCases: JudgeTestCase[];
@@ -101,4 +103,8 @@ export interface ExecutionRequestBody {
     operations?: string[];
     arguments?: unknown[][];
   };
+}
+
+export interface SessionQuestionSwitchBody {
+  questionId?: string;
 }
