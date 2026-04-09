@@ -13,6 +13,7 @@ interface EditorProps {
   token: string;
   initialCode?: string;
   sharedCode?: string;
+  sharedYjsState?: string | null;
   onActivity?: () => void;
 }
 
@@ -24,7 +25,15 @@ export interface CodeEditorHandle {
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
   (
-    { sessionId, username, token, initialCode = "", sharedCode = "", onActivity },
+    {
+      sessionId,
+      username,
+      token,
+      initialCode = "",
+      sharedCode = "",
+      sharedYjsState = null,
+      onActivity,
+    },
     ref,
   ) => {
     const editorRef = useRef<HTMLDivElement>(null);
@@ -78,6 +87,17 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
+      if (sharedYjsState) {
+        try {
+          const binaryString = atob(sharedYjsState);
+          const update = Uint8Array.from(binaryString, (char) =>
+            char.charCodeAt(0),
+          );
+          Y.applyUpdate(ydoc, update);
+        } catch {
+          // Fall back to the live socket sync path below.
+        }
+      }
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
 
@@ -114,23 +134,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       };
 
       const provider = new WebsocketProvider(
-      `${wsUrl}/ws/sessions/`,
+        `${wsUrl}/ws/sessions/`,
         sessionId,
         ydoc,
-        { params: { token } }
+        { params: { token } },
       );
 
-      const setupWsFilter = () => {
-        if (provider.ws) {
-          const originalOnMessage = provider.ws.onmessage;
-          provider.ws.onmessage = (event) => {
-            if (typeof event.data === "string" && event.data.startsWith("{")) {
-              return;
-            }
-            originalOnMessage?.call(provider.ws!, event);
-          };
-        }
-      };
       const handleSync = (isSynced: boolean) => {
         hasSyncedRef.current = isSynced;
         if (isSynced) {
@@ -138,8 +147,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         }
       };
 
-      setupWsFilter();
-      provider.on("status", setupWsFilter);
       provider.on("sync", handleSync);
       providerRef.current = provider;
       provider.awareness.setLocalStateField("user", {
@@ -154,7 +161,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       });
 
       const state = EditorState.create({
-        doc: sharedCode || "",
+        doc: ytext.toString() || sharedCode || "",
         extensions: [
           basicSetup,
           python(),
@@ -169,7 +176,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       viewRef.current = view;
 
       return () => {
-        provider.off("status", setupWsFilter);
         provider.off("sync", handleSync);
         provider.disconnect();
         provider.destroy();
@@ -177,7 +183,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         viewRef.current = null;
         ydoc.destroy();
       };
-    }, [sessionId, username, token]);
+    }, [sessionId, sharedCode, sharedYjsState, token, username]);
 
     return (
       <div

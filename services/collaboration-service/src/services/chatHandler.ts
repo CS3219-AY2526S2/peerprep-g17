@@ -28,7 +28,7 @@ export function handleChatConnection(
     return;
   }
 
-sessionSocketManager.join(sessionId, `chat:${userId}`, ws);
+  sessionSocketManager.join(sessionId, `chat:${userId}`, ws, "chat");
   if (!chatRooms.has(sessionId)) {
     chatRooms.set(sessionId, new Map());
   }

@@ -4,6 +4,7 @@ import { config } from "../config";
 interface ConnectedUser {
   ws: WebSocket;
   userId: string;
+  socketType: "chat" | "yjs";
 }
 
 interface SessionRoom {
@@ -18,7 +19,12 @@ interface SessionRoom {
 export class SessionSocketManager {
   private rooms = new Map<string, SessionRoom>();
   private terminatedSessions = new Set<string>(); 
-  join(sessionId: string, userId: string, ws: WebSocket): void {
+  join(
+    sessionId: string,
+    userId: string,
+    ws: WebSocket,
+    socketType: "chat" | "yjs",
+  ): void {
     if (this.terminatedSessions.has(sessionId)) {
       console.log(`[WS] Hard Blocking User ${userId} from Terminated Session ${sessionId}`);
       try {
@@ -42,7 +48,7 @@ export class SessionSocketManager {
     }
 
     const room = this.rooms.get(sessionId)!;
-    room.users.set(userId, { ws, userId });
+    room.users.set(userId, { ws, userId, socketType });
   }
   leave(sessionId: string, userId: string, isManual: boolean = false): void {
   const room = this.rooms.get(sessionId);
@@ -144,11 +150,20 @@ export class SessionSocketManager {
     this.rooms.delete(sessionId);
   }
 
-  public broadcastToSession(sessionId: string, message: any): void {
+  public broadcastToSession(
+    sessionId: string,
+    message: any,
+    socketTypes: Array<"chat" | "yjs"> = ["chat"],
+  ): void {
     const room = this.rooms.get(sessionId);
     if (!room) return;
     room.users.forEach(u => {
-      if (u.ws.readyState === WebSocket.OPEN) u.ws.send(JSON.stringify(message));
+      if (
+        u.ws.readyState === WebSocket.OPEN &&
+        socketTypes.includes(u.socketType)
+      ) {
+        u.ws.send(JSON.stringify(message));
+      }
     });
   }
 }

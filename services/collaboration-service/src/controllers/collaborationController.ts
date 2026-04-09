@@ -45,6 +45,9 @@ async function formatSessionResponseWithSharedCode(session: any) {
   return {
     ...formatSessionResponse(session),
     sharedCode,
+    sharedYjsState: session.yjsState
+      ? Buffer.from(session.yjsState).toString("base64")
+      : null,
   };
 }
 

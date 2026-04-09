@@ -1064,6 +1064,7 @@ export default function CollaborationPage() {
                         token={token || ""}
                         initialCode={question.starterCode?.python ?? ""}
                         sharedCode={session.sharedCode ?? ""}
+                        sharedYjsState={session.sharedYjsState ?? null}
                         onActivity={handleKeepAlive}
                       />
                     ) : (
