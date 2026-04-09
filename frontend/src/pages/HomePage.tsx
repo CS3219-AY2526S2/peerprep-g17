@@ -28,7 +28,7 @@ export default function HomePage() {
           <h1 className="text-5xl leading-[1.1] font-bold tracking-tight md:text-6xl">
             Practice interviews
             <br />
-            <span className="bg-gradient-to-r from-foreground to-foreground/50 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/65 bg-clip-text text-transparent">
               with your peers
             </span>
           </h1>
@@ -36,7 +36,7 @@ export default function HomePage() {
           {/* Subtitle */}
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
             Find a study partner, tackle whiteboard questions together, and
-            build confidence for your next technical interview — all in real
+            build confidence for your next technical interview, all in real
             time.
           </p>
 
@@ -77,7 +77,7 @@ export default function HomePage() {
             {
               title: "Real-time Collaboration",
               description:
-                "Code together in a shared editor with live sync — just like a real whiteboard interview.",
+                "Code together in a shared editor with live sync, just like a real whiteboard interview.",
             },
             {
               title: "Smart Matching",
@@ -106,7 +106,7 @@ export default function HomePage() {
       <footer className="border-t border-border/50 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-center px-6">
           <span className="text-xs text-muted-foreground">
-            © 2026 PeerPrep. CS3219 Group 17.
+            {"\u00A9"} 2026 <span className="brand-wordmark text-foreground/85">PeerPrep</span>. CS3219 Group 17.
           </span>
         </div>
       </footer>

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { RequireAuth, RequireAdmin } from "@/components/RouteGuards";
-import HomePage from "@/pages/HomePage";
+import HomePage from "@/pages/homepage";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import DashboardPage from "@/pages/DashboardPage";

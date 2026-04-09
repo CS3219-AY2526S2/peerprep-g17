@@ -11,7 +11,7 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="relative mx-auto flex h-14 max-w-6xl items-center px-6">
-        <Link to="/" className="text-lg font-semibold tracking-tight">
+        <Link to="/" className="brand-wordmark text-xl text-foreground/90 tracking-tight">
           PeerPrep
         </Link>
         {isAuthenticated && (
