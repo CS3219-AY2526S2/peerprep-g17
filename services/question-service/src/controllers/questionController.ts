@@ -385,23 +385,26 @@ export async function seedQuestions(
       (q) => !existingTitles.has(q.title),
     );
 
-    if (questionsToInsert.length === 0) {
-      res.status(200).json({
-        data: {
-          message: "All seed questions already exist. Nothing to add.",
-          inserted: 0,
-        },
-      });
-      return;
+    let insertedCount = 0;
+    if (questionsToInsert.length > 0) {
+      const result = await Question.insertMany(questionsToInsert);
+      insertedCount = result.length;
     }
 
-    const result = await Question.insertMany(questionsToInsert);
+    const { syncSeedQuestionExecutionMetadata } = await import(
+      "../utils/seedSync"
+    );
+    const updated = await syncSeedQuestionExecutionMetadata();
 
-    res.status(201).json({
+    res.status(questionsToInsert.length > 0 ? 201 : 200).json({
       data: {
-        message: `Seeded ${result.length} questions successfully.`,
-        inserted: result.length,
-        skipped: SEED_QUESTIONS.length - result.length,
+        message:
+          insertedCount > 0 || updated > 0
+            ? `Seed sync complete. Inserted ${insertedCount}, updated ${updated}.`
+            : "All seed questions already exist and are up to date.",
+        inserted: insertedCount,
+        updated,
+        skipped: SEED_QUESTIONS.length - insertedCount,
       },
     });
   } catch {

@@ -547,22 +547,6 @@ export default function CollaborationPage() {
                           {question.description}
                         </p>
 
-                        {question.judgeConfig && (
-                          <div className="space-y-2 rounded-md border border-border/40 bg-background/60 p-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                              Starter Code / Signature
-                            </p>
-                            <div className="text-xs text-muted-foreground">
-                              {question.executionMode === "python_function"
-                                ? `class ${question.judgeConfig.className} -> ${question.judgeConfig.methodName}(...)`
-                                : `class ${question.judgeConfig.className}`}
-                            </div>
-                            <pre className="max-h-48 overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-100">
-                              {question.starterCode.python}
-                            </pre>
-                          </div>
-                        )}
-
                         {question.examples.length > 0 && (
                           <div className="space-y-2">
                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -668,6 +652,7 @@ export default function CollaborationPage() {
                       sessionId={session.sessionId}
                       username={user?.username || "Guest"}
                       token={token || ""}
+                      initialCode={question?.starterCode?.python ?? ""}
                       onActivity={handleKeepAlive}
                     />
                   </div>

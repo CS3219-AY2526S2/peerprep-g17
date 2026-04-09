@@ -11,6 +11,7 @@ interface EditorProps {
   sessionId: string;
   username: string;
   token: string;
+  initialCode?: string;
   onActivity?: () => void;
 }
 
@@ -21,16 +22,22 @@ export interface CodeEditorHandle {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
-  ({ sessionId, username, token, onActivity }, ref) => {
+  ({ sessionId, username, token, initialCode = "", onActivity }, ref) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
     const onActivityRef = useRef(onActivity);
+    const initialCodeRef = useRef(initialCode);
+    const hasSyncedRef = useRef(false);
 
     useEffect(() => {
       onActivityRef.current = onActivity;
     }, [onActivity]);
+
+    useEffect(() => {
+      initialCodeRef.current = initialCode;
+    }, [initialCode]);
 
     useImperativeHandle(ref, () => ({
       disconnect() {
@@ -68,6 +75,25 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
+      const maybeSeedInitialCode = () => {
+        const ytext = ytextRef.current;
+        const starterCode = initialCodeRef.current;
+        if (!hasSyncedRef.current || !ytext || !starterCode.trim()) {
+          return;
+        }
+
+        if (ytext.toString().trim().length > 0) {
+          return;
+        }
+
+        ydoc.transact(() => {
+          if (ytext.length > 0) {
+            ytext.delete(0, ytext.length);
+          }
+          ytext.insert(0, starterCode);
+        });
+      };
+
      const provider = new WebsocketProvider(
       `${wsUrl}/ws/sessions/`, 
         sessionId,
@@ -89,6 +115,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       setupWsFilter();
       provider.on("status", setupWsFilter);
+      provider.on("sync", (isSynced: boolean) => {
+        hasSyncedRef.current = isSynced;
+        if (isSynced) {
+          maybeSeedInitialCode();
+        }
+      });
       providerRef.current = provider;
       provider.awareness.setLocalStateField("user", {
         name: username,
@@ -97,6 +129,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
+      maybeSeedInitialCode();
       const activityExtension = EditorView.updateListener.of((update) => {
         if (update.docChanged && onActivityRef.current) {
           onActivityRef.current();
@@ -125,6 +158,29 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         view.destroy();
       };
     }, [sessionId, username, token]);
+
+    useEffect(() => {
+      const ytext = ytextRef.current;
+      if (!hasSyncedRef.current || !ytext || !initialCode.trim()) {
+        return;
+      }
+
+      if (ytext.toString().trim().length > 0) {
+        return;
+      }
+
+      const doc = ytext.doc;
+      if (!doc) {
+        return;
+      }
+
+      doc.transact(() => {
+        if (ytext.length > 0) {
+          ytext.delete(0, ytext.length);
+        }
+        ytext.insert(0, initialCode);
+      });
+    }, [initialCode]);
 
     return (
       <div
