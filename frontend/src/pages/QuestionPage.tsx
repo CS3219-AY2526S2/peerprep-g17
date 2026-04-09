@@ -468,7 +468,7 @@ export default function QuestionPage() {
                         {(q.categories ?? []).map((cat) => (
                           <span
                             key={cat}
-                            className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
                           >
                             {cat}
                           </span>

@@ -3,110 +3,157 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 
+const featureCards = [
+  {
+    title: "Real-time Collaboration",
+    description:
+      "Code together in a shared editor with live sync, just like a real whiteboard interview.",
+  },
+  {
+    title: "Smart Matching",
+    description:
+      "Get matched with peers based on topic, difficulty, and skill level within seconds.",
+  },
+  {
+    title: "Curated Questions",
+    description:
+      "Practice with a growing library of questions indexed by topic and difficulty.",
+  },
+];
+
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
+  const primaryHref = isAuthenticated ? "/dashboard" : "/signup";
+  const primaryLabel = isAuthenticated ? "Go to Dashboard" : "Get started";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      {/* Hero Section */}
-      <main className="relative flex flex-col items-center justify-center px-6 pt-40 pb-32">
-        {/* Radial gradient background effect */}
+      <main className="relative overflow-hidden px-6 pt-40 pb-24">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-[120px]" />
+          <div className="absolute top-28 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-sky-900/10 blur-[140px] dark:bg-sky-400/10" />
+          <div className="absolute right-[-8rem] bottom-10 h-72 w-72 rounded-full bg-slate-900/6 blur-[120px] dark:bg-slate-100/6" />
         </div>
 
-        <div className="relative z-10 flex max-w-3xl flex-col items-center text-center">
-          {/* Badge */}
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/50 px-3 py-1 text-xs text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Now in active development
-          </div>
+        <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center">
+          <div className="flex max-w-3xl flex-col items-center text-center">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-xs text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-700 dark:bg-sky-300" />
+              Now in active development
+            </div>
 
-          {/* Headline */}
-          <h1 className="text-5xl leading-[1.1] font-bold tracking-tight md:text-6xl">
-            Practice interviews
-            <br />
-            <span className="bg-gradient-to-r from-foreground via-foreground/90 to-foreground/65 bg-clip-text text-transparent">
-              with your peers
-            </span>
-          </h1>
+            <h1 className="text-5xl leading-[1.05] font-bold tracking-tight md:text-6xl">
+              Practice interviews
+              <br />
+              <span className="bg-gradient-to-r from-slate-950 via-sky-900 to-slate-500 bg-clip-text text-transparent dark:from-white dark:via-sky-200 dark:to-slate-300">
+                with your peers
+              </span>
+            </h1>
 
-          {/* Subtitle */}
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
-            Find a study partner, tackle whiteboard questions together, and
-            build confidence for your next technical interview, all in real
-            time.
-          </p>
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">
+              Find a study partner, tackle whiteboard questions together, and
+              build confidence for your next technical interview, all in real
+              time.
+            </p>
 
-          {/* CTA Buttons */}
-          <div className="mt-10 flex items-center gap-4">
-            <Link to={isAuthenticated ? "/dashboard" : "/signup"}>
-              <Button size="lg" className="px-6">
-                {isAuthenticated ? "Go to Dashboard" : "Get started"}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+              <Link to={primaryHref}>
+                <Button
+                  size="lg"
+                  className="gap-2 bg-slate-950 px-6 text-white hover:bg-sky-900 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-sky-200"
                 >
-                  <path d="M5 12h14" />
-                  <path d="m12 5 7 7-7 7" />
-                </svg>
-              </Button>
-            </Link>
-            {!isAuthenticated && (
-              <Link to="/login">
-                <Button variant="outline" size="lg" className="px-6">
-                  Log in
+                  {primaryLabel}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
                 </Button>
               </Link>
-            )}
-          </div>
-        </div>
 
-        {/* Feature Grid */}
-        <div className="relative z-10 mt-32 grid w-full max-w-4xl grid-cols-1 gap-px overflow-hidden rounded-xl border border-border/50 bg-border/50 md:grid-cols-3">
-          {[
-            {
-              title: "Real-time Collaboration",
-              description:
-                "Code together in a shared editor with live sync, just like a real whiteboard interview.",
-            },
-            {
-              title: "Smart Matching",
-              description:
-                "Get matched with peers based on topic, difficulty, and skill level within seconds.",
-            },
-            {
-              title: "Curated Questions",
-              description:
-                "Practice with a growing library of questions indexed by topic and difficulty.",
-            },
-          ].map((feature) => (
-            <div
-              key={feature.title}
-              className="bg-background p-6 transition-colors hover:bg-muted/30"
-            >
-              <h3 className="mb-2 text-sm font-medium">{feature.title}</h3>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {feature.description}
-              </p>
+              {!isAuthenticated && (
+                <Link to="/login">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-slate-300 bg-white/80 px-6 text-slate-700 hover:border-sky-800 hover:bg-sky-50 hover:text-sky-950 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:border-sky-300 dark:hover:bg-sky-950/30 dark:hover:text-sky-100"
+                  >
+                    Log in
+                  </Button>
+                </Link>
+              )}
             </div>
-          ))}
+          </div>
+
+          <div className="mt-24 grid w-full max-w-5xl grid-cols-1 gap-5 md:grid-cols-3">
+            {featureCards.map((feature) => (
+              <div
+                key={feature.title}
+                className="rounded-2xl border border-slate-200/80 bg-white/88 p-6 shadow-[0_12px_40px_-24px_rgba(15,23,42,0.24)] transition-transform duration-200 hover:-translate-y-1 dark:border-slate-800 dark:bg-slate-950/75"
+              >
+                <div className="mb-4 h-9 w-9 rounded-full bg-sky-100 text-sky-900 dark:bg-sky-950/70 dark:text-sky-200" />
+                <h3 className="mb-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+                  {feature.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-10 w-full max-w-5xl rounded-3xl border border-slate-200/80 bg-gradient-to-r from-slate-950 to-sky-950 px-8 py-8 text-white shadow-[0_18px_60px_-30px_rgba(3,7,18,0.6)] dark:border-slate-800">
+            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm uppercase tracking-[0.18em] text-sky-200/85">
+                  Start Practising
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+                  Built for peer mock interviews, not solo grinding.
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
+                  Pair up, solve questions together, and get comfortable thinking out loud under interview pressure.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Link to={primaryHref}>
+                  <Button
+                    size="lg"
+                    className="bg-white text-slate-950 hover:bg-sky-100"
+                  >
+                    {primaryLabel}
+                  </Button>
+                </Link>
+                <Link to="/questions">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="border-white/20 bg-white/6 text-white hover:bg-white/12"
+                  >
+                    Browse questions
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
-      <footer className="border-t border-border/50 py-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-center px-6">
-          <span className="text-xs text-muted-foreground">
-            {"\u00A9"} 2026 <span className="brand-wordmark text-foreground/85">PeerPrep</span>. CS3219 Group 17.
+      <footer className="border-t border-slate-200/80 py-8 dark:border-slate-800">
+        <div className="mx-auto flex max-w-6xl items-center justify-center px-6 text-sm text-slate-500 dark:text-slate-400">
+          <span>
+            {"\u00A9"} 2026 <span className="brand-wordmark text-slate-800 dark:text-slate-100">PeerPrep</span>. CS3219 Group 17.
           </span>
         </div>
       </footer>
