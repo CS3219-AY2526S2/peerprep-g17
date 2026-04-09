@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useRef, useCallback } from "react";
+import { Fragment, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ function renderInlineText(text: string) {
 
 function ExplanationContent({ content }: { content: string }) {
   const normalized = content.replace(/\r\n/g, "\n").trim();
-  const elements: JSX.Element[] = [];
+  const elements: ReactNode[] = [];
   const lines = normalized.split("\n");
 
   for (let index = 0; index < lines.length;) {
