@@ -12,6 +12,7 @@ interface EditorProps {
   username: string;
   token: string;
   initialCode?: string;
+  sharedCode?: string;
   onActivity?: () => void;
 }
 
@@ -22,7 +23,10 @@ export interface CodeEditorHandle {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
-  ({ sessionId, username, token, initialCode = "", onActivity }, ref) => {
+  (
+    { sessionId, username, token, initialCode = "", sharedCode = "", onActivity },
+    ref,
+  ) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
@@ -74,32 +78,47 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
+      const ytext = ydoc.getText("codemirror");
+      ytextRef.current = ytext;
 
-      const maybeSeedInitialCode = () => {
-        const ytext = ytextRef.current;
+      const collapseDuplicateStarterCode = () => {
         const starterCode = initialCodeRef.current;
-        if (!hasSyncedRef.current || !ytext || !starterCode.trim()) {
+        if (!starterCode.trim()) {
           return;
         }
 
-        if (ytext.toString().trim().length > 0) {
+        const currentText = ytext.toString();
+        if (!currentText) {
           return;
         }
 
-        ydoc.transact(() => {
-          if (ytext.length > 0) {
+        let dedupedText = currentText;
+        let repeatCount = 0;
+        while (dedupedText.startsWith(starterCode)) {
+          dedupedText = dedupedText.slice(starterCode.length);
+          repeatCount += 1;
+        }
+
+        if (repeatCount > 1 && dedupedText.length === 0) {
+          dedupedText = starterCode;
+        } else {
+          dedupedText = currentText;
+        }
+
+        if (dedupedText !== currentText) {
+          ydoc.transact(() => {
             ytext.delete(0, ytext.length);
-          }
-          ytext.insert(0, starterCode);
-        });
+            ytext.insert(0, dedupedText);
+          });
+        }
       };
 
-     const provider = new WebsocketProvider(
-      `${wsUrl}/ws/sessions/`, 
+      const provider = new WebsocketProvider(
+      `${wsUrl}/ws/sessions/`,
         sessionId,
         ydoc,
         { params: { token } }
-    );
+      );
 
       const setupWsFilter = () => {
         if (provider.ws) {
@@ -112,24 +131,22 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
           };
         }
       };
+      const handleSync = (isSynced: boolean) => {
+        hasSyncedRef.current = isSynced;
+        if (isSynced) {
+          queueMicrotask(collapseDuplicateStarterCode);
+        }
+      };
 
       setupWsFilter();
       provider.on("status", setupWsFilter);
-      provider.on("sync", (isSynced: boolean) => {
-        hasSyncedRef.current = isSynced;
-        if (isSynced) {
-          maybeSeedInitialCode();
-        }
-      });
+      provider.on("sync", handleSync);
       providerRef.current = provider;
       provider.awareness.setLocalStateField("user", {
         name: username,
         color: "#" + Math.floor(Math.random() * 16777215).toString(16),
       });
 
-      const ytext = ydoc.getText("codemirror");
-      ytextRef.current = ytext;
-      maybeSeedInitialCode();
       const activityExtension = EditorView.updateListener.of((update) => {
         if (update.docChanged && onActivityRef.current) {
           onActivityRef.current();
@@ -137,6 +154,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       });
 
       const state = EditorState.create({
+        doc: sharedCode || "",
         extensions: [
           basicSetup,
           python(),
@@ -152,35 +170,14 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       return () => {
         provider.off("status", setupWsFilter);
+        provider.off("sync", handleSync);
         provider.disconnect();
         provider.destroy();
+        viewRef.current?.destroy();
+        viewRef.current = null;
         ydoc.destroy();
-        view.destroy();
       };
     }, [sessionId, username, token]);
-
-    useEffect(() => {
-      const ytext = ytextRef.current;
-      if (!hasSyncedRef.current || !ytext || !initialCode.trim()) {
-        return;
-      }
-
-      if (ytext.toString().trim().length > 0) {
-        return;
-      }
-
-      const doc = ytext.doc;
-      if (!doc) {
-        return;
-      }
-
-      doc.transact(() => {
-        if (ytext.length > 0) {
-          ytext.delete(0, ytext.length);
-        }
-        ytext.insert(0, initialCode);
-      });
-    }, [initialCode]);
 
     return (
       <div

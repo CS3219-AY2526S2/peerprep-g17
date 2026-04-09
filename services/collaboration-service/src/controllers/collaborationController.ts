@@ -13,6 +13,7 @@ import {
   SessionQuestionSwitchBody,
 } from "../types";
 import SessionModel from "../models/CollaborationSession"; 
+import { getSessionCode } from "../services/yjsUtils";
 function formatSessionResponse(session: any) {
   return {
     sessionId: session.sessionId,
@@ -30,6 +31,20 @@ function formatSessionResponse(session: any) {
     lastExecutionResult: session.lastExecutionResult || null,
     lastExecutionAt: session.lastExecutionAt?.toISOString(),
     lastSubmittedAt: session.lastSubmittedAt?.toISOString(),
+  };
+}
+
+async function formatSessionResponseWithSharedCode(session: any) {
+  let sharedCode = "";
+  try {
+    sharedCode = await getSessionCode(String(session.sessionId));
+  } catch {
+    sharedCode = "";
+  }
+
+  return {
+    ...formatSessionResponse(session),
+    sharedCode,
   };
 }
 
@@ -201,7 +216,9 @@ export class CollaborationController {
       return;
     }
     await this.collaborationService.ensureSessionStarterCode(session);
-    res.status(200).json({ data: formatSessionResponse(session) });
+    res.status(200).json({
+      data: await formatSessionResponseWithSharedCode(session),
+    });
   };
 
   switchSessionQuestion = async (
@@ -219,7 +236,9 @@ export class CollaborationController {
         req.userId,
         req.body as SessionQuestionSwitchBody,
       );
-      res.status(200).json({ data: formatSessionResponse(session) });
+      res.status(200).json({
+        data: await formatSessionResponseWithSharedCode(session),
+      });
     } catch (error) {
       if (error instanceof NotFoundError) {
         res.status(404).json({ error: error.message });

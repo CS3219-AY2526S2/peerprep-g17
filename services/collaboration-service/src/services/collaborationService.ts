@@ -36,7 +36,7 @@ export class CollaborationService {
   async handoffSession(
     payload: CollaborationSessionPayload,
   ): Promise<ICollaborationSession> {
-    return CollaborationSession.findOneAndUpdate(
+    const session = await CollaborationSession.findOneAndUpdate(
       { sessionId: payload.sessionId },
       {
         ...payload,
@@ -50,6 +50,24 @@ export class CollaborationService {
         setDefaultsOnInsert: true,
       },
     );
+
+    const question = await this.questionServiceClient.getQuestionJudge(
+      payload.questionId,
+    );
+
+    if (question.starterCode?.python?.trim()) {
+      const seeded = await ensureStarterCode(
+        payload.sessionId,
+        question.starterCode.python,
+      );
+
+      if (seeded || !session.starterCodeSeededAt) {
+        session.starterCodeSeededAt = new Date();
+        await session.save();
+      }
+    }
+
+    return session;
   }
 
   async getSessionForUser(

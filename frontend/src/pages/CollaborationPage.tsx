@@ -1063,6 +1063,7 @@ export default function CollaborationPage() {
                         username={user?.username || "Guest"}
                         token={token || ""}
                         initialCode={question.starterCode?.python ?? ""}
+                        sharedCode={session.sharedCode ?? ""}
                         onActivity={handleKeepAlive}
                       />
                     ) : (

@@ -267,18 +267,23 @@ const DEFAULT_LIMITS = {
   memoryLimitMb: 256,
 };
 
-function functionTemplate(methodName: string, signature: string, body: string): string {
+function functionTemplate(methodName: string, signature: string, _body: string): string {
   return [
     "class Solution:",
     `    def ${methodName}(self, ${signature}):`,
-    ...body.split("\n").map((line) => `        ${line}`),
+    "        pass",
   ].join("\n");
 }
 
 function classTemplate(className: string, methods: string[]): string {
+  const skeletonMethods = methods
+    .map((method) => method.trim())
+    .filter((method) => method.startsWith("def "))
+    .flatMap((method) => [`    ${method}`, "        pass", ""]);
+
   return [
     `class ${className}:`,
-    ...methods.flatMap((method) => method.split("\n").map((line) => `    ${line}`)),
+    ...skeletonMethods.slice(0, -1),
   ].join("\n");
 }
 

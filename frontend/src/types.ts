@@ -117,6 +117,7 @@ export interface CollaborationSessionRecord {
   createdAt: string;
   completedAt?: string;
   starterCodeSeededAt?: string;
+  sharedCode?: string;
   lastExecutionResult?: ExecutionResult | null;
   lastExecutionAt?: string;
   lastSubmittedAt?: string;
