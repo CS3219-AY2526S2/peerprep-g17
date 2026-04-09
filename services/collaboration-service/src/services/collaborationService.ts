@@ -1,15 +1,35 @@
-import * as Y from "yjs";
 import CollaborationSession, {
   ICollaborationSession,
 } from "../models/CollaborationSession";
-import Attempt from "../models/Attempt";
-import { CollaborationSessionPayload } from "../types";
+import Attempt, { IAttempt } from "../models/Attempt";
+import {
+  CollaborationSessionPayload,
+  ExecutionRequestBody,
+  ExecutionResult,
+  ExecutionResultMode,
+} from "../types";
 import { MatchingServiceClient } from "./matchingServiceClient";
-import { docs } from "./yjsUtils";
+import { QuestionServiceClient } from "./questionServiceClient";
+import { ExecutionService } from "./executionService";
+import { ensureStarterCode, getSessionCode } from "./yjsUtils";
+import { sessionSocketManager } from "./sessionSocketManager";
+import { config } from "../config";
+
+class NotFoundError extends Error {}
+class ConflictError extends Error {}
+class ValidationError extends Error {}
+
+const sessionExecutionLocks = new Set<string>();
+
+function findFirstFailingCase(result: ExecutionResult) {
+  return result.cases.find((testCase) => testCase.verdict !== "Accepted") || null;
+}
 
 export class CollaborationService {
   constructor(
     private readonly matchingServiceClient: MatchingServiceClient,
+    private readonly questionServiceClient: QuestionServiceClient = new QuestionServiceClient(),
+    private readonly executionService: ExecutionService = new ExecutionService(),
   ) {}
 
   async handoffSession(
@@ -41,6 +61,123 @@ export class CollaborationService {
     });
   }
 
+  async ensureSessionStarterCode(
+    session: ICollaborationSession,
+  ): Promise<void> {
+    const question = await this.questionServiceClient.getQuestionJudge(
+      session.questionId,
+    );
+
+    if (!question.starterCode?.python?.trim()) {
+      return;
+    }
+
+    const seeded = await ensureStarterCode(
+      session.sessionId,
+      question.starterCode.python,
+    );
+
+    if (seeded || !session.starterCodeSeededAt) {
+      session.starterCodeSeededAt = new Date();
+      await session.save();
+    }
+  }
+
+  async executeSessionCode(
+    sessionId: string,
+    userId: string,
+    mode: ExecutionResultMode,
+    body: ExecutionRequestBody,
+  ): Promise<ExecutionResult> {
+    const session = await this.getSessionForUser(sessionId, userId);
+    if (!session) {
+      throw new NotFoundError("Session not found.");
+    }
+
+    const code = String(body.code || "");
+    if (!code.trim()) {
+      throw new ValidationError("No code provided.");
+    }
+
+    if (
+      Buffer.byteLength(code, "utf8") > config.executionSourceSizeLimitBytes
+    ) {
+      throw new ValidationError("Submitted code exceeds the maximum size limit.");
+    }
+
+    if (sessionExecutionLocks.has(sessionId)) {
+      throw new ConflictError(
+        "An execution is already running for this collaboration session.",
+      );
+    }
+
+    sessionExecutionLocks.add(sessionId);
+    const startedAt = new Date().toISOString();
+    sessionSocketManager.broadcastToSession(sessionId, {
+      type: "execution_started",
+      payload: {
+        mode,
+        initiatedByUserId: userId,
+        initiatedAt: startedAt,
+      },
+    });
+
+    try {
+      const question = await this.questionServiceClient.getQuestionJudge(
+        session.questionId,
+      );
+      const result = await this.executionService.execute(
+        question,
+        code,
+        mode,
+        userId,
+        body.customTestCase,
+      );
+
+      session.lastExecutionResult = result;
+      session.lastExecutionAt = new Date(result.initiatedAt);
+      if (mode === "submit") {
+        session.lastSubmittedAt = new Date(result.initiatedAt);
+      }
+      await session.save();
+
+      if (mode === "submit") {
+        const attemptData = {
+          sessionId,
+          questionId: session.questionId,
+          topic: session.topic,
+          difficulty: session.difficulty,
+          language: session.language,
+          code,
+          attemptedAt: new Date(),
+          mode: "submit" as const,
+          verdict: result.verdict,
+          passedCount: result.passedCount,
+          totalCount: result.totalCount,
+          runtimeMs: result.runtimeMs,
+          memoryKb: result.memoryKb,
+          executionMode: result.executionMode,
+          firstFailingCase: findFirstFailingCase(result),
+          submittedAt: new Date(result.initiatedAt),
+        };
+
+        await Attempt.insertMany([
+          { ...attemptData, userId: session.userAId },
+          { ...attemptData, userId: session.userBId },
+        ]);
+      }
+
+      sessionSocketManager.broadcastToSession(sessionId, {
+        type: "execution_result",
+        payload: result,
+      });
+
+      return result;
+    } finally {
+      sessionExecutionLocks.delete(sessionId);
+    }
+  }
+
   async completeSession(
     sessionId: string,
     userId: string,
@@ -48,18 +185,18 @@ export class CollaborationService {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) return null;
     if (session.status === "completed") return session;
+
     let code = "";
     try {
-      const doc = docs.get(sessionId);
-      if (doc) {
-        code = doc.getText("codemirror").toString();
-      } else if (session.yjsState) {
-        const tempDoc = new Y.Doc();
-        Y.applyUpdate(tempDoc, new Uint8Array(session.yjsState));
-        code = tempDoc.getText("codemirror").toString();
-        tempDoc.destroy();
-      }
-    } catch (_) {}
+      code = await getSessionCode(sessionId);
+    } catch {
+      code = "";
+    }
+
+    const lastSubmit =
+      session.lastExecutionResult?.mode === "submit"
+        ? session.lastExecutionResult
+        : null;
 
     const attemptData = {
       sessionId,
@@ -69,6 +206,15 @@ export class CollaborationService {
       language: session.language,
       code,
       attemptedAt: new Date(),
+      mode: "session_complete" as const,
+      verdict: lastSubmit?.verdict,
+      passedCount: lastSubmit?.passedCount,
+      totalCount: lastSubmit?.totalCount,
+      runtimeMs: lastSubmit?.runtimeMs,
+      memoryKb: lastSubmit?.memoryKb,
+      executionMode: lastSubmit?.executionMode,
+      firstFailingCase: lastSubmit ? findFirstFailingCase(lastSubmit) : null,
+      submittedAt: session.lastSubmittedAt || null,
     };
 
     await Attempt.insertMany([
@@ -82,14 +228,16 @@ export class CollaborationService {
     } catch (err) {
       console.error(`[Collab] Failed to notify matching service:`, err);
     }
+
     session.status = "completed";
     session.completedAt = new Date();
     await session.save();
     return session;
   }
+
   async getAttemptHistory(userId: string): Promise<IAttempt[]> {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
   }
 }
 
-import { IAttempt } from "../models/Attempt";
+export { ConflictError, NotFoundError, ValidationError };

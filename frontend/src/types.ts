@@ -14,8 +14,35 @@ export interface QuestionRecord {
   description: string;
   examples: ExampleRecord[];
   link: string;
+  executionMode: "python_function" | "python_class" | "unsupported";
+  starterCode: { python: string };
+  visibleTestCases: JudgeTestCase[];
+  judgeConfig: JudgeConfig | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FunctionJudgeTestCase {
+  id: string;
+  args: unknown[];
+  expected?: unknown;
+}
+
+export interface ClassJudgeTestCase {
+  id: string;
+  operations: string[];
+  arguments: unknown[][];
+  expected?: unknown[];
+}
+
+export type JudgeTestCase = FunctionJudgeTestCase | ClassJudgeTestCase;
+
+export interface JudgeConfig {
+  className?: string;
+  methodName?: string;
+  comparisonMode: "exact_json" | "float_tolerance";
+  timeLimitMs: number;
+  memoryLimitMb: number;
 }
 
 export interface QuestionMeta {
@@ -89,4 +116,64 @@ export interface CollaborationSessionRecord {
   status: string;
   createdAt: string;
   completedAt?: string;
+  starterCodeSeededAt?: string;
+  lastExecutionResult?: ExecutionResult | null;
+  lastExecutionAt?: string;
+  lastSubmittedAt?: string;
+}
+
+export type ExecutionVerdict =
+  | "Accepted"
+  | "Wrong Answer"
+  | "Runtime Error"
+  | "Time Limit Exceeded"
+  | "Memory Limit Exceeded"
+  | "Compilation Error"
+  | "Internal Error";
+
+export interface ExecutionCaseResult {
+  id: string;
+  verdict: ExecutionVerdict;
+  inputPreview: string;
+  expectedPreview: string;
+  actualPreview: string;
+  stdout: string;
+  stderr: string;
+  errorMessage: string;
+}
+
+export interface ExecutionResult {
+  mode: "run" | "submit";
+  executionMode: "python_function" | "python_class";
+  verdict: ExecutionVerdict;
+  status: "finished";
+  stdout: string;
+  stderr: string;
+  runtimeMs: number;
+  memoryKb: number;
+  passedCount: number;
+  totalCount: number;
+  cases: ExecutionCaseResult[];
+  initiatedByUserId: string;
+  initiatedAt: string;
+}
+
+export interface AttemptRecord {
+  _id: string;
+  sessionId: string;
+  questionId: string;
+  topic: string;
+  difficulty: string;
+  language: string;
+  code: string;
+  attemptedAt: string;
+  mode?: "submit" | "session_complete";
+  verdict?: ExecutionVerdict;
+  passedCount?: number;
+  totalCount?: number;
+  runtimeMs?: number;
+  memoryKb?: number;
+  executionMode?: "python_function" | "python_class";
+  firstFailingCase?: ExecutionCaseResult | null;
+  submittedAt?: string | null;
 }

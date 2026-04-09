@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
-    "test": "npm run build && node --test --test-reporter=spec dist/tests/",
+    "test": "npm run build && node --test --test-reporter=spec dist/tests/*.js",
     "test:coverage": "c8 --check-coverage --lines 80 --branches 80 npm test"
   },
   "keywords": [],

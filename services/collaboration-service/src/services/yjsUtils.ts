@@ -42,7 +42,7 @@ async function loadDoc(sessionId: string, doc: Y.Doc): Promise<void> {
   }
 }
 
-async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
+export async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
   if (docs.has(sessionId)) return docs.get(sessionId)!;
   if (docsLoading.has(sessionId)) return docsLoading.get(sessionId)!;
 
@@ -212,4 +212,32 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
       }, 3000);
     }
   });
+}
+
+export async function ensureStarterCode(
+  sessionId: string,
+  starterCode: string,
+): Promise<boolean> {
+  if (!starterCode.trim()) {
+    return false;
+  }
+
+  const doc = await getOrCreateDoc(sessionId);
+  const text = doc.getText("codemirror");
+
+  if (text.length > 0 && text.toString().trim().length > 0) {
+    return false;
+  }
+
+  if (text.length > 0) {
+    text.delete(0, text.length);
+  }
+  text.insert(0, starterCode);
+  await persistDoc(sessionId, doc);
+  return true;
+}
+
+export async function getSessionCode(sessionId: string): Promise<string> {
+  const doc = await getOrCreateDoc(sessionId);
+  return doc.getText("codemirror").toString();
 }

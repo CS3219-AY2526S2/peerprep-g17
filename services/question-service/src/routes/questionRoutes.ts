@@ -4,15 +4,18 @@ import {
   createQuestion,
   getAllQuestions,
   getQuestionById,
+  getQuestionJudgeById,
   updateQuestion,
   deleteQuestion,
   seedQuestions,
 } from "../controllers/questionController";
+import { verifyInternalServiceToken } from "../middleware/internalAuthMiddleware";
 
 const router = Router();
 
 // ── Read routes (any authenticated user) ────────────
 router.get("/", verifyToken, getAllQuestions);
+router.get("/:id/judge", verifyInternalServiceToken, getQuestionJudgeById);
 router.get("/:id", verifyToken, getQuestionById);
 
 // ── Write routes (admin only) ───────────────────────

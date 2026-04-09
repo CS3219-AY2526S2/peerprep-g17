@@ -56,9 +56,12 @@ export default function MatchPage() {
         setError("");
 
         const [topicsRes, stateRes] = await Promise.all([
-          fetch(QUESTION_API_URL, {
+          fetch(
+            `${QUESTION_API_URL}?executionModes=python_function,python_class`,
+            {
             headers: { Authorization: `Bearer ${token}` },
-          }),
+            },
+          ),
           fetch(`${MATCHING_API_URL}/requests/me`, {
             headers: { Authorization: `Bearer ${token}` },
           }),

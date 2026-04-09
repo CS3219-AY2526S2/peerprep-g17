@@ -29,6 +29,7 @@ export function handleWebSocketConnection(
     .getSessionForUser(sessionId, userId)
     .then(async (session) => {
       if (!session) { ws.close(4004, "Session not found or access denied"); return; }
+      await collaborationService.ensureSessionStarterCode(session);
 sessionSocketManager.join(sessionId, `yjs:${userId}`, ws);
 
       await setupYjsConnection(ws, sessionId);

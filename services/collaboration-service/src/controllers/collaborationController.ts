@@ -1,7 +1,16 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
-import { CollaborationService } from "../services/collaborationService";
-import { CollaborationSessionPayload, DIFFICULTIES } from "../types";
+import {
+  CollaborationService,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../services/collaborationService";
+import {
+  CollaborationSessionPayload,
+  DIFFICULTIES,
+  ExecutionRequestBody,
+} from "../types";
 import SessionModel from "../models/CollaborationSession"; 
 function formatSessionResponse(session: any) {
   return {
@@ -16,6 +25,10 @@ function formatSessionResponse(session: any) {
     messages: session.messages || [], 
     createdAt: session.createdAt.toISOString(),
     completedAt: session.completedAt?.toISOString(),
+    starterCodeSeededAt: session.starterCodeSeededAt?.toISOString(),
+    lastExecutionResult: session.lastExecutionResult || null,
+    lastExecutionAt: session.lastExecutionAt?.toISOString(),
+    lastSubmittedAt: session.lastSubmittedAt?.toISOString(),
   };
 }
 
@@ -103,6 +116,76 @@ export class CollaborationController {
     }
   };
 
+  runCode = async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    try {
+      const result = await this.collaborationService.executeSessionCode(
+        String(req.params.sessionId),
+        req.userId,
+        "run",
+        req.body as ExecutionRequestBody,
+      );
+      res.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ConflictError) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      res.status(502).json({
+        error:
+          error instanceof Error ? error.message : "Failed to run submitted code.",
+      });
+    }
+  };
+
+  submitCode = async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    try {
+      const result = await this.collaborationService.executeSessionCode(
+        String(req.params.sessionId),
+        req.userId,
+        "submit",
+        req.body as ExecutionRequestBody,
+      );
+      res.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ConflictError) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to submit code to the judge.",
+      });
+    }
+  };
+
   getSession = async (req: AuthRequest, res: Response): Promise<void> => {
     if (!req.userId) {
       res.status(401).json({ error: "Unauthorized." });
@@ -116,6 +199,7 @@ export class CollaborationController {
       res.status(404).json({ error: "Session not found." });
       return;
     }
+    await this.collaborationService.ensureSessionStarterCode(session);
     res.status(200).json({ data: formatSessionResponse(session) });
   };
 

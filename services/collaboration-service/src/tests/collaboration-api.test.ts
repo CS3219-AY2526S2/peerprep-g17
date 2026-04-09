@@ -11,6 +11,8 @@ import { CollaborationService } from "../services/collaborationService";
 const originalFetch = global.fetch;
 
 let mongoServer: MongoMemoryServer;
+const RESULT_START_MARKER = "__PEERPREP_EXECUTION_RESULT_START__";
+const RESULT_END_MARKER = "__PEERPREP_EXECUTION_RESULT_END__";
 
 function createFetchMock() {
   return (async (input: string | URL, init?: RequestInit) => {
@@ -52,6 +54,77 @@ function createFetchMock() {
         ok: true,
         async json() {
           return { data: { status: "completed" } };
+        },
+      } as Response;
+    }
+
+    if (url.includes("/api/questions/q-1/judge")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            data: {
+              id: "q-1",
+              title: "Roman to Integer",
+              executionMode: "python_function",
+              starterCode: {
+                python: "class Solution:\n    def romanToInt(self, s):\n        return 0",
+              },
+              visibleTestCases: [
+                { id: "visible-1", args: ["III"], expected: 3 },
+              ],
+              hiddenTestCases: [
+                { id: "hidden-1", args: ["LVIII"], expected: 58 },
+              ],
+              judgeConfig: {
+                className: "Solution",
+                methodName: "romanToInt",
+                comparisonMode: "exact_json",
+                timeLimitMs: 4000,
+                memoryLimitMb: 256,
+              },
+            },
+          };
+        },
+      } as Response;
+    }
+
+    if (url.includes("/api/v2/execute")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            run: {
+              stdout: [
+                RESULT_START_MARKER,
+                JSON.stringify({
+                  verdict: "Accepted",
+                  stdout: "",
+                  stderr: "",
+                  runtimeMs: 5,
+                  memoryKb: 12,
+                  passedCount: 1,
+                  totalCount: 1,
+                  cases: [
+                    {
+                      id: "visible-1",
+                      verdict: "Accepted",
+                      inputPreview: '["III"]',
+                      expectedPreview: "3",
+                      actualPreview: "3",
+                      stdout: "",
+                      stderr: "",
+                      errorMessage: "",
+                    },
+                  ],
+                }),
+                RESULT_END_MARKER,
+              ].join("\n"),
+              stderr: "",
+              output: "",
+              code: 0,
+            },
+          };
         },
       } as Response;
     }
@@ -197,4 +270,30 @@ test("POST /api/sessions/:sessionId/complete completes the session", async () =>
   const stored = await CollaborationSession.findOne({ sessionId: "session-1" });
   assert.ok(stored);
   assert.equal(stored.status, "completed");
+});
+
+test("POST /api/sessions/:sessionId/run returns a structured execution result", async () => {
+  const app = createTestApp();
+
+  await CollaborationSession.create({
+    sessionId: "session-1",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-1",
+    language: "Python",
+    status: "active",
+  });
+
+  const res = await request(app)
+    .post("/api/sessions/session-1/run")
+    .set("Authorization", "Bearer user-a-token")
+    .send({
+      code: "class Solution:\n    def romanToInt(self, s):\n        return 3",
+    });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.verdict, "Accepted");
+  assert.equal(res.body.data.mode, "run");
 });
