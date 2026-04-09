@@ -840,6 +840,10 @@ export default function CollaborationPage() {
     }
   }
 
+  void switchingQuestion;
+  void currentQuestionIndex;
+  void switchQuestion;
+
   const latestExecutionLabel = useMemo(() => {
     if (!executionResult) return "";
     return executionResult.initiatedByUserId === user?.id ? "You" : "Your partner";
@@ -873,6 +877,7 @@ export default function CollaborationPage() {
 
               {!terminated && session ? (
                 <div className="space-y-6">
+                  {/* Temporary question browser hidden for now.
                   {questionCatalog.length > 0 && (
                     <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -931,7 +936,7 @@ export default function CollaborationPage() {
                         </div>
                       </div>
                     </div>
-                  )}
+                  )} */}
 
                   {question && (
                     <details className="rounded-lg border border-border/60 bg-muted/20 p-3" open>
