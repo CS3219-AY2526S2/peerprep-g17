@@ -253,7 +253,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     ]);
 
     return (
-      <div className="rounded-[1.1rem] border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/70 to-sky-50/60 p-2 shadow-[0_18px_44px_-30px_rgba(79,70,229,0.32)] dark:border-slate-800 dark:bg-slate-950/80">
+      <div className="rounded-[1.1rem] border border-indigo-200/80 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div
           ref={editorRef}
           className="overflow-hidden rounded-xl border border-indigo-200/80 bg-background shadow-inner dark:border-slate-800"

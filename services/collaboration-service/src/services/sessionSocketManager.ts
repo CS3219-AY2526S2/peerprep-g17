@@ -13,12 +13,17 @@ interface SessionRoom {
   lastActivityAt: number;
   inactivityCheckTimer?: ReturnType<typeof setInterval>;
   terminationTimer?: ReturnType<typeof setTimeout>;
+  emptyRoomCleanupTimer?: ReturnType<typeof setTimeout>;
   warningActive: boolean;
 }
 
 export class SessionSocketManager {
   private rooms = new Map<string, SessionRoom>();
   private terminatedSessions = new Set<string>();
+  private terminatedSessionCleanupTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   private getDistinctConnectedUserCount(room: SessionRoom): number {
     const baseUsers = new Set<string>();
@@ -58,7 +63,8 @@ export class SessionSocketManager {
       } catch {
         // Ignore send failures during forced termination.
       }
-      setTimeout(() => ws.close(4000, "Session terminated"), 150);
+      const forcedCloseTimer = setTimeout(() => ws.close(4000, "Session terminated"), 150);
+      forcedCloseTimer.unref?.();
       return;
     }
 
@@ -80,6 +86,10 @@ export class SessionSocketManager {
 
     room.users.set(userId, { ws, userId, username });
     room.lastActivityAt = Date.now();
+    if (room.emptyRoomCleanupTimer) {
+      clearTimeout(room.emptyRoomCleanupTimer);
+      room.emptyRoomCleanupTimer = undefined;
+    }
 
     if (!wasAlreadyConnected) {
       room.users.forEach((connectedUser, id) => {
@@ -146,12 +156,13 @@ export class SessionSocketManager {
     }
 
     if (room.users.size === 0) {
-      setTimeout(() => {
+      room.emptyRoomCleanupTimer = setTimeout(() => {
         const currentRoom = this.rooms.get(sessionId);
         if (currentRoom && currentRoom.users.size === 0) {
           this.cleanupRoom(sessionId);
         }
       }, 30000);
+      room.emptyRoomCleanupTimer.unref?.();
     }
   }
 
@@ -209,8 +220,10 @@ export class SessionSocketManager {
           () => this.terminateSession(sessionId),
           5 * 60 * 1000,
         );
+        currentRoom.terminationTimer.unref?.();
       }
     }, 1000);
+    room.inactivityCheckTimer.unref?.();
   }
 
   private async terminateSession(sessionId: string): Promise<void> {
@@ -250,7 +263,12 @@ export class SessionSocketManager {
       }
     }
     this.cleanupRoom(sessionId);
-    setTimeout(() => this.terminatedSessions.delete(sessionId), 60000);
+    const cleanupTimer = setTimeout(() => {
+      this.terminatedSessions.delete(sessionId);
+      this.terminatedSessionCleanupTimers.delete(sessionId);
+    }, 60000);
+    cleanupTimer.unref?.();
+    this.terminatedSessionCleanupTimers.set(sessionId, cleanupTimer);
   }
 
   private cleanupRoom(sessionId: string): void {
@@ -260,7 +278,19 @@ export class SessionSocketManager {
     }
     clearInterval(room.inactivityCheckTimer);
     clearTimeout(room.terminationTimer);
+    clearTimeout(room.emptyRoomCleanupTimer);
     this.rooms.delete(sessionId);
+  }
+
+  public reset(): void {
+    for (const sessionId of this.rooms.keys()) {
+      this.cleanupRoom(sessionId);
+    }
+    for (const timer of this.terminatedSessionCleanupTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.terminatedSessionCleanupTimers.clear();
+    this.terminatedSessions.clear();
   }
 
   public broadcastToSession(sessionId: string, message: unknown): void {

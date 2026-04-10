@@ -36,6 +36,7 @@ test("acknowledging the warning cancels the active countdown for the session", (
   assert.equal(lastMessage.payload.cancelled, true);
 
   (manager as any).cleanupRoom("session-1");
+  manager.reset();
 });
 
 test("regular activity does not reset the timer after the warning is already active", () => {
@@ -57,4 +58,5 @@ test("regular activity does not reset the timer after the warning is already act
   assert.equal(room.lastActivityAt, 123);
 
   (manager as any).cleanupRoom("session-2");
+  manager.reset();
 });

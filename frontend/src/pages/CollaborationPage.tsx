@@ -485,6 +485,9 @@ export default function CollaborationPage() {
   const [editorStatus, setEditorStatus] = useState<
     "connecting" | "connected" | "disconnected"
   >("connecting");
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
+  const [leftPaneWidth, setLeftPaneWidth] = useState(43);
+  const [isResizingPanels, setIsResizingPanels] = useState(false);
 
   const currentQuestionIndex = useMemo(() => {
     if (!session?.questionId) return -1;
@@ -529,6 +532,7 @@ export default function CollaborationPage() {
   const terminatedRef = useRef(false);
   const isRedirecting = useRef(false);
   const executionStartedAtRef = useRef<string | null>(null);
+  const splitPaneRef = useRef<HTMLDivElement | null>(null);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -543,6 +547,43 @@ export default function CollaborationPage() {
       sessionRetryTimerRef.current = null;
     }
   }, []);
+
+  const handlePanelResizeStart = useCallback(() => {
+    setIsResizingPanels(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingPanels) {
+      return;
+    }
+
+    const handlePointerMove = (event: MouseEvent) => {
+      const container = splitPaneRef.current;
+      if (!container) {
+        return;
+      }
+
+      const bounds = container.getBoundingClientRect();
+      if (bounds.width <= 0) {
+        return;
+      }
+
+      const nextWidth = ((event.clientX - bounds.left) / bounds.width) * 100;
+      setLeftPaneWidth(Math.min(62, Math.max(32, nextWidth)));
+    };
+
+    const stopResizing = () => {
+      setIsResizingPanels(false);
+    };
+
+    window.addEventListener("mousemove", handlePointerMove);
+    window.addEventListener("mouseup", stopResizing);
+
+    return () => {
+      window.removeEventListener("mousemove", handlePointerMove);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizingPanels]);
 
   const sendKeepAlive = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -614,7 +655,7 @@ export default function CollaborationPage() {
     setCustomFunctionArgs(buildFunctionCustomState(question));
     setCustomClassOperations(buildClassOperationState(question));
     setCustomClassArguments(buildClassArgumentState(question));
-    setSelectedTestCase("sample-0");
+      setSelectedTestCase("sample-0");
   }, [question?.id]);
 
   useEffect(() => {
@@ -1283,9 +1324,13 @@ export default function CollaborationPage() {
               )}
               {error && <p className="text-xs text-destructive">{error}</p>}
 
-              {!terminated && session ? (
-                <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
-                  <div className="space-y-6">
+                {!terminated && session ? (
+                  <div
+                    ref={splitPaneRef}
+                    className="grid gap-6 xl:[grid-template-columns:minmax(0,var(--left-pane))_14px_minmax(0,calc(100%-var(--left-pane)-14px))]"
+                    style={{ ["--left-pane" as string]: `${leftPaneWidth}%` }}
+                  >
+                    <div className="space-y-6">
                   {/* Temporary question browser hidden for now.
                   {questionCatalog.length > 0 && (
                     <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
@@ -1347,9 +1392,9 @@ export default function CollaborationPage() {
                     </div>
                   )} */}
 
-                  {question && (
-                    <details className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/70 to-cyan-50/60 p-4 shadow-[0_16px_40px_-30px_rgba(14,116,144,0.45)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none" open>
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-base font-semibold">
+                    {question && (
+                      <details className="rounded-2xl border border-sky-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none" open>
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-base font-semibold">
                         <div className="flex items-center gap-2">
                           <span>{question.title}</span>
                           {question.categories.length > 0 && (
@@ -1370,7 +1415,7 @@ export default function CollaborationPage() {
                           {question.difficulty}
                         </span>
                       </summary>
-                      <div className="max-h-[24rem] space-y-4 overflow-y-auto border-t border-slate-200/80 pt-4 pr-1 dark:border-slate-800">
+                        <div className="space-y-4 border-t border-slate-200/80 pt-4 pr-1 dark:border-slate-800">
                         <p className="text-base leading-relaxed text-muted-foreground">
                           {question.description}
                         </p>
@@ -1442,35 +1487,11 @@ export default function CollaborationPage() {
                   )}
 
                   {question && (
-                    <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-[0_18px_44px_-32px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none">
+                    <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                           Test Cases
                         </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Keep the prompt and test cases visible on the left while coding on the right.
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200/80 bg-slate-50/90 p-2 dark:border-slate-800 dark:bg-slate-900/80">
-                        {question.visibleTestCases.map((testCase, index) => (
-                          <Button
-                            key={testCase.id}
-                            variant={
-                              selectedTestCase === `sample-${index}`
-                                ? "default"
-                                : "outline"
-                            }
-                            className={`min-w-24 text-sm ${
-                              selectedTestCase === `sample-${index}`
-                                ? "border-sky-200 bg-sky-100 text-sky-900 shadow-sm hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-100"
-                                : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                            }`}
-                            onClick={() => setSelectedTestCase(`sample-${index}`)}
-                          >
-                            Sample {index + 1}
-                          </Button>
-                        ))}
                         <Button
                           variant={selectedTestCase === "custom" ? "default" : "outline"}
                           className={`min-w-24 text-sm ${
@@ -1486,9 +1507,6 @@ export default function CollaborationPage() {
 
                       {selectedTestCase === "custom" ? (
                         <div className="space-y-3">
-                          <p className="text-sm text-muted-foreground">
-                            Custom input stays beside the problem statement for easier split-screen presenting.
-                          </p>
                           {question.executionMode === "python_function" ? (
                             <div className="space-y-2">
                               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
@@ -1527,9 +1545,6 @@ export default function CollaborationPage() {
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          <p className="text-sm text-muted-foreground">
-                            All visible sample testcases stay here while you code on the right.
-                          </p>
                           {question.visibleTestCases.map((testCase, index) => (
                             <TestCaseView
                               key={testCase.id}
@@ -1544,8 +1559,19 @@ export default function CollaborationPage() {
 
                   </div>
 
+                  <div className="hidden xl:flex xl:items-stretch xl:justify-center">
+                    <button
+                      type="button"
+                      aria-label="Resize collaboration panels"
+                      onMouseDown={handlePanelResizeStart}
+                      className="group flex w-3 cursor-col-resize items-center justify-center rounded-full border border-slate-200/80 bg-white/85 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+                    >
+                      <span className="h-16 w-1 rounded-full bg-slate-300 group-hover:bg-slate-400 dark:bg-slate-600 dark:group-hover:bg-slate-500" />
+                    </button>
+                  </div>
+
                   <div className="space-y-6">
-                  <div className="space-y-4 rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/60 to-sky-50/60 p-4 shadow-[0_18px_44px_-32px_rgba(79,70,229,0.42)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none">
+                  <div className="space-y-4 rounded-2xl border border-indigo-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <h3 className="text-base font-semibold">Shared Editor</h3>
                       <div className="flex flex-wrap gap-2 rounded-xl border border-indigo-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
@@ -1600,17 +1626,25 @@ export default function CollaborationPage() {
                     )}
                   </div>
 
-                  <div className="space-y-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-white via-amber-50/70 to-orange-50/60 p-5 shadow-[0_18px_44px_-32px_rgba(245,158,11,0.4)] dark:border-slate-800 dark:bg-slate-950/45">
+                  <div className="space-y-4 rounded-2xl border border-amber-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
                     <div className="space-y-2">
-                      <div>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
                         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                           Results Workspace
                         </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Switch between sample inputs, run results, and console
-                          output without everything blending together.
-                        </p>
                       </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-w-32"
+                          onClick={() => setResultsCollapsed((current) => !current)}
+                        >
+                          {resultsCollapsed ? "Show Results" : "Hide Results"}
+                        </Button>
+                      </div>
+                      {!resultsCollapsed && (
                       <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                       <Button
                         variant={resultTab === "result" ? "default" : "outline"}
@@ -1634,8 +1668,17 @@ export default function CollaborationPage() {
                         Chat
                       </Button>
                       </div>
+                      )}
                     </div>
 
+                    {resultsCollapsed ? (
+                      <div className="rounded-xl border border-dashed border-slate-300/80 bg-white/70 px-4 py-6 text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-900/55">
+                        Results are hidden so the editor has more room. Use
+                        <span className="mx-1 font-medium text-foreground">Show Results</span>
+                        when you want to present runs, console output, or chat.
+                      </div>
+                    ) : (
+                    <>
                     {resultTab === "result" && (
                       <div className="space-y-4">
                         {runningMode && (
@@ -1877,6 +1920,8 @@ export default function CollaborationPage() {
                           />
                         </div>
                       </div>
+                    )}
+                    </>
                     )}
                   </div>
 

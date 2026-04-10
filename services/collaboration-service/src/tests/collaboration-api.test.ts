@@ -10,6 +10,8 @@ import CollaborationSession from "../models/CollaborationSession";
 import Attempt from "../models/Attempt";
 import { CollaborationService } from "../services/collaborationService";
 import { config } from "../config";
+import { resetYjsState } from "../services/yjsUtils";
+import { sessionSocketManager } from "../services/sessionSocketManager";
 
 const originalFetch = global.fetch;
 
@@ -199,12 +201,16 @@ test.before(async () => {
 
 test.after(async () => {
   global.fetch = originalFetch;
+  resetYjsState();
+  sessionSocketManager.reset();
   await mongoose.disconnect();
   await mongoServer.stop();
 });
 
 test.beforeEach(async () => {
   await mongoose.connection.db?.dropDatabase();
+  resetYjsState();
+  sessionSocketManager.reset();
   global.fetch = createFetchMock();
   process.env.OPENAI_API_KEY = "test-openai-key";
 });
