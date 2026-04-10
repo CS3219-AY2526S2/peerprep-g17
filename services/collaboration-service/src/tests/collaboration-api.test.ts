@@ -19,6 +19,36 @@ function createFetchMock() {
   return (async (input: string | URL, init?: RequestInit) => {
     const url = String(input);
 
+    if (url === "https://api.openai.com/v1/chat/completions") {
+      const authHeader = init?.headers
+        ? (init.headers as Record<string, string>).Authorization
+        : undefined;
+
+      if (authHeader === "Bearer test-openai-key") {
+        return {
+          ok: true,
+          async json() {
+            return {
+              choices: [
+                {
+                  message: {
+                    content: "## Summary\n\n- This code prints `hello`.",
+                  },
+                },
+              ],
+            };
+          },
+        } as Response;
+      }
+
+      return {
+        ok: false,
+        async json() {
+          return { error: { message: "Invalid API key." } };
+        },
+      } as Response;
+    }
+
     if (url.includes("/api/users/me")) {
       const authHeader = init?.headers
         ? (init.headers as Record<string, string>).Authorization
@@ -103,6 +133,7 @@ test.after(async () => {
 test.beforeEach(async () => {
   await mongoose.connection.db?.dropDatabase();
   global.fetch = createFetchMock();
+  process.env.OPENAI_API_KEY = "test-openai-key";
 });
 
 test("GET /health returns ok", async () => {
@@ -447,4 +478,14 @@ test("POST /api/sessions/execute maps piston failures to 502", async () => {
     .send({ code: "print('hello')" });
 
   assert.equal(res.status, 502);
+test("POST /api/sessions/explain returns an AI explanation", async () => {
+  const app = createTestApp();
+
+  const res = await request(app)
+    .post("/api/sessions/explain")
+    .set("Authorization", "Bearer user-a-token")
+    .send({ code: "print('hello')" });
+
+  assert.equal(res.status, 200);
+  assert.match(res.body.data.explanation, /Summary/);
 });
