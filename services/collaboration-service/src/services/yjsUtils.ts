@@ -13,7 +13,7 @@ const messageAwareness = 1;
 export const docs = new Map<string, Y.Doc>();
 const awarenesses = new Map<string, awarenessProtocol.Awareness>();
 const connections = new Map<string, Set<WebSocket>>();
-const clientIds = new Map<WebSocket, number>();
+const clientIds = new Map<WebSocket, Set<number>>();
 const docsLoading = new Map<string, Promise<Y.Doc>>();
 
 async function persistDoc(sessionId: string, doc: Y.Doc): Promise<void> {
@@ -155,8 +155,14 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
           const innerDecoder = decoding.createDecoder(update);
           const len = decoding.readVarUint(innerDecoder);
           if (len > 0) {
-            const clientId = decoding.readVarUint(innerDecoder);
-            clientIds.set(ws, clientId);
+            const wsClientIds = clientIds.get(ws) ?? new Set<number>();
+            for (let i = 0; i < len; i += 1) {
+              const clientId = decoding.readVarUint(innerDecoder);
+              wsClientIds.add(clientId);
+              decoding.readVarUint(innerDecoder);
+              decoding.readVarString(innerDecoder);
+            }
+            clientIds.set(ws, wsClientIds);
           }
         } catch {
         }
@@ -175,15 +181,16 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
     doc.off("update", updateHandler);
     awareness.off("change", awarenessHandler);
 
-    const clientId = clientIds.get(ws);
-    if (clientId !== undefined) {
-      awarenessProtocol.removeAwarenessStates(awareness, [clientId], null);
+    const wsClientIds = clientIds.get(ws);
+    if (wsClientIds && wsClientIds.size > 0) {
+      const removedClientIds = Array.from(wsClientIds);
+      awarenessProtocol.removeAwarenessStates(awareness, removedClientIds, null);
       clientIds.delete(ws);
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, messageAwareness);
       encoding.writeVarUint8Array(
         encoder,
-        awarenessProtocol.encodeAwarenessUpdate(awareness, [clientId])
+        awarenessProtocol.encodeAwarenessUpdate(awareness, removedClientIds)
       );
       broadcastToAll(sessionId, encoding.toUint8Array(encoder));
     }

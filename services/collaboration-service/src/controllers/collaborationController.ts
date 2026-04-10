@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { CollaborationService } from "../services/collaborationService";
 import { CollaborationSessionPayload, DIFFICULTIES } from "../types";
-import SessionModel from "../models/CollaborationSession"; 
+
 function formatSessionResponse(session: any) {
   return {
     sessionId: session.sessionId,
@@ -56,11 +56,25 @@ export class CollaborationController {
 
   terminateSession = async (req: AuthRequest, res: Response) => {
     try {
-      const { sessionId } = req.params;
-      await SessionModel.deleteOne({ sessionId }); 
-      res.status(200).json({ message: "Session ended." });
+      const sessionId = String(req.params.sessionId);
+      if (!req.userId) {
+        res.status(401).json({ error: "Unauthorized." });
+        return;
+      }
+
+      const session = await this.collaborationService.terminateSession(
+        sessionId,
+        req.userId,
+      );
+
+      if (!session) {
+        res.status(404).json({ error: "Session not found." });
+        return;
+      }
+
+      res.status(200).json({ data: formatSessionResponse(session) });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete session." });
+      res.status(500).json({ error: "Failed to end session." });
     }
   };
 
@@ -103,6 +117,79 @@ export class CollaborationController {
     }
   };
 
+  explainCode = async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    const { code } = req.body as { code?: string };
+
+    if (!code?.trim()) {
+      res.status(400).json({ error: "No code provided." });
+      return;
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+
+    if (!apiKey) {
+      res.status(503).json({ error: "AI explanation service is not configured." });
+      return;
+    }
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.3,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You explain code for students in clear markdown. Use short sections, bullet points when helpful, and wrap code identifiers in backticks. Keep the explanation concise but useful.",
+            },
+            {
+              role: "user",
+              content: `Explain this code:\n\n\`\`\`\n${code}\n\`\`\``,
+            },
+          ],
+        }),
+      });
+
+      const result = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        res.status(502).json({
+          error:
+            result.error?.message || "OpenAI explanation request failed.",
+        });
+        return;
+      }
+
+      const explanation = result.choices?.[0]?.message?.content?.trim();
+
+      if (!explanation) {
+        res.status(502).json({ error: "OpenAI did not return an explanation." });
+        return;
+      }
+
+      res.status(200).json({ data: { explanation } });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate explanation.";
+      res.status(502).json({ error: message });
+    }
+  };
+
   getSession = async (req: AuthRequest, res: Response): Promise<void> => {
     if (!req.userId) {
       res.status(401).json({ error: "Unauthorized." });
@@ -125,10 +212,15 @@ export class CollaborationController {
       return;
     }
 
+    const { code } = (req.body ?? {}) as {
+      code?: string;
+    };
+
     try {
       const session = await this.collaborationService.completeSession(
         String(req.params.sessionId),
         req.userId,
+        code,
       );
       if (!session) {
         res.status(404).json({ error: "Session not found." });

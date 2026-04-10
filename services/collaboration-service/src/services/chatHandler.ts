@@ -2,13 +2,15 @@ import { WebSocket } from "ws";
 import { IncomingMessage } from "http";
 import { verifyTokenString } from "../middleware/authMiddleware";
 import { sessionSocketManager } from "./sessionSocketManager";
+import CollaborationSession from "../models/CollaborationSession";
 
 const chatRooms = new Map<string, Map<WebSocket, string>>();
+const HEARTBEAT_INTERVAL_MS = 10000;
 
-export function handleChatConnection(
+export async function handleChatConnection(
   ws: WebSocket,
   req: IncomingMessage,
-): void {
+): Promise<void> {
   const url = new URL(req.url || "", `http://${req.headers.host || "localhost"}`);
   const pathParts = url.pathname.split("/").filter(Boolean);
   const sessionId = pathParts[pathParts.length - 1];
@@ -28,87 +30,133 @@ export function handleChatConnection(
     return;
   }
 
-sessionSocketManager.join(sessionId, `chat:${userId}`, ws);
+  sessionSocketManager.join(sessionId, `chat:${userId}`, ws, username);
+
   if (!chatRooms.has(sessionId)) {
     chatRooms.set(sessionId, new Map());
   }
   const room = chatRooms.get(sessionId)!;
   room.set(ws, username);
 
-  const joinMessage = JSON.stringify({
-    type: "chat_message",
-    payload: {
-      fromUserId: "SYSTEM",
-      username: "System",
-      text: `${username} has joined the chat`,
-      timestamp: new Date().toISOString(),
-    },
-  });
-  room.forEach((_, client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(joinMessage);
+  let isAlive = true;
+  const pingTimer = setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    if (!isAlive) {
+      ws.terminate();
+      return;
+    }
+
+    isAlive = false;
+    ws.ping();
+  }, HEARTBEAT_INTERVAL_MS);
+
+  ws.on("pong", () => {
+    isAlive = true;
   });
 
-  console.log(`[Chat] User ${username} (${userId}) joined session ${sessionId}`);
+  // HYDRATION: Load previous messages from MongoDB
+  try {
+    const session = await CollaborationSession.findOne({ sessionId });
+    if (session?.messages && session.messages.length > 0) {
+      ws.send(JSON.stringify({
+        type: "chat_history",
+        payload: session.messages,
+      }));
+    }
 
-  ws.on("message", (data) => {
+    ws.send(
+      JSON.stringify({
+        type: "peer_status_snapshot",
+        payload: {
+          onlineUserIds: sessionSocketManager.getConnectedPeerIds(
+            sessionId,
+            `chat:${userId}`,
+          ),
+        },
+      }),
+    );
+  } catch (err) {
+    console.error(`[Chat] History load failed:`, err);
+  }
+
+  ws.on("message", async (data) => {
     try {
-      const parsed = JSON.parse(data.toString()) as {
-        type: string;
-        payload?: { text?: string; username?: string };
-      };
+      const parsed = JSON.parse(data.toString());
+
       if (parsed.type === "chat_message") {
         sessionSocketManager.recordActivity(sessionId);
-        const outgoing = JSON.stringify({
-          type: "chat_message",
-          payload: {
-            fromUserId: userId,
-            text: parsed.payload?.text,
-            username: parsed.payload?.username || username,
-            timestamp: new Date().toISOString(),
-          },
-        });
+
+        const messagePayload = {
+          fromUserId: userId,
+          text: parsed.payload?.text,
+          username: parsed.payload?.username || username,
+          timestamp: new Date().toISOString(),
+        };
+
+        await CollaborationSession.findOneAndUpdate(
+          { sessionId },
+          {
+            $push: {
+              messages: {
+                username: messagePayload.username,
+                text: messagePayload.text || "",
+                timestamp: new Date(messagePayload.timestamp),
+              },
+            },
+          }
+        );
+
+        const outgoing = JSON.stringify({ type: "chat_message", payload: messagePayload });
         room.forEach((_, client) => {
           if (client.readyState === WebSocket.OPEN) client.send(outgoing);
         });
       }
 
+      if (parsed.type === "explicit_leave") {
+        const leaveMsg = JSON.stringify({
+          type: "chat_message",
+          payload: {
+            fromUserId: "SYSTEM",
+            username: "System",
+            text: `${username} has ended the session.`,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        room.forEach((_, client) => {
+          if (client.readyState === WebSocket.OPEN) client.send(leaveMsg);
+        });
+      }
+
       if (parsed.type === "keep_alive") {
+        sessionSocketManager.acknowledgeWarning(sessionId);
+      }
+
+      if (parsed.type === "activity") {
         sessionSocketManager.recordActivity(sessionId);
       }
 
       if (parsed.type === "ping") {
         sessionSocketManager.handlePong(sessionId, userId);
-        ws.send(JSON.stringify({
-          type: "pong",
-          payload: {},
-          timestamp: new Date().toISOString(),
-        }));
+        ws.send(JSON.stringify({ type: "pong", payload: {}, timestamp: new Date().toISOString() }));
       }
-    } catch {
-    }
+    } catch (err) {}
   });
 
   ws.on("close", () => {
-    const leavingUsername = room.get(ws) || "User";
+    clearInterval(pingTimer);
     room.delete(ws);
-    const leaveMsg = JSON.stringify({
-      type: "chat_message",
-      payload: {
-        fromUserId: "SYSTEM",
-        username: "System",
-        text: `${leavingUsername} has left the chat`,
-        timestamp: new Date().toISOString(),
-      },
-    });
-    room.forEach((_, client) => {
-      if (client.readyState === WebSocket.OPEN) client.send(leaveMsg);
-    });
-    if (room.size === 0) chatRooms.delete(sessionId);
-sessionSocketManager.leave(sessionId, `chat:${userId}`);
-    console.log(`[Chat] User ${leavingUsername} left session ${sessionId}`);
+    sessionSocketManager.leave(sessionId, `chat:${userId}`);
+
+    setTimeout(() => {
+      if (room.size === 0) chatRooms.delete(sessionId);
+    }, 3000);
   });
+
   ws.on("error", (err) => {
     console.error(`[Chat] Error for user ${userId}:`, err);
-sessionSocketManager.leave(sessionId, `chat:${userId}`);
+    sessionSocketManager.leave(sessionId, `chat:${userId}`);
   });
 }

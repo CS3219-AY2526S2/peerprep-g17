@@ -54,6 +54,7 @@ export interface RequestRecord {
   timeoutAt: number;
   t1At: number;
   t2At: number;
+  recentPartnerAt: number;
   status: "searching" | "matching";
   sessionId: string;
   cancelRequested: boolean;

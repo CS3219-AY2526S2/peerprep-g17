@@ -6,12 +6,14 @@ import { EditorView, basicSetup } from "codemirror";
 import { python } from "@codemirror/lang-python";
 import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
+import type { Awareness } from "y-protocols/awareness";
 
 interface EditorProps {
   sessionId: string;
   username: string;
   token: string;
   onActivity?: () => void;
+  onConnectionStatusChange?: (status: "connecting" | "connected" | "disconnected") => void;
 }
 
 export interface CodeEditorHandle {
@@ -21,7 +23,7 @@ export interface CodeEditorHandle {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
-  ({ sessionId, username, token, onActivity }, ref) => {
+  ({ sessionId, username, token, onActivity, onConnectionStatusChange }, ref) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
@@ -68,12 +70,19 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
-     const provider = new WebsocketProvider(
-      `${wsUrl}/ws/sessions/`, 
+      const provider = new WebsocketProvider(
+        `${wsUrl}/ws/sessions/`, 
         sessionId,
         ydoc,
-        { params: { token } }
-    );
+        { 
+          params: { 
+            token,
+            username 
+          } 
+        }
+      );
+
+      onConnectionStatusChange?.("connecting");
 
       const setupWsFilter = () => {
         if (provider.ws) {
@@ -87,16 +96,46 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         }
       };
 
+      const handleProviderStatus = (event: { status: "connected" | "disconnected" | "connecting" }) => {
+        onConnectionStatusChange?.(event.status);
+      };
+
       setupWsFilter();
       provider.on("status", setupWsFilter);
+      provider.on("status", handleProviderStatus);
       providerRef.current = provider;
+      
+      // Awareness shows the username for the cursor/presence
       provider.awareness.setLocalStateField("user", {
         name: username,
         color: "#" + Math.floor(Math.random() * 16777215).toString(16),
       });
 
+      const filteredAwareness = new Proxy(provider.awareness as Awareness, {
+        get(target, prop, receiver) {
+          if (prop === "getStates") {
+            return () => {
+              const states = target.getStates();
+              const filtered = new Map(states);
+              filtered.forEach((state, clientId) => {
+                if (
+                  clientId !== target.doc.clientID &&
+                  state?.user?.name === username
+                ) {
+                  filtered.delete(clientId);
+                }
+              });
+              return filtered;
+            };
+          }
+
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
+      
       const activityExtension = EditorView.updateListener.of((update) => {
         if (update.docChanged && onActivityRef.current) {
           onActivityRef.current();
@@ -108,7 +147,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
           basicSetup,
           python(),
           oneDark,
-          yCollab(ytext, provider.awareness),
+          yCollab(ytext, filteredAwareness),
           activityExtension,
           EditorView.theme({ "&": { height: "450px" } }),
         ],
@@ -119,12 +158,14 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       return () => {
         provider.off("status", setupWsFilter);
+        provider.off("status", handleProviderStatus);
+        onConnectionStatusChange?.("disconnected");
         provider.disconnect();
         provider.destroy();
         ydoc.destroy();
         view.destroy();
       };
-    }, [sessionId, username, token]);
+    }, [sessionId, username, token, onConnectionStatusChange]);
 
     return (
       <div

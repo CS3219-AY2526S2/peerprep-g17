@@ -1,8 +1,9 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 
+<<<<<<< HEAD
 const featureCards = [
   {
     title: "Real-time Collaboration",
@@ -25,6 +26,20 @@ export default function HomePage() {
   const { isAuthenticated } = useAuth();
   const primaryHref = isAuthenticated ? "/dashboard" : "/signup";
   const primaryLabel = isAuthenticated ? "Go to Dashboard" : "Get started";
+=======
+const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
+
+export default function HomePage() {
+  const { isAuthenticated } = useAuth();
+  const activeSessionId =
+    typeof window !== "undefined"
+      ? localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)
+      : null;
+
+  if (isAuthenticated && activeSessionId) {
+    return <Navigate to={`/collaboration/${activeSessionId}`} replace />;
+  }
+>>>>>>> 074b3dbbdacf2c223f82cfd792da34f23e5eab26
 
   return (
     <div className="min-h-screen bg-background text-foreground">
