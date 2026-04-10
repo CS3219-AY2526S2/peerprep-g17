@@ -51,7 +51,7 @@ const presetProfilePhotos = [
   },
   {
     id: "singapore",
-    label: "Singapore",
+    label: "City",
     url: "https://cdn.pixabay.com/photo/2017/07/31/06/20/singapore-2556628_1280.jpg",
   },
   {
@@ -63,6 +63,31 @@ const presetProfilePhotos = [
     id: "paris",
     label: "Paris",
     url: "https://cdn.pixabay.com/photo/2022/10/22/13/41/paris-7539257_1280.jpg",
+  },
+  {
+    id: "city",
+    label: "City",
+    url: "https://pixabay.com/images/download/seoulinspired-city-4119806_1920.jpg",
+  },
+  {
+    id: "alps",
+    label: "Alps",
+    url: "https://pixabay.com/images/download/katerinavulcova-alps-9919976_1920.jpg",
+  },
+  {
+    id: "sunset",
+    label: "Sunset",
+    url: "https://pixabay.com/images/download/c1ri-sunset-3875817_1920.jpg",
+  },
+  {
+    id: "landscape",
+    label: "Landscape",
+    url: "https://pixabay.com/images/download/kanenori-landscape-7373484_1920.jpg",
+  },
+  {
+    id: "elephant",
+    label: "Elephant",
+    url: "https://pixabay.com/images/download/shahzadskk-elephant-9772462_1920.jpg",
   },
 ] as const;
 

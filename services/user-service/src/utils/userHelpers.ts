@@ -102,7 +102,7 @@ function buildProfilePhotoUrl(
 ): string | null {
   if (presetUrl) return presetUrl;
   if (!hasPhoto) return null;
-  return `${config.baseUrl}/api/users/${userId}/photo`;
+  return `/api/users/${userId}/photo`;
 }
 
 export function toSelfProfile(user: IUser): SelfProfile {
