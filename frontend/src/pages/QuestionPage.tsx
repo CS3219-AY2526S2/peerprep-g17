@@ -263,8 +263,8 @@ export default function QuestionPage() {
         {/* ── Header ──────────────────────────────── */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Questions</h1>
-            <p className="mt-2 text-muted-foreground">
+            <h1 className="text-4xl font-bold tracking-tight">Questions</h1>
+            <p className="mt-2 text-base text-muted-foreground">
               {isAdmin
                 ? "Create, view, and manage the question repository."
                 : "Browse and explore the question repository."}
@@ -360,13 +360,13 @@ export default function QuestionPage() {
               placeholder="Search by title…"
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
-              className="w-64"
+              className="h-10 w-72 text-base"
             />
             <select
               id="filter-difficulty"
               value={filterDifficulty}
               onChange={(e) => setFilterDifficulty(e.target.value)}
-              className="surface-select"
+              className="surface-select h-10 min-w-44 text-base"
             >
                <option value="">All Difficulties</option>
                   {DIFFICULTIES.map((d) => (
@@ -377,7 +377,7 @@ export default function QuestionPage() {
               id="filter-category"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="surface-select"
+              className="surface-select h-10 min-w-48 text-base"
             >
               <option value="">All Categories</option>
               {CATEGORIES.map((c) => (
@@ -421,25 +421,25 @@ export default function QuestionPage() {
           </div>
         ) : (
           <div className="mt-6 overflow-hidden rounded-xl border border-border/50">
-            <table className="w-full text-sm">
+            <table className="w-full text-base">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
                   <th 
-                    className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground"
+                    className="w-[30%] px-4 py-3 text-left text-sm font-medium text-muted-foreground"
                     onClick={() => handleTheSort("title")}
                   >
                     Title {sortField === "title" ? (sortDirectory == "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="w-[10%] px-4 py-3 text-left font-medium text-muted-foreground"
+                  <th className="w-[10%] px-4 py-3 text-left text-sm font-medium text-muted-foreground"
                     onClick={() => handleTheSort("difficulty")}
                   >
                     Difficulty {sortField === "difficulty" ? (sortDirectory === "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground">
+                  <th className="w-[30%] px-4 py-3 text-left text-sm font-medium text-muted-foreground">
                     Categories
                   </th>
                   {isAdmin && (
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                    <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">
                       Actions
                     </th>
                   )}
@@ -452,10 +452,10 @@ export default function QuestionPage() {
                     className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
                     onClick={() => setSelectedQuestion(q)}
                   >
-                    <td className="px-4 py-3 font-medium">{q.title}</td>
+                    <td className="px-4 py-4 text-[1.05rem] font-medium text-foreground">{q.title}</td>
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${
+                        className={`inline-block rounded-md border px-2.5 py-1 text-sm font-medium ${
                           DIFFICULTY_STYLES[q.difficulty] ||
                           "bg-muted text-muted-foreground"
                         }`}
@@ -468,7 +468,7 @@ export default function QuestionPage() {
                         {(q.categories ?? []).map((cat) => (
                           <span
                             key={cat}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
+                            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
                           >
                             {cat}
                           </span>
