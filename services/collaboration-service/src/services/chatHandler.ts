@@ -43,12 +43,10 @@ export async function handleChatConnection(
     if (ws.readyState !== WebSocket.OPEN) {
       return;
     }
-
     if (!isAlive) {
       ws.terminate();
       return;
     }
-
     isAlive = false;
     ws.ping();
   }, HEARTBEAT_INTERVAL_MS);
@@ -57,14 +55,15 @@ export async function handleChatConnection(
     isAlive = true;
   });
 
-  // HYDRATION: Load previous messages from MongoDB
   try {
     const session = await CollaborationSession.findOne({ sessionId });
     if (session?.messages && session.messages.length > 0) {
-      ws.send(JSON.stringify({
-        type: "chat_history",
-        payload: session.messages,
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "chat_history",
+          payload: session.messages,
+        }),
+      );
     }
 
     ws.send(
@@ -79,7 +78,7 @@ export async function handleChatConnection(
       }),
     );
   } catch (err) {
-    console.error(`[Chat] History load failed:`, err);
+    console.error("[Chat] History load failed:", err);
   }
 
   ws.on("message", async (data) => {
@@ -106,12 +105,17 @@ export async function handleChatConnection(
                 timestamp: new Date(messagePayload.timestamp),
               },
             },
-          }
+          },
         );
 
-        const outgoing = JSON.stringify({ type: "chat_message", payload: messagePayload });
+        const outgoing = JSON.stringify({
+          type: "chat_message",
+          payload: messagePayload,
+        });
         room.forEach((_, client) => {
-          if (client.readyState === WebSocket.OPEN) client.send(outgoing);
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(outgoing);
+          }
         });
       }
 
@@ -126,7 +130,9 @@ export async function handleChatConnection(
           },
         });
         room.forEach((_, client) => {
-          if (client.readyState === WebSocket.OPEN) client.send(leaveMsg);
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(leaveMsg);
+          }
         });
       }
 
@@ -139,10 +145,18 @@ export async function handleChatConnection(
       }
 
       if (parsed.type === "ping") {
-        sessionSocketManager.handlePong(sessionId, userId);
-        ws.send(JSON.stringify({ type: "pong", payload: {}, timestamp: new Date().toISOString() }));
+        sessionSocketManager.handlePong(sessionId, `chat:${userId}`);
+        ws.send(
+          JSON.stringify({
+            type: "pong",
+            payload: {},
+            timestamp: new Date().toISOString(),
+          }),
+        );
       }
-    } catch (err) {}
+    } catch {
+      // Ignore malformed chat messages.
+    }
   });
 
   ws.on("close", () => {
@@ -151,7 +165,9 @@ export async function handleChatConnection(
     sessionSocketManager.leave(sessionId, `chat:${userId}`);
 
     setTimeout(() => {
-      if (room.size === 0) chatRooms.delete(sessionId);
+      if (room.size === 0) {
+        chatRooms.delete(sessionId);
+      }
     }, 3000);
   });
 

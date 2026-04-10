@@ -1,6 +1,12 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const;
+export const EXECUTION_MODES = [
+  "python_function",
+  "python_class",
+  "unsupported",
+] as const;
+export const COMPARISON_MODES = ["exact_json", "float_tolerance"] as const;
 
 export const CATEGORIES = [
   "Algorithms",
@@ -26,6 +32,33 @@ export interface IExample {
   explanation?: string;
 }
 
+export interface StarterCodeRecord {
+  python: string;
+}
+
+export interface FunctionTestCase {
+  id: string;
+  args: unknown[];
+  expected: unknown;
+}
+
+export interface ClassTestCase {
+  id: string;
+  operations: string[];
+  arguments: unknown[][];
+  expected: unknown[];
+}
+
+export type JudgeTestCase = FunctionTestCase | ClassTestCase;
+
+export interface JudgeConfig {
+  className?: string;
+  methodName?: string;
+  comparisonMode: (typeof COMPARISON_MODES)[number];
+  timeLimitMs: number;
+  memoryLimitMb: number;
+}
+
 export interface IQuestion extends Document {
   title: string;
   difficulty: string;
@@ -33,6 +66,11 @@ export interface IQuestion extends Document {
   description: string;
   examples: IExample[];
   link: string;
+  executionMode: (typeof EXECUTION_MODES)[number];
+  starterCode: StarterCodeRecord;
+  visibleTestCases: JudgeTestCase[];
+  hiddenTestCases: JudgeTestCase[];
+  judgeConfig?: JudgeConfig | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -101,6 +139,45 @@ const questionSchema = new Schema<IQuestion>(
       type: String,
       trim: true,
       default: "",
+    },
+    executionMode: {
+      type: String,
+      enum: [...EXECUTION_MODES],
+      default: "unsupported",
+    },
+    starterCode: {
+      python: {
+        type: String,
+        default: "",
+      },
+    },
+    visibleTestCases: {
+      type: [Schema.Types.Mixed] as unknown as never,
+      default: [],
+    },
+    hiddenTestCases: {
+      type: [Schema.Types.Mixed] as unknown as never,
+      default: [],
+    },
+    judgeConfig: {
+      type: {
+        className: { type: String, trim: true },
+        methodName: { type: String, trim: true },
+        comparisonMode: {
+          type: String,
+          enum: [...COMPARISON_MODES],
+          default: "exact_json",
+        },
+        timeLimitMs: {
+          type: Number,
+          default: 4000,
+        },
+        memoryLimitMb: {
+          type: Number,
+          default: 256,
+        },
+      },
+      default: null,
     },
   },
   {

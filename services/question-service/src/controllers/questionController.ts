@@ -9,6 +9,7 @@ import {
   findInvalidCategories,
   buildFilterQuery,
   formatQuestionResponse,
+  formatQuestionJudgeResponse,
 } from "../utils/questionHelpers";
 
 /* ── CREATE ───────────────────────────────────────────── */
@@ -21,7 +22,19 @@ export async function createQuestion(
   req: AuthRequest,
   res: Response,
 ): Promise<void> {
-  const { title, difficulty, categories, description, examples, link } =
+  const {
+    title,
+    difficulty,
+    categories,
+    description,
+    examples,
+    link,
+    executionMode,
+    starterCode,
+    visibleTestCases,
+    hiddenTestCases,
+    judgeConfig,
+  } =
     req.body;
 
   // ── Guard: required fields
@@ -72,6 +85,11 @@ export async function createQuestion(
       description,
       examples: examples || [],
       link: link || "",
+      executionMode: executionMode || "unsupported",
+      starterCode: starterCode || { python: "" },
+      visibleTestCases: visibleTestCases || [],
+      hiddenTestCases: hiddenTestCases || [],
+      judgeConfig: judgeConfig || null,
     });
 
     res.status(201).json({ data: formatQuestionResponse(question) });
@@ -118,12 +136,23 @@ export async function getAllQuestions(
     { $project: { difficultyOrder: 0 } },
   ]);
 
+  const filteredCategories =
+    typeof req.query.executionModes === "string" && req.query.executionModes.trim()
+      ? [
+          ...new Set(
+            questions.flatMap((question) =>
+              Array.isArray(question.categories) ? question.categories : [],
+            ),
+          ),
+        ].sort()
+      : [...CATEGORIES];
+
   res.status(200).json({
     data: questions.map(formatQuestionResponse),
     meta: {
       total: questions.length,
       difficulties: [...DIFFICULTIES],
-      categories: [...CATEGORIES],
+      categories: filteredCategories,
     },
   });
 }
@@ -154,6 +183,26 @@ export async function getQuestionById(
   res.status(200).json({ data: formatQuestionResponse(question) });
 }
 
+export async function getQuestionJudgeById(
+  req: AuthRequest,
+  res: Response,
+): Promise<void> {
+  const { id } = req.params;
+
+  if (!isValidObjectId(String(id))) {
+    res.status(400).json({ error: "Invalid question id." });
+    return;
+  }
+
+  const question = await Question.findById(id);
+  if (!question) {
+    res.status(404).json({ error: "Question not found." });
+    return;
+  }
+
+  res.status(200).json({ data: formatQuestionJudgeResponse(question) });
+}
+
 /* ── UPDATE ───────────────────────────────────────────── */
 
 /**
@@ -165,8 +214,19 @@ export async function updateQuestion(
   res: Response,
 ): Promise<void> {
   const { id } = req.params;
-  const { title, difficulty, categories, description, examples, link } =
-    req.body;
+  const {
+    title,
+    difficulty,
+    categories,
+    description,
+    examples,
+    link,
+    executionMode,
+    starterCode,
+    visibleTestCases,
+    hiddenTestCases,
+    judgeConfig,
+  } = req.body;
 
   // ── Guard: valid ObjectId
   if (!isValidObjectId(String(id))) {
@@ -181,7 +241,12 @@ export async function updateQuestion(
     !categories &&
     !description &&
     examples === undefined &&
-    link === undefined
+    link === undefined &&
+    executionMode === undefined &&
+    starterCode === undefined &&
+    visibleTestCases === undefined &&
+    hiddenTestCases === undefined &&
+    judgeConfig === undefined
   ) {
     res
       .status(400)
@@ -238,6 +303,13 @@ export async function updateQuestion(
   if (description) updatePayload.description = description;
   if (examples !== undefined) updatePayload.examples = examples;
   if (link !== undefined) updatePayload.link = link;
+  if (executionMode !== undefined) updatePayload.executionMode = executionMode;
+  if (starterCode !== undefined) updatePayload.starterCode = starterCode;
+  if (visibleTestCases !== undefined)
+    updatePayload.visibleTestCases = visibleTestCases;
+  if (hiddenTestCases !== undefined)
+    updatePayload.hiddenTestCases = hiddenTestCases;
+  if (judgeConfig !== undefined) updatePayload.judgeConfig = judgeConfig;
 
   // ── Persist
   try {
@@ -313,23 +385,26 @@ export async function seedQuestions(
       (q) => !existingTitles.has(q.title),
     );
 
-    if (questionsToInsert.length === 0) {
-      res.status(200).json({
-        data: {
-          message: "All seed questions already exist. Nothing to add.",
-          inserted: 0,
-        },
-      });
-      return;
+    let insertedCount = 0;
+    if (questionsToInsert.length > 0) {
+      const result = await Question.insertMany(questionsToInsert);
+      insertedCount = result.length;
     }
 
-    const result = await Question.insertMany(questionsToInsert);
+    const { syncSeedQuestionExecutionMetadata } = await import(
+      "../utils/seedSync"
+    );
+    const updated = await syncSeedQuestionExecutionMetadata();
 
-    res.status(201).json({
+    res.status(questionsToInsert.length > 0 ? 201 : 200).json({
       data: {
-        message: `Seeded ${result.length} questions successfully.`,
-        inserted: result.length,
-        skipped: SEED_QUESTIONS.length - result.length,
+        message:
+          insertedCount > 0 || updated > 0
+            ? `Seed sync complete. Inserted ${insertedCount}, updated ${updated}.`
+            : "All seed questions already exist and are up to date.",
+        inserted: insertedCount,
+        updated,
+        skipped: SEED_QUESTIONS.length - insertedCount,
       },
     });
   } catch {

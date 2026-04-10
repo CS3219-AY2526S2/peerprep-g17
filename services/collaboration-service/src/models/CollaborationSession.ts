@@ -6,6 +6,7 @@ import {
   Difficulty,
   Language,
   CollaborationSessionStatus,
+  ExecutionResult,
 } from "../types";
 
 export interface ICollaborationSession extends Document {
@@ -26,6 +27,10 @@ export interface ICollaborationSession extends Document {
     text: string;
     timestamp: Date;
   }[];
+  starterCodeSeededAt?: Date | null;
+  lastExecutionResult?: ExecutionResult | null;
+  lastExecutionAt?: Date | null;
+  lastSubmittedAt?: Date | null;
 }
 
 const collaborationSessionSchema = new Schema<ICollaborationSession>(
@@ -86,6 +91,22 @@ const collaborationSessionSchema = new Schema<ICollaborationSession>(
         timestamp: { type: Date, default: Date.now },
       },
     ],
+    starterCodeSeededAt: {
+      type: Date,
+      default: null,
+    },
+    lastExecutionResult: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    lastExecutionAt: {
+      type: Date,
+      default: null,
+    },
+    lastSubmittedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

@@ -1,32 +1,275 @@
-import { Fragment, useEffect, useState, useRef, useCallback, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { COLLABORATION_API_URL, MATCHING_API_URL } from "@/config";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  COLLABORATION_API_URL,
+  MATCHING_API_URL,
+  QUESTION_API_URL,
+} from "@/config";
 import { useAuth } from "@/contexts/AuthContext";
-import type { CollaborationSessionRecord } from "@/types";
+import type {
+  ClassJudgeTestCase,
+  CollaborationSessionRecord,
+  ExecutionResult,
+  FunctionJudgeTestCase,
+  JudgeTestCase,
+  QuestionRecord,
+} from "@/types";
 import CodeEditor from "./CollaborationEditor";
 import type { CodeEditorHandle } from "./CollaborationEditor";
-import { QUESTION_API_URL } from "@/config";
 
 const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
 
-function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; onKeepAlive: () => void; }) {
+type ResultTab = "testcase" | "result" | "console";
+type SelectedTestCase = `sample-${number}` | "custom";
+
+function InactivityWarning({
+  secondsLeft,
+  onKeepAlive,
+}: {
+  secondsLeft: number;
+  onKeepAlive: () => void;
+}) {
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
-  const timeStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, "0")}s` : `${secs}s`;
+  const timeStr =
+    mins > 0
+      ? `${mins}m ${secs.toString().padStart(2, "0")}s`
+      : `${secs}s`;
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-md px-4 animate-in slide-in-from-top-4">
-      <div className="rounded-lg border border-amber-500/40 bg-amber-950/90 px-4 py-3 shadow-2xl backdrop-blur-md flex items-center justify-between gap-4 text-white">
+    <div className="fixed top-20 left-1/2 z-[9999] w-full max-w-md -translate-x-1/2 px-4 animate-in slide-in-from-top-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-amber-500/40 bg-amber-950/90 px-4 py-3 text-white shadow-2xl backdrop-blur-md">
         <div>
-          <p className="text-sm font-bold text-amber-500 uppercase tracking-tight">Inactivity Warning</p>
-          <p className="text-xs text-amber-200/80 mt-0.5">Terminating in <span className="font-mono font-bold text-amber-400">{timeStr}</span></p>
+          <p className="text-sm font-bold uppercase tracking-tight text-amber-500">
+            Inactivity Warning
+          </p>
+          <p className="mt-0.5 text-xs text-amber-200/80">
+            Terminating in{" "}
+            <span className="font-mono font-bold text-amber-400">{timeStr}</span>
+          </p>
         </div>
-        <button className="bg-500/20 text-amber-500 px-3 py-1 rounded border border-amber-500/40 text-sm hover:bg-amber-500/30" onClick={onKeepAlive}>Stay Connected</button>
+        <button
+          className="rounded border border-amber-500/40 px-3 py-1 text-sm text-amber-500 hover:bg-amber-500/30"
+          onClick={onKeepAlive}
+        >
+          Stay Connected
+        </button>
       </div>
     </div>
+  );
+}
+
+function isFunctionCase(testCase: JudgeTestCase): testCase is FunctionJudgeTestCase {
+  return "args" in testCase;
+}
+
+function isClassCase(testCase: JudgeTestCase): testCase is ClassJudgeTestCase {
+  return "operations" in testCase;
+}
+
+function toPrettyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function toDisplayJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function verdictStyles(verdict?: string) {
+  switch (verdict) {
+    case "Accepted":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+    case "Wrong Answer":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+    case "Runtime Error":
+    case "Compilation Error":
+    case "Time Limit Exceeded":
+    case "Memory Limit Exceeded":
+    case "Internal Error":
+      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
+    default:
+      return "border-border/60 bg-muted/20 text-foreground";
+  }
+}
+
+function buildFunctionCustomState(question: QuestionRecord | null): string {
+  const firstCase = question?.visibleTestCases.find(isFunctionCase);
+  return toPrettyJson(firstCase?.args || []);
+}
+
+function buildClassOperationState(question: QuestionRecord | null): string {
+  const firstCase = question?.visibleTestCases.find(isClassCase);
+  return toPrettyJson(firstCase?.operations || []);
+}
+
+function buildClassArgumentState(question: QuestionRecord | null): string {
+  const firstCase = question?.visibleTestCases.find(isClassCase);
+  return toPrettyJson(firstCase?.arguments || []);
+}
+
+function ValuePreview({
+  label,
+  value,
+  emptyLabel = "(none)",
+}: {
+  label: string;
+  value: unknown;
+  emptyLabel?: string;
+}) {
+  const serialized =
+    value === undefined || value === null || value === ""
+      ? emptyLabel
+      : toDisplayJson(value);
+
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <pre className="overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-zinc-100">
+        {serialized}
+      </pre>
+    </div>
+  );
+}
+
+function FunctionTestCaseView({
+  testCase,
+  title,
+  showExpected = true,
+}: {
+  testCase: FunctionJudgeTestCase;
+  title?: string;
+  showExpected?: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-border/40 bg-background/70 p-3">
+      {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+      <div className="grid gap-3 md:grid-cols-2">
+        <ValuePreview label="Arguments" value={testCase.args} emptyLabel="[]" />
+        {showExpected && (
+          <ValuePreview
+            label="Expected Output"
+            value={testCase.expected}
+            emptyLabel="(not provided)"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClassTestCaseView({
+  testCase,
+  title,
+  showExpected = true,
+}: {
+  testCase: ClassJudgeTestCase;
+  title?: string;
+  showExpected?: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-border/40 bg-background/70 p-3">
+      {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+      <div className="grid gap-3 md:grid-cols-3">
+        <ValuePreview
+          label="Operations"
+          value={testCase.operations}
+          emptyLabel="[]"
+        />
+        <ValuePreview
+          label="Arguments"
+          value={testCase.arguments}
+          emptyLabel="[]"
+        />
+        {showExpected && (
+          <ValuePreview
+            label="Expected Output"
+            value={testCase.expected}
+            emptyLabel="(not provided)"
+          />
+        )}
+      </div>
+      <div className="overflow-hidden rounded-md border border-border/40">
+        <div className="bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          Call Flow
+        </div>
+        <div className="divide-y divide-border/30">
+          {testCase.operations.map((operation, index) => (
+            <div
+              key={`${testCase.id}-${operation}-${index}`}
+              className="grid gap-2 px-3 py-2 text-xs md:grid-cols-[56px_1fr_1fr_1fr]"
+            >
+              <span className="font-semibold text-muted-foreground">
+                Step {index + 1}
+              </span>
+              <span className="font-mono text-foreground">{operation}</span>
+              <span className="font-mono text-muted-foreground">
+                {toDisplayJson(testCase.arguments[index] ?? [])}
+              </span>
+              {showExpected && (
+                <span className="font-mono text-emerald-300">
+                  {toDisplayJson(testCase.expected?.[index])}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TestCaseView({
+  testCase,
+  title,
+  showExpected = true,
+}: {
+  testCase: JudgeTestCase;
+  title?: string;
+  showExpected?: boolean;
+}) {
+  if (isFunctionCase(testCase)) {
+    return (
+      <FunctionTestCaseView
+        testCase={testCase}
+        title={title}
+        showExpected={showExpected}
+      />
+    );
+  }
+
+  return (
+    <ClassTestCaseView
+      testCase={testCase}
+      title={title}
+      showExpected={showExpected}
+    />
   );
 }
 
@@ -179,6 +422,8 @@ export default function CollaborationPage() {
   const navigate = useNavigate();
   const { token, user } = useAuth();
   const [session, setSession] = useState<CollaborationSessionRecord | null>(null);
+  const [question, setQuestion] = useState<QuestionRecord | null>(null);
+  const [questionCatalog, setQuestionCatalog] = useState<QuestionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
@@ -187,20 +432,72 @@ export default function CollaborationPage() {
   const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [warningActive, setWarningActive] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [output, setOutput] = useState<string | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(
+    null,
+  );
+  const [executionError, setExecutionError] = useState<string | null>(null);
+  const [runningMode, setRunningMode] = useState<"run" | "submit" | null>(null);
+  const [resultTab, setResultTab] = useState<ResultTab>("testcase");
+  const [selectedTestCase, setSelectedTestCase] =
+    useState<SelectedTestCase>("sample-0");
+  const [customFunctionArgs, setCustomFunctionArgs] = useState("[]");
+  const [customClassOperations, setCustomClassOperations] = useState("[]");
+  const [customClassArguments, setCustomClassArguments] = useState("[]");
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
-  const [question, setQuestion] = useState<any>(null);
+  const [switchingQuestion, setSwitchingQuestion] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(null);
   const [peerOnline, setPeerOnline] = useState(false);
-  const [chatStatus, setChatStatus] = useState<"connecting" | "connected" | "reconnecting" | "offline">(
-    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting"
+  const [chatStatus, setChatStatus] = useState<
+    "connecting" | "connected" | "reconnecting" | "offline"
+  >(
+    typeof navigator !== "undefined" && !navigator.onLine
+      ? "offline"
+      : "connecting",
   );
-  const [editorStatus, setEditorStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const [editorStatus, setEditorStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
+
+  const selectedVisibleCase = useMemo(() => {
+    if (!question) return null;
+    const index = Number(selectedTestCase.replace("sample-", ""));
+    return question.visibleTestCases[index] || null;
+  }, [question, selectedTestCase]);
+
+  const currentQuestionIndex = useMemo(() => {
+    if (!session?.questionId) return -1;
+    return questionCatalog.findIndex(
+      (catalogQuestion) => catalogQuestion.id === session.questionId,
+    );
+  }, [questionCatalog, session?.questionId]);
+
+  const syncQuestionChange = useCallback(
+    (nextQuestionId: string, nextTopic?: string, nextDifficulty?: string) => {
+      setSession((previous) =>
+        previous
+          ? {
+              ...previous,
+              questionId: nextQuestionId,
+              topic: nextTopic || previous.topic,
+              difficulty: nextDifficulty || previous.difficulty,
+              lastExecutionResult: null,
+              lastExecutionAt: undefined,
+              lastSubmittedAt: undefined,
+            }
+          : previous,
+      );
+      setQuestion(null);
+      setExecutionResult(null);
+      setExecutionError(null);
+      setExplainError(null);
+      setExplanation(null);
+      setResultTab("testcase");
+    },
+    [],
+  );
 
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -212,6 +509,7 @@ export default function CollaborationPage() {
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const terminatedRef = useRef(false);
   const isRedirecting = useRef(false);
+  const executionStartedAtRef = useRef<string | null>(null);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -254,8 +552,7 @@ export default function CollaborationPage() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(countdownTimerRef.current!);
-          console.log("⏰ Timer hit zero. Auto-redirecting...");
-          window.location.href = "/match"; 
+          window.location.href = "/match";
           return 0;
         }
         return prev - 1;
@@ -268,15 +565,73 @@ export default function CollaborationPage() {
     sendKeepAlive();
   };
 
- async function completeSession(shouldSave: boolean = true) {
+  const applyExecutionResult = useCallback((result: ExecutionResult | null) => {
+    setExecutionResult(result);
+    setRunningMode(null);
+    setExecutionError(null);
+    if (result) {
+      executionStartedAtRef.current = result.initiatedAt;
+      setSession((previous) =>
+        previous
+          ? {
+              ...previous,
+              lastExecutionResult: result,
+              lastExecutionAt: result.initiatedAt,
+              lastSubmittedAt:
+                result.mode === "submit"
+                  ? result.initiatedAt
+                  : previous.lastSubmittedAt,
+            }
+          : previous,
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!question) {
+      return;
+    }
+
+    setCustomFunctionArgs(buildFunctionCustomState(question));
+    setCustomClassOperations(buildClassOperationState(question));
+    setCustomClassArguments(buildClassArgumentState(question));
+    setSelectedTestCase("sample-0");
+  }, [question?.id]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    async function loadQuestionCatalog() {
+      try {
+        const response = await fetch(
+          `${QUESTION_API_URL}?executionModes=python_function,python_class`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        const json = await response.json();
+        setQuestionCatalog(Array.isArray(json.data) ? json.data : []);
+      } catch {
+        // Keep the collaboration page usable even if the temporary switcher fails.
+      }
+    }
+
+    void loadQuestionCatalog();
+  }, [token]);
+
+  async function completeSession(shouldSave: boolean = true) {
   if (!token || !sessionId || isRedirecting.current) return;
 
-  // --- ADDED: Send explicit leave signal to the chat ---
-  if (socketRef.current?.readyState === WebSocket.OPEN) {
-    socketRef.current.send(JSON.stringify({
-      type: "explicit_leave",
-      payload: { 
-        reason: shouldSave ? "submitted the solution" : "left the session" 
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: "explicit_leave",
+      payload: {
+        reason: shouldSave ? "submitted the solution" : "left the session"
       }
     }));
   }
@@ -286,7 +641,7 @@ export default function CollaborationPage() {
 
     try {
       setCompleting(true);
-      const collabUrl = shouldSave 
+      const collabUrl = shouldSave
         ? `${COLLABORATION_API_URL}/sessions/${sessionId}/complete`
         : `${COLLABORATION_API_URL}/sessions/${sessionId}`;
       const code = editorRef.current?.getCode() ?? "";
@@ -312,7 +667,6 @@ export default function CollaborationPage() {
         const json = await matchingRes.json().catch(() => ({}));
         throw new Error(json.error || "Failed to clear match state.");
       }
-
     } catch (err) {
       console.error("Cleanup failed:", err);
       setError(err instanceof Error ? err.message : "Failed to end session.");
@@ -333,6 +687,28 @@ export default function CollaborationPage() {
     if (mode === "submit") await completeSession(true);
     else if (mode === "leave") await completeSession(false);
   };
+
+  const redirectAfterSharedCompletion = useCallback(
+    (outcome: "submitted" | "ended") => {
+      if (isRedirecting.current) {
+        return;
+      }
+
+      isRedirecting.current = true;
+      terminatedRef.current = true;
+      localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+      editorRef.current?.disconnect();
+      setSessionUnavailable(false);
+      setTerminated(true);
+      setError(
+        outcome === "submitted"
+          ? "The collaboration session was completed and submitted."
+          : "The collaboration session was ended.",
+      );
+      setTimeout(() => navigate("/match"), 1500);
+    },
+    [navigate],
+  );
 
   const connectChatSocket = useCallback(() => {
     if (
@@ -356,7 +732,9 @@ export default function CollaborationPage() {
 
     const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
     const ws = new WebSocket(
-      `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username || "Guest"}`
+      `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${encodeURIComponent(
+        user?.username || "Guest",
+      )}`,
     );
     socketRef.current = ws;
     ws.onopen = () => {
@@ -364,15 +742,16 @@ export default function CollaborationPage() {
       clearReconnectTimer();
       setPeerOnline(false);
       setChatStatus("connected");
-      console.log("[WS] Chat socket opened");
     };
+
     ws.onmessage = (event) => {
-      if (typeof event.data !== 'string') return;
+      if (typeof event.data !== "string") return;
       try {
         const data = JSON.parse(event.data);
-        console.log("Valid JSON arrived:", data.type);
         if (data.type === "session_warning") {
-          data.payload.cancelled ? cancelCountdown() : startCountdown(data.payload.countdownSeconds);
+          data.payload.cancelled
+            ? cancelCountdown()
+            : startCountdown(data.payload.countdownSeconds);
         } else if (data.type === "chat_message") {
           setMessages((prev) => [...prev, data.payload]);
         } else if (data.type === "chat_history") {
@@ -386,6 +765,8 @@ export default function CollaborationPage() {
           if (data.payload.userId !== user?.id) {
             setPeerOnline(data.payload.isConnected);
           }
+        } else if (data.type === "session_completed") {
+          redirectAfterSharedCompletion(data.payload?.outcome || "ended");
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
@@ -394,12 +775,28 @@ export default function CollaborationPage() {
           setSessionUnavailable(false);
           setTerminated(true);
           setTimeout(() => navigate("/match"), 3000);
+        } else if (data.type === "execution_started") {
+          executionStartedAtRef.current = data.payload?.initiatedAt || null;
+          setRunningMode(data.payload?.mode || "run");
+          setExecutionResult(null);
+          setExecutionError(null);
+          setResultTab("result");
+        } else if (data.type === "execution_result") {
+          applyExecutionResult(data.payload);
+          setResultTab("result");
+        } else if (data.type === "question_switched") {
+          syncQuestionChange(
+            data.payload?.questionId,
+            data.payload?.topic,
+            data.payload?.difficulty,
+          );
         }
-      } catch (_) {}
+      } catch {
+        // Ignore non-JSON noise.
+      }
     };
 
-    ws.onclose = (e) => {
-      console.log("[WS] Chat socket closed", e.code, e.reason);
+    ws.onclose = () => {
       if (socketRef.current === ws) {
         socketRef.current = null;
       }
@@ -430,12 +827,23 @@ export default function CollaborationPage() {
         connectChatSocket();
       }, CHAT_RECONNECT_DELAY_MS * reconnectAttemptsRef.current);
     };
-    ws.onerror = (e) => {
-      console.log("[WS] Chat socket error", e);
+    ws.onerror = () => {
       setPeerOnline(false);
       ws.close();
     };
-  }, [clearReconnectTimer, navigate, sessionId, token, user?.username]);
+  }, [
+    applyExecutionResult,
+    cancelCountdown,
+    clearReconnectTimer,
+    navigate,
+    redirectAfterSharedCompletion,
+    sessionId,
+    startCountdown,
+    syncQuestionChange,
+    token,
+    user?.id,
+    user?.username,
+  ]);
 
   useEffect(() => {
     if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
@@ -480,9 +888,20 @@ export default function CollaborationPage() {
       });
       if (res.ok) {
         const json = await res.json();
+        if (json.data?.status === "completed" && !isRedirecting.current) {
+          redirectAfterSharedCompletion(
+            json.data?.lastSubmittedAt ? "submitted" : "ended",
+          );
+          return;
+        }
         setSession(json.data);
         setSessionUnavailable(false);
         clearSessionRetryTimer();
+        if (json.data?.lastExecutionResult) {
+          applyExecutionResult(json.data.lastExecutionResult);
+        } else {
+          setExecutionResult(null);
+        }
         if (json.data?.messages) setMessages(json.data.messages);
       } else if (res.status === 404 && !isRedirecting.current) {
         setSession(null);
@@ -500,11 +919,17 @@ export default function CollaborationPage() {
     } finally {
       setLoading(false);
     }
-  }, [clearSessionRetryTimer, sessionId, token]);
+  }, [
+    applyExecutionResult,
+    clearSessionRetryTimer,
+    redirectAfterSharedCompletion,
+    sessionId,
+    token,
+  ]);
 
   useEffect(() => {
     void loadSession();
-  }, [loadSession, user?.username]);
+  }, [loadSession]);
 
   useEffect(() => {
     if (!sessionUnavailable || terminated || isRedirecting.current) {
@@ -523,19 +948,89 @@ export default function CollaborationPage() {
   }, [clearSessionRetryTimer, loadSession, sessionUnavailable, terminated]);
 
   useEffect(() => {
+    if (!runningMode || !token || !sessionId || terminatedRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const response = await fetch(
+          `${COLLABORATION_API_URL}/sessions/${sessionId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const json = await response.json();
+        const latestResult = json.data?.lastExecutionResult as
+          | ExecutionResult
+          | null
+          | undefined;
+
+        if (
+          latestResult &&
+          (!executionStartedAtRef.current ||
+            new Date(latestResult.initiatedAt).getTime() >=
+              new Date(executionStartedAtRef.current).getTime())
+        ) {
+          setSession(json.data);
+          applyExecutionResult(latestResult);
+          return;
+        }
+
+        if (attempts >= 12) {
+          setRunningMode(null);
+          setExecutionError(
+            "Execution finished but the shared result did not sync in time. Please run again.",
+          );
+        }
+      } catch {
+        if (attempts >= 12) {
+          setRunningMode(null);
+        }
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void poll();
+    }, 1500);
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [applyExecutionResult, runningMode, sessionId, token]);
+
+  useEffect(() => {
     if (!session?.questionId || !token) return;
+    const questionId = session.questionId;
+
     async function loadQuestion() {
       try {
-        const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
+        setQuestion(null);
+        const res = await fetch(`${QUESTION_API_URL}/${questionId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const json = await res.json();
           setQuestion(json.data);
         }
-      } catch (_) {}
+      } catch {
+        // Ignore question fetch errors here; the page already has a session shell.
+      }
     }
-    loadQuestion();
+
+    void loadQuestion();
   }, [session?.questionId, token]);
 
   useEffect(() => {
@@ -543,39 +1038,35 @@ export default function CollaborationPage() {
       localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
     }
   }, [terminated]);
-  
-  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const sendMessage = () => {
-    if (socketRef.current?.readyState === WebSocket.OPEN && chatInput.trim() && !terminated) {
-      socketRef.current.send(JSON.stringify({ type: "chat_message", payload: { text: chatInput, username: user?.username } }));
+    if (
+      socketRef.current?.readyState === WebSocket.OPEN &&
+      chatInput.trim() &&
+      !terminated
+    ) {
+      socketRef.current.send(
+        JSON.stringify({
+          type: "chat_message",
+          payload: { text: chatInput, username: user?.username },
+        }),
+      );
       setChatInput("");
       sendActivity();
     }
   };
 
-  async function runCode() {
-    const code = editorRef.current?.getCode();
-    if (!code?.trim()) return;
-    try {
-      setRunning(true);
-      setOutput(null);
-      setRunError(null);
-      const res = await fetch(`${COLLABORATION_API_URL}/sessions/execute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code }),
-      });
-      const json = await res.json();
-      if (json.data?.run?.stderr) setRunError(json.data.run.stderr);
-      else setOutput(json.data?.run?.stdout || "(no output)");
-    } catch (_) { setRunError("Execution failed."); }
-    finally { setRunning(false); }
-  }
-
   async function explainCode() {
     const code = editorRef.current?.getCode();
-    if (!code?.trim()) { setExplainError("No code to explain."); return; }
+    if (!code?.trim()) {
+      setExplainError("No code to explain.");
+      return;
+    }
+
     try {
       setExplaining(true);
       setExplanation(null);
@@ -599,77 +1090,318 @@ export default function CollaborationPage() {
       }
 
       setExplanation(result?.data?.explanation || "");
-    } catch (err: any) { setExplainError(err.message || "Explanation failed."); }
-    finally { setExplaining(false); }
+    } catch (err: any) {
+      setExplainError(err.message || "Explanation failed.");
+    } finally {
+      setExplaining(false);
+    }
   }
+
+  function buildCustomPayload() {
+    if (!question || selectedTestCase !== "custom") {
+      return undefined;
+    }
+
+    if (question.executionMode === "python_function") {
+      const parsedArgs = JSON.parse(customFunctionArgs);
+      if (!Array.isArray(parsedArgs)) {
+        throw new Error("Custom args must be a JSON array.");
+      }
+      return { args: parsedArgs };
+    }
+
+    const operations = JSON.parse(customClassOperations);
+    const argumentsPayload = JSON.parse(customClassArguments);
+
+    if (!Array.isArray(operations) || !Array.isArray(argumentsPayload)) {
+      throw new Error("Operations and arguments must both be JSON arrays.");
+    }
+    if (operations.length !== argumentsPayload.length) {
+      throw new Error("Operations and arguments must be the same length.");
+    }
+
+    return {
+      operations,
+      arguments: argumentsPayload,
+    };
+  }
+
+  async function execute(mode: "run" | "submit") {
+    const code = editorRef.current?.getCode();
+    if (!code?.trim() || !token || !sessionId) {
+      setExecutionError("No code to execute.");
+      setResultTab("result");
+      return;
+    }
+
+    try {
+      setExecutionError(null);
+      setRunningMode(mode);
+      setResultTab("result");
+
+      const body: Record<string, unknown> = { code };
+      const customPayload = buildCustomPayload();
+      if (customPayload) {
+        body.customTestCase = customPayload;
+      }
+
+      const response = await fetch(
+        `${COLLABORATION_API_URL}/sessions/${sessionId}/${mode}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        },
+      );
+
+      const json = await response.json();
+      if (!response.ok) {
+        setExecutionError(json.error || `Failed to ${mode} code.`);
+        return;
+      }
+
+      applyExecutionResult(json.data);
+    } catch (err) {
+      setExecutionError(
+        err instanceof Error ? err.message : `Failed to ${mode} code.`,
+      );
+    } finally {
+      setRunningMode(null);
+    }
+  }
+
+  async function switchQuestion(nextQuestionId: string) {
+    if (
+      !token ||
+      !sessionId ||
+      !nextQuestionId ||
+      nextQuestionId === session?.questionId
+    ) {
+      return;
+    }
+
+    try {
+      setSwitchingQuestion(true);
+      setError("");
+      const response = await fetch(
+        `${COLLABORATION_API_URL}/sessions/${sessionId}/question`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ questionId: nextQuestionId }),
+        },
+      );
+
+      const json = await response.json();
+      if (!response.ok) {
+        setError(json.error || "Failed to switch question.");
+        return;
+      }
+
+      setSession(json.data);
+      syncQuestionChange(
+        json.data.questionId,
+        json.data.topic,
+        json.data.difficulty,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to switch question.",
+      );
+    } finally {
+      setSwitchingQuestion(false);
+    }
+  }
+
+  void switchingQuestion;
+  void currentQuestionIndex;
+  void switchQuestion;
+
+  const latestExecutionLabel = useMemo(() => {
+    if (!executionResult) return "";
+    return executionResult.initiatedByUserId === user?.id ? "You" : "Your partner";
+  }, [executionResult, user?.id]);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       <Navbar />
-      {warningActive && countdown > 0 && <InactivityWarning secondsLeft={countdown} onKeepAlive={handleKeepAlive} />}
-      <main className="mx-auto max-w-7xl px-6 pt-24 pb-12 flex flex-col md:flex-row gap-6">
-        <div className="flex-1 min-w-0">
-          <Card className={`h-full flex flex-col shadow-lg ${terminated ? "border-destructive/40" : "border-primary/10"}`}>
-            <CardHeader><CardTitle>Collaboration Session</CardTitle></CardHeader>
-            <CardContent className="space-y-6 flex-1">
-              {loading && !terminated && <p className="animate-pulse text-sm">Syncing workspace...</p>}
-              {error && <p className="text-destructive text-xs">{error}</p>}
-              
+      {warningActive && countdown > 0 && (
+        <InactivityWarning
+          secondsLeft={countdown}
+          onKeepAlive={handleKeepAlive}
+        />
+      )}
+
+      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-12 pt-24 md:flex-row">
+        <div className="min-w-0 flex-1">
+          <Card
+            className={`flex h-full flex-col shadow-lg ${
+              terminated ? "border-destructive/40" : "border-primary/10"
+            }`}
+          >
+            <CardHeader>
+              <CardTitle>Collaboration Session</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-6">
+              {loading && !terminated && (
+                <p className="animate-pulse text-sm">Syncing workspace...</p>
+              )}
+              {error && <p className="text-xs text-destructive">{error}</p>}
+
               {!terminated && session ? (
-                <div className="flex flex-col gap-6">
+                <div className="space-y-6">
+                  {/* Temporary question browser hidden for now.
+                  {questionCatalog.length > 0 && (
+                    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-primary/80">
+                            Temporary Question Browser
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Jump through supported questions without leaving this collaboration session.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              currentQuestionIndex > 0 &&
+                              switchQuestion(
+                                questionCatalog[currentQuestionIndex - 1].id,
+                              )
+                            }
+                            disabled={switchingQuestion || currentQuestionIndex <= 0}
+                          >
+                            Previous
+                          </Button>
+                          <select
+                            className="min-w-72 rounded-md border bg-background px-3 py-2 text-sm"
+                            value={session?.questionId || ""}
+                            onChange={(event) => void switchQuestion(event.target.value)}
+                            disabled={switchingQuestion}
+                          >
+                            {questionCatalog.map((catalogQuestion, index) => (
+                              <option key={catalogQuestion.id} value={catalogQuestion.id}>
+                                {index + 1}. {catalogQuestion.title}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              currentQuestionIndex >= 0 &&
+                              currentQuestionIndex < questionCatalog.length - 1 &&
+                              switchQuestion(
+                                questionCatalog[currentQuestionIndex + 1].id,
+                              )
+                            }
+                            disabled={
+                              switchingQuestion ||
+                              currentQuestionIndex < 0 ||
+                              currentQuestionIndex >= questionCatalog.length - 1
+                            }
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )} */}
+
                   {question && (
                     <details className="rounded-lg border border-border/60 bg-muted/20 p-3" open>
-                      <summary className="cursor-pointer text-sm font-semibold flex items-center justify-between list-none">
+                      <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold">
                         <div className="flex items-center gap-2">
                           <span>{question.title}</span>
-                          {question.categories?.length > 0 && (
-                            <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                          {question.categories.length > 0 && (
+                            <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
                               [{question.categories.join(", ")}]
                             </span>
                           )}
                         </div>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          question.difficulty === "Easy" ? "bg-green-500/20 text-green-400" :
-                          question.difficulty === "Medium" ? "bg-amber-500/20 text-amber-400" :
-                            "bg-red-500/20 text-red-400"
-                        }`}>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            question.difficulty === "Easy"
+                              ? "bg-green-500/20 text-green-400"
+                              : question.difficulty === "Medium"
+                                ? "bg-amber-500/20 text-amber-400"
+                                : "bg-red-500/20 text-red-400"
+                          }`}
+                        >
                           {question.difficulty}
                         </span>
                       </summary>
-                      <div className="mt-3 border-t border-border/40 pt-3 space-y-4">
-                        <p className="text-sm text-muted-foreground leading-relaxed">
+                      <div className="space-y-4 border-t border-border/40 pt-3">
+                        <p className="text-sm leading-relaxed text-muted-foreground">
                           {question.description}
                         </p>
-                        {question.examples?.length > 0 && (
+
+                        {question.examples.length > 0 && (
                           <div className="space-y-2">
-                            <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Examples</p>
-                            {question.examples.map((ex: any, i: number) => (
-                              <div key={i} className="rounded bg-muted/40 px-3 py-2 text-xs font-mono border border-border/20">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Examples
+                            </p>
+                            {question.examples.map((example, index) => (
+                              <div
+                                key={index}
+                                className="rounded border border-border/20 bg-muted/40 px-3 py-2 text-xs"
+                              >
                                 <div className="flex gap-2">
-                                  <span className="text-muted-foreground w-12 shrink-0">Input:</span> 
-                                  <span className="text-foreground">{ex.input}</span>
+                                  <span className="w-16 shrink-0 text-muted-foreground">
+                                    Input:
+                                  </span>
+                                  <span>{example.input}</span>
                                 </div>
                                 <div className="flex gap-2">
-                                  <span className="text-muted-foreground w-12 shrink-0">Output:</span> 
-                                  <span className="text-foreground">{ex.output}</span>
+                                  <span className="w-16 shrink-0 text-muted-foreground">
+                                    Output:
+                                  </span>
+                                  <span>{example.output}</span>
                                 </div>
-                                {ex.explanation && (
-                                  <div className="mt-1 pt-1 border-t border-border/10 italic text-[11px]">
-                                    <span className="text-muted-foreground not-italic font-sans mr-2">Explanation:</span> 
-                                    {ex.explanation}
+                                {example.explanation && (
+                                  <div className="mt-1 border-t border-border/10 pt-1 text-[11px] italic">
+                                    <span className="mr-2 not-italic text-muted-foreground">
+                                      Explanation:
+                                    </span>
+                                    {example.explanation}
                                   </div>
                                 )}
                               </div>
                             ))}
                           </div>
                         )}
+
+                        {question.visibleTestCases.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Sample Testcases
+                            </p>
+                            {question.visibleTestCases.map((testCase, index) => (
+                              <TestCaseView
+                                key={testCase.id}
+                                testCase={testCase}
+                                title={`Sample ${index + 1}`}
+                              />
+                            ))}
+                          </div>
+                        )}
+
                         {question.link && (
                           <div className="pt-2">
-                            <a 
-                              href={question.link} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                            <a
+                              href={question.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-[10px] text-primary hover:underline"
                             >
                               View on LeetCode <span className="text-xs">→</span>
                             </a>
@@ -680,22 +1412,52 @@ export default function CollaborationPage() {
                   )}
 
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold">Shared Editor</h3>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={runCode} disabled={running}>Run</Button>
-                        <Button size="sm" variant="outline" onClick={explainCode} disabled={explaining}>Explain</Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => execute("run")}
+                          disabled={runningMode !== null}
+                        >
+                          {runningMode === "run" ? "Running..." : "Run"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => execute("submit")}
+                          disabled={runningMode !== null}
+                        >
+                          {runningMode === "submit" ? "Submitting..." : "Submit"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={explainCode}
+                          disabled={explaining}
+                        >
+                          Explain
+                        </Button>
                       </div>
                     </div>
-                    <CodeEditor 
-                      ref={editorRef} 
-                      sessionId={session.sessionId} 
-                      username={user?.username || "Guest"} 
-                      token={token || ""} 
-                      onActivity={sendActivity}
-                      onConnectionStatusChange={setEditorStatus}
-                    />
-                    {editorStatus !== "connected" && (
+                    {question ? (
+                      <CodeEditor
+                        key={`${session.sessionId}:${question.id}`}
+                        ref={editorRef}
+                        sessionId={session.sessionId}
+                        username={user?.username || "Guest"}
+                        token={token || ""}
+                        initialCode={question.starterCode?.python ?? ""}
+                        sharedCode={session.sharedCode ?? ""}
+                        sharedYjsState={session.sharedYjsState ?? null}
+                        onActivity={sendActivity}
+                        onConnectionStatusChange={setEditorStatus}
+                      />
+                    ) : (
+                      <div className="flex h-[450px] items-center justify-center rounded-md border bg-background text-sm text-muted-foreground shadow-inner">
+                        Loading shared starter code...
+                      </div>
+                    )}
+                    {question && editorStatus !== "connected" && (
                       <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                         {editorStatus === "connecting"
                           ? "Shared editor connecting..."
@@ -704,24 +1466,287 @@ export default function CollaborationPage() {
                     )}
                   </div>
 
-                  {(output || runError) && (
-                    <div className="rounded-md border bg-zinc-950 text-zinc-100 font-mono text-xs p-3 max-h-[180px] overflow-y-auto">
-                      <div className="flex justify-between mb-2 border-b border-zinc-800 pb-1">
-                        <span className="text-zinc-500 uppercase text-[10px]">Terminal Output</span>
-                        <button onClick={() => { setOutput(null); setRunError(null); }}>✕</button>
-                      </div>
-                      {runError ? <pre className="text-rose-400">{runError}</pre> : <pre>{output}</pre>}
+                  <div className="space-y-4 rounded-xl border border-border/60 bg-card/70 p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant={resultTab === "testcase" ? "default" : "outline"}
+                        onClick={() => setResultTab("testcase")}
+                      >
+                        Testcase
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={resultTab === "result" ? "default" : "outline"}
+                        onClick={() => setResultTab("result")}
+                      >
+                        Result
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={resultTab === "console" ? "default" : "outline"}
+                        onClick={() => setResultTab("console")}
+                      >
+                        Console
+                      </Button>
                     </div>
-                  )}
+
+                    {resultTab === "testcase" && question && (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2">
+                          {question.visibleTestCases.map((testCase, index) => (
+                            <Button
+                              key={testCase.id}
+                              size="sm"
+                              variant={
+                                selectedTestCase === `sample-${index}`
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                setSelectedTestCase(`sample-${index}`)
+                              }
+                            >
+                              Sample {index + 1}
+                            </Button>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant={
+                              selectedTestCase === "custom" ? "default" : "outline"
+                            }
+                            onClick={() => setSelectedTestCase("custom")}
+                          >
+                            Custom
+                          </Button>
+                        </div>
+
+                        {selectedTestCase === "custom" ? (
+                          <div className="space-y-3">
+                            <p className="text-xs text-muted-foreground">
+                              Running with a custom testcase executes only the
+                              custom input and returns output/error details.
+                            </p>
+                            {question.executionMode === "python_function" ? (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  Args JSON
+                                </p>
+                                <textarea
+                                  className="min-h-32 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                                  value={customFunctionArgs}
+                                  onChange={(event) =>
+                                    setCustomFunctionArgs(event.target.value)
+                                  }
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Operations JSON
+                                  </p>
+                                  <textarea
+                                    className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                                    value={customClassOperations}
+                                    onChange={(event) =>
+                                      setCustomClassOperations(event.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Arguments JSON
+                                  </p>
+                                  <textarea
+                                    className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                                    value={customClassArguments}
+                                    onChange={(event) =>
+                                      setCustomClassArguments(event.target.value)
+                                    }
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              Run will execute all visible sample testcases.
+                            </p>
+                            {selectedVisibleCase && (
+                              <TestCaseView testCase={selectedVisibleCase} />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {resultTab === "result" && (
+                      <div className="space-y-4">
+                        {runningMode && (
+                          <div className="rounded-md border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+                            {runningMode === "run"
+                              ? "Running shared testcases..."
+                              : "Submitting shared solution..."}
+                          </div>
+                        )}
+                        {executionError && (
+                          <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                            {executionError}
+                          </div>
+                        )}
+                        {executionResult && (
+                          <>
+                            <div
+                              className={`rounded-md border px-4 py-3 ${verdictStyles(
+                                executionResult.verdict,
+                              )}`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-xs uppercase tracking-wider opacity-80">
+                                    {executionResult.mode === "submit"
+                                      ? "Submission Verdict"
+                                      : "Run Result"}
+                                  </div>
+                                  <div className="text-lg font-semibold">
+                                    {executionResult.verdict}
+                                  </div>
+                                </div>
+                                <div className="text-right text-xs opacity-90">
+                                  <div>
+                                    Triggered by {latestExecutionLabel || "a collaborator"}
+                                  </div>
+                                  <div>
+                                    {new Date(
+                                      executionResult.initiatedAt,
+                                    ).toLocaleString()}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-4 text-xs">
+                                <span>
+                                  Passed {executionResult.passedCount}/
+                                  {executionResult.totalCount}
+                                </span>
+                                <span>Runtime {executionResult.runtimeMs} ms</span>
+                                <span>Memory {executionResult.memoryKb} KB</span>
+                              </div>
+                            </div>
+
+                            {executionResult.cases.length > 0 ? (
+                              <div className="space-y-3">
+                                {executionResult.cases.map((testCase) => (
+                                  <div
+                                    key={testCase.id}
+                                    className="rounded-md border border-border/60 bg-background/60 p-3 text-sm"
+                                  >
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                      <div className="font-medium">{testCase.id}</div>
+                                      <span
+                                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${verdictStyles(
+                                          testCase.verdict,
+                                        )}`}
+                                      >
+                                        {testCase.verdict}
+                                      </span>
+                                    </div>
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                      <div>
+                                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                          Input
+                                        </div>
+                                        <pre className="overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-100">
+                                          {testCase.inputPreview || "(none)"}
+                                        </pre>
+                                      </div>
+                                      <div>
+                                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                          Expected
+                                        </div>
+                                        <pre className="overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-100">
+                                          {testCase.expectedPreview || "(custom testcase)"}
+                                        </pre>
+                                      </div>
+                                      <div>
+                                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                          Actual
+                                        </div>
+                                        <pre className="overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-100">
+                                          {testCase.actualPreview || "(none)"}
+                                        </pre>
+                                      </div>
+                                    </div>
+                                    {testCase.errorMessage && (
+                                      <p className="mt-3 text-xs text-rose-300">
+                                        {testCase.errorMessage}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                No per-case details were returned for this result.
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {!runningMode && !executionError && !executionResult && (
+                          <p className="text-sm text-muted-foreground">
+                            Run sample testcases or submit the shared solution to
+                            see verdicts here.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {resultTab === "console" && (
+                      <div className="space-y-4">
+                        <div>
+                          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Stdout
+                          </div>
+                          <pre className="max-h-48 overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-zinc-100">
+                            {executionResult?.stdout || "(no stdout)"}
+                          </pre>
+                        </div>
+                        <div>
+                          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Stderr
+                          </div>
+                          <pre className="max-h-48 overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-rose-300">
+                            {executionResult?.stderr || "(no stderr)"}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {(explanation || explainError || explaining) && (
-                    <div className="rounded-md border border-violet-500/20 bg-violet-950/10 text-sm p-4 max-h-[300px] overflow-y-auto">
-                      <div className="flex justify-between mb-3 border-b border-violet-500/20 pb-2">
-                        <span className="text-violet-400 uppercase text-[10px] font-bold">✦ AI Explanation</span>
-                        <button onClick={() => { setExplanation(null); setExplainError(null); }}>✕</button>
+                    <div className="max-h-[300px] overflow-y-auto rounded-md border border-violet-500/20 bg-violet-950/10 p-4 text-sm">
+                      <div className="mb-3 flex justify-between border-b border-violet-500/20 pb-2">
+                        <span className="text-[10px] font-bold uppercase text-violet-400">
+                          ✦ AI Explanation
+                        </span>
+                        <button
+                          onClick={() => {
+                            setExplanation(null);
+                            setExplainError(null);
+                          }}
+                        >
+                          ✕
+                        </button>
                       </div>
-                      {explaining && <div className="text-violet-300 text-xs animate-pulse">Analyzing...</div>}
-                      {explainError && <p className="text-rose-400 text-xs">{explainError}</p>}
+                      {explaining && (
+                        <div className="text-xs animate-pulse text-violet-300">
+                          Analyzing...
+                        </div>
+                      )}
+                      {explainError && (
+                        <p className="text-xs text-rose-400">{explainError}</p>
+                      )}
                       {explanation && <ExplanationContent content={explanation} />}
                     </div>
                   )}
@@ -743,58 +1768,98 @@ export default function CollaborationPage() {
                   )}
                 </div>
               ) : (
-                <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">
-                  <p className="text-xl font-black uppercase text-zinc-500">Session Ended</p>
-                  <Button variant="outline" className="mt-4" onClick={() => navigate("/match")}>Return to Match Page</Button>
+                <div className="flex h-[400px] flex-col items-center justify-center rounded-lg border-2 border-dashed">
+                  <p className="text-xl font-black uppercase text-zinc-500">
+                    Session Ended
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => navigate("/match")}
+                  >
+                    Return to Match Page
+                  </Button>
                 </div>
               )}
             </CardContent>
             <CardFooter className="flex justify-between border-t bg-muted/5 pt-6">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmMode("leave")} disabled={terminated}>Exit Session</Button>
-              <Button size="sm" onClick={() => setConfirmMode("submit")} disabled={!session || completing || terminated}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmMode("leave")}
+                disabled={terminated}
+              >
+                Exit Session
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setConfirmMode("submit")}
+                disabled={!session || completing || terminated}
+              >
                 {completing ? "Saving..." : "Submit & Complete"}
               </Button>
             </CardFooter>
           </Card>
         </div>
 
-        <div className="w-full md:w-80 flex flex-col border rounded-xl bg-card shadow-lg h-[600px]">
-          <div className="p-4 border-b font-bold text-[10px] uppercase text-muted-foreground flex items-center justify-between">
+        <div className="w-full md:w-80 flex h-[600px] flex-col rounded-xl border bg-card shadow-lg">
+          <div className="flex items-center justify-between border-b p-4 text-[10px] font-bold uppercase text-muted-foreground">
             Session Chat
             <div className="flex flex-col items-end gap-1">
               <span className="flex items-center gap-1">
-                <span className={`w-2 h-2 rounded-full ${chatStatus === "connected" && peerOnline ? "bg-green-500" : "bg-zinc-500"}`} />
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    chatStatus === "connected" && peerOnline
+                      ? "bg-green-500"
+                      : "bg-zinc-500"
+                  }`}
+                />
                 <span className="normal-case font-normal">
                   {chatStatus !== "connected"
                     ? "Peer status unavailable"
                     : peerOnline
-                    ? "Peer online"
-                    : "Peer offline"}
+                      ? "Peer online"
+                      : "Peer offline"}
                 </span>
               </span>
               <span className="normal-case text-[10px] font-normal text-muted-foreground">
                 {chatStatus === "connected"
                   ? "Chat connected"
                   : chatStatus === "reconnecting"
-                  ? "Chat reconnecting..."
-                  : chatStatus === "offline"
-                  ? "You are offline"
-                  : "Chat connecting..."}
+                    ? "Chat reconnecting..."
+                    : chatStatus === "offline"
+                      ? "You are offline"
+                      : "Chat connecting..."}
               </span>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages?.map((m, i) => (
-              <div key={i} className={`flex flex-col ${m.username === user?.username ? "items-end" : "items-start"}`}>
-                <span className="text-[10px] text-muted-foreground mb-1 font-bold">{m.username}</span>
-                <div className={`px-3 py-2 rounded-2xl text-sm ${m.username === user?.username ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-                  {m.text}
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            {messages?.map((message, index) => (
+              <div
+                key={index}
+                className={`flex flex-col ${
+                  message.username === user?.username
+                    ? "items-end"
+                    : "items-start"
+                }`}
+              >
+                <span className="mb-1 text-[10px] font-bold text-muted-foreground">
+                  {message.username}
+                </span>
+                <div
+                  className={`rounded-2xl px-3 py-2 text-sm ${
+                    message.username === user?.username
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted"
+                  }`}
+                >
+                  {message.text}
                 </div>
               </div>
             ))}
             <div ref={scrollRef} />
           </div>
-          <div className="p-4 border-t">
+          <div className="border-t p-4">
             {chatStatus !== "connected" && !terminated && (
               <p className="mb-2 text-xs text-muted-foreground">
                 {chatStatus === "offline"
@@ -802,35 +1867,49 @@ export default function CollaborationPage() {
                   : "Chat is reconnecting. Messages can be sent again once the connection is restored."}
               </p>
             )}
-            <input 
-              disabled={terminated || chatStatus !== "connected"} 
-              className="w-full bg-background border rounded px-3 py-2 text-sm" 
+            <input
+              disabled={terminated || chatStatus !== "connected"}
+              className="w-full rounded border bg-background px-3 py-2 text-sm"
               placeholder={
                 terminated
                   ? "Session ended"
                   : chatStatus === "offline"
-                  ? "Offline..."
-                  : chatStatus === "connected"
-                  ? "Message..."
-                  : "Reconnecting..."
-              } 
-              value={chatInput} 
-              onChange={(e) => setChatInput(e.target.value)} 
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()} 
+                    ? "Offline..."
+                    : chatStatus === "connected"
+                      ? "Message..."
+                      : "Reconnecting..."
+              }
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && sendMessage()}
             />
           </div>
         </div>
       </main>
 
-      {/* CONFIRMATION MODALS */}
       {confirmMode && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-sm shadow-2xl">
-            <CardHeader><CardTitle>{confirmMode === "submit" ? "Submit & Save?" : "Leave Session?"}</CardTitle></CardHeader>
-            <CardContent><p className="text-sm text-muted-foreground">This will end the collaboration session.</p></CardContent>
+            <CardHeader>
+              <CardTitle>
+                {confirmMode === "submit" ? "Submit & Save?" : "Leave Session?"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                This will end the collaboration session.
+              </p>
+            </CardContent>
             <CardFooter className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setConfirmMode(null)}>Cancel</Button>
-              <Button variant={confirmMode === "submit" ? "default" : "destructive"} onClick={handleActionConfirm}>Confirm</Button>
+              <Button variant="ghost" onClick={() => setConfirmMode(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={confirmMode === "submit" ? "default" : "destructive"}
+                onClick={handleActionConfirm}
+              >
+                Confirm
+              </Button>
             </CardFooter>
           </Card>
         </div>

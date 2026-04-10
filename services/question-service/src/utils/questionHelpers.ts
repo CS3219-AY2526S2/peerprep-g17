@@ -1,8 +1,13 @@
 import mongoose from "mongoose";
-import { DIFFICULTIES, CATEGORIES } from "../models/Question";
+import {
+  DIFFICULTIES,
+  CATEGORIES,
+  EXECUTION_MODES,
+} from "../models/Question";
 
 type Difficulty = (typeof DIFFICULTIES)[number];
 type Category = (typeof CATEGORIES)[number];
+type ExecutionMode = (typeof EXECUTION_MODES)[number];
 
 /**
  * Returns true if the given string is a valid MongoDB ObjectId.
@@ -40,6 +45,7 @@ export function buildFilterQuery(query: {
   difficulty?: unknown;
   categories?: unknown;
   search?: unknown;
+  executionModes?: unknown;
 }): Record<string, unknown> {
   const filter: Record<string, unknown> = {};
 
@@ -60,6 +66,20 @@ export function buildFilterQuery(query: {
 
   if (typeof query.search === "string" && query.search.trim()) {
     filter.title = { $regex: query.search.trim(), $options: "i" };
+  }
+
+  if (typeof query.executionModes === "string" && query.executionModes.trim()) {
+    const requestedModes = query.executionModes
+      .split(",")
+      .map((mode) => mode.trim())
+      .filter(
+        (mode): mode is ExecutionMode =>
+          EXECUTION_MODES.includes(mode as ExecutionMode),
+      );
+
+    if (requestedModes.length > 0) {
+      filter.executionMode = { $in: requestedModes };
+    }
   }
 
   return filter;
@@ -84,6 +104,10 @@ export function formatQuestionResponse(question: any) {
     description: doc.description,
     examples: doc.examples || [],
     link: doc.link || "",
+    executionMode: doc.executionMode || "unsupported",
+    starterCode: doc.starterCode || { python: "" },
+    visibleTestCases: doc.visibleTestCases || [],
+    judgeConfig: doc.judgeConfig || null,
     createdAt:
       doc.createdAt instanceof Date
         ? doc.createdAt.toISOString()
@@ -92,5 +116,19 @@ export function formatQuestionResponse(question: any) {
       doc.updatedAt instanceof Date
         ? doc.updatedAt.toISOString()
         : String(doc.updatedAt),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function formatQuestionJudgeResponse(question: any) {
+  const base = formatQuestionResponse(question);
+  const doc =
+    typeof question.toObject === "function"
+      ? question.toObject()
+      : question;
+
+  return {
+    ...base,
+    hiddenTestCases: doc.hiddenTestCases || [],
   };
 }

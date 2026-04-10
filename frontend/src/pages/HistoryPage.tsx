@@ -4,17 +4,7 @@ import { COLLABORATION_API_URL, QUESTION_API_URL } from "@/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-interface Attempt {
-  _id: string;
-  sessionId: string;
-  questionId: string;
-  topic: string;
-  difficulty: string;
-  language: string;
-  code: string;
-  attemptedAt: string;
-}
+import type { AttemptRecord } from "@/types";
 
 interface QuestionInfo {
   title: string;
@@ -37,7 +27,7 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
 
 export default function HistoryPage() {
   const { token } = useAuth();
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [attempts, setAttempts] = useState<AttemptRecord[]>([]);
   const [questions, setQuestions] = useState<Record<string, QuestionInfo>>({});
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -50,7 +40,7 @@ export default function HistoryPage() {
         });
         if (res.ok) {
           const json = await res.json();
-          const data: Attempt[] = json.data ?? [];
+          const data: AttemptRecord[] = json.data ?? [];
           setAttempts(data);
 
           const uniqueIds = [...new Set(data.map((a) => a.questionId))];
@@ -115,7 +105,18 @@ export default function HistoryPage() {
                       </CardTitle>
                       <div className="flex items-center gap-2 flex-wrap">
                         <DifficultyBadge difficulty={q?.difficulty ?? attempt.difficulty} />
+                        {attempt.verdict && (
+                          <span className="text-xs text-muted-foreground">
+                            {attempt.verdict}
+                          </span>
+                        )}
                         <span className="text-xs text-muted-foreground">{attempt.language}</span>
+                        {typeof attempt.passedCount === "number" &&
+                          typeof attempt.totalCount === "number" && (
+                            <span className="text-xs text-muted-foreground">
+                              {attempt.passedCount}/{attempt.totalCount} passed
+                            </span>
+                          )}
                         <span className="text-xs text-muted-foreground">•</span>
                         <span className="text-xs text-muted-foreground">
                           {date.toLocaleDateString()} at {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

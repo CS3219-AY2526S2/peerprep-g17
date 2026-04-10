@@ -19,10 +19,7 @@ const docsLoading = new Map<string, Promise<Y.Doc>>();
 async function persistDoc(sessionId: string, doc: Y.Doc): Promise<void> {
   try {
     const state = Buffer.from(Y.encodeStateAsUpdate(doc));
-    await CollaborationSession.findOneAndUpdate(
-      { sessionId },
-      { yjsState: state },
-    );
+    await CollaborationSession.findOneAndUpdate({ sessionId }, { yjsState: state });
   } catch (err) {
     console.error("[Yjs] Failed to persist doc:", err);
   }
@@ -33,7 +30,9 @@ async function loadDoc(sessionId: string, doc: Y.Doc): Promise<void> {
     const session = await CollaborationSession.findOne({ sessionId });
     if (session?.yjsState) {
       Y.applyUpdate(doc, new Uint8Array(session.yjsState));
-      console.log(`[Yjs] Loaded ${session.yjsState.length} bytes for session ${sessionId}`);
+      console.log(
+        `[Yjs] Loaded ${session.yjsState.length} bytes for session ${sessionId}`,
+      );
     } else {
       console.log(`[Yjs] No persisted state for session ${sessionId}`);
     }
@@ -42,9 +41,13 @@ async function loadDoc(sessionId: string, doc: Y.Doc): Promise<void> {
   }
 }
 
-async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
-  if (docs.has(sessionId)) return docs.get(sessionId)!;
-  if (docsLoading.has(sessionId)) return docsLoading.get(sessionId)!;
+export async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
+  if (docs.has(sessionId)) {
+    return docs.get(sessionId)!;
+  }
+  if (docsLoading.has(sessionId)) {
+    return docsLoading.get(sessionId)!;
+  }
 
   const loadPromise = (async () => {
     const doc = new Y.Doc();
@@ -55,7 +58,9 @@ async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
 
     let persistTimer: ReturnType<typeof setTimeout> | null = null;
     doc.on("update", () => {
-      if (persistTimer) clearTimeout(persistTimer);
+      if (persistTimer) {
+        clearTimeout(persistTimer);
+      }
       persistTimer = setTimeout(() => {
         void persistDoc(sessionId, doc);
       }, 10);
@@ -69,9 +74,15 @@ async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
   return loadPromise;
 }
 
-function broadcastToOthers(sessionId: string, sender: WebSocket, message: Uint8Array): void {
+function broadcastToOthers(
+  sessionId: string,
+  sender: WebSocket,
+  message: Uint8Array,
+): void {
   const room = connections.get(sessionId);
-  if (!room) return;
+  if (!room) {
+    return;
+  }
   for (const client of room) {
     if (client !== sender && client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -81,7 +92,9 @@ function broadcastToOthers(sessionId: string, sender: WebSocket, message: Uint8A
 
 function broadcastToAll(sessionId: string, message: Uint8Array): void {
   const room = connections.get(sessionId);
-  if (!room) return;
+  if (!room) {
+    return;
+  }
   for (const client of room) {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -89,7 +102,10 @@ function broadcastToAll(sessionId: string, message: Uint8Array): void {
   }
 }
 
-export async function setupYjsConnection(ws: WebSocket, sessionId: string): Promise<void> {
+export async function setupYjsConnection(
+  ws: WebSocket,
+  sessionId: string,
+): Promise<void> {
   const doc = await getOrCreateDoc(sessionId);
   const awareness = awarenesses.get(sessionId)!;
   const room = connections.get(sessionId)!;
@@ -107,7 +123,10 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
     encoding.writeVarUint(awarenessEncoder, messageAwareness);
     encoding.writeVarUint8Array(
       awarenessEncoder,
-      awarenessProtocol.encodeAwarenessUpdate(awareness, Array.from(awarenessStates.keys()))
+      awarenessProtocol.encodeAwarenessUpdate(
+        awareness,
+        Array.from(awarenessStates.keys()),
+      ),
     );
     ws.send(encoding.toUint8Array(awarenessEncoder));
   }
@@ -120,13 +139,21 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
     broadcastToOthers(sessionId, origin as WebSocket, encoding.toUint8Array(encoder));
   };
 
-  const awarenessHandler = ({ added, updated, removed }: { added: number[], updated: number[], removed: number[] }) => {
+  const awarenessHandler = ({
+    added,
+    updated,
+    removed,
+  }: {
+    added: number[];
+    updated: number[];
+    removed: number[];
+  }) => {
     const changedClients = added.concat(updated, removed);
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, messageAwareness);
     encoding.writeVarUint8Array(
       encoder,
-      awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients)
+      awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients),
     );
     broadcastToOthers(sessionId, ws, encoding.toUint8Array(encoder));
   };
@@ -135,7 +162,9 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
   awareness.on("change", awarenessHandler);
 
   const messageHandler = (data: Buffer, isBinary: boolean) => {
-    if (!isBinary) return;
+    if (!isBinary) {
+      return;
+    }
     try {
       const uint8 = new Uint8Array(data);
       const decoder = decoding.createDecoder(uint8);
@@ -156,7 +185,7 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
           const len = decoding.readVarUint(innerDecoder);
           if (len > 0) {
             const wsClientIds = clientIds.get(ws) ?? new Set<number>();
-            for (let i = 0; i < len; i += 1) {
+            for (let index = 0; index < len; index += 1) {
               const clientId = decoding.readVarUint(innerDecoder);
               wsClientIds.add(clientId);
               decoding.readVarUint(innerDecoder);
@@ -165,6 +194,7 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
             clientIds.set(ws, wsClientIds);
           }
         } catch {
+          // Ignore awareness payload parsing issues and still apply the update.
         }
         awarenessProtocol.applyAwarenessUpdate(awareness, update, ws);
       }
@@ -190,7 +220,7 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
       encoding.writeVarUint(encoder, messageAwareness);
       encoding.writeVarUint8Array(
         encoder,
-        awarenessProtocol.encodeAwarenessUpdate(awareness, removedClientIds)
+        awarenessProtocol.encodeAwarenessUpdate(awareness, removedClientIds),
       );
       broadcastToAll(sessionId, encoding.toUint8Array(encoder));
     }
@@ -200,7 +230,9 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
       setTimeout(() => {
         const currentRoom = connections.get(sessionId);
         if (currentRoom && currentRoom.size > 0) {
-          console.log(`[Yjs] Session ${sessionId} rejoined during grace period, skipping cleanup`);
+          console.log(
+            `[Yjs] Session ${sessionId} rejoined during grace period, skipping cleanup`,
+          );
           return;
         }
         persistDoc(sessionId, doc)
@@ -219,4 +251,51 @@ export async function setupYjsConnection(ws: WebSocket, sessionId: string): Prom
       }, 3000);
     }
   });
+}
+
+export async function ensureStarterCode(
+  sessionId: string,
+  starterCode: string,
+): Promise<boolean> {
+  if (!starterCode.trim()) {
+    return false;
+  }
+
+  const doc = await getOrCreateDoc(sessionId);
+  const text = doc.getText("codemirror");
+
+  if (text.length > 0 && text.toString().trim().length > 0) {
+    return false;
+  }
+
+  if (text.length > 0) {
+    text.delete(0, text.length);
+  }
+  text.insert(0, starterCode);
+  await persistDoc(sessionId, doc);
+  return true;
+}
+
+export async function replaceSessionCode(
+  sessionId: string,
+  code: string,
+): Promise<void> {
+  const doc = await getOrCreateDoc(sessionId);
+  const text = doc.getText("codemirror");
+
+  doc.transact(() => {
+    if (text.length > 0) {
+      text.delete(0, text.length);
+    }
+    if (code) {
+      text.insert(0, code);
+    }
+  });
+
+  await persistDoc(sessionId, doc);
+}
+
+export async function getSessionCode(sessionId: string): Promise<string> {
+  const doc = await getOrCreateDoc(sessionId);
+  return doc.getText("codemirror").toString();
 }

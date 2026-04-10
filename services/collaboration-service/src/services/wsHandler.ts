@@ -4,7 +4,6 @@ import { CollaborationService } from "./collaborationService";
 import { verifyTokenString } from "../middleware/authMiddleware";
 import { setupYjsConnection } from "./yjsUtils";
 import { sessionSocketManager } from "./sessionSocketManager";
-import CollaborationSession from "../models/CollaborationSession";
 
 const HEARTBEAT_INTERVAL_MS = 10000;
 
@@ -40,8 +39,8 @@ export function handleWebSocketConnection(
         return;
       }
 
+      await collaborationService.ensureSessionStarterCode(session);
       sessionSocketManager.join(sessionId, `yjs:${userId}`, ws, username);
-
       await setupYjsConnection(ws, sessionId);
 
       let isAlive = true;
@@ -49,12 +48,10 @@ export function handleWebSocketConnection(
         if (ws.readyState !== WebSocket.OPEN) {
           return;
         }
-
         if (!isAlive) {
           ws.terminate();
           return;
         }
-
         isAlive = false;
         ws.ping();
       }, HEARTBEAT_INTERVAL_MS);
@@ -63,60 +60,40 @@ export function handleWebSocketConnection(
         isAlive = true;
       });
 
-      ws.on("close", (code) => {
-        clearInterval(pingTimer);
-        console.log(`[WS] User ${userId} disconnected (Code: ${code})`);
-        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
-      });
-
-      console.log(`[WS] User ${username} (${userId}) connected to Yjs session ${sessionId}`);
-
-      ws.on("message", async (data: any, isBinary: boolean) => {
-        if (isBinary) return;
+      ws.on("message", (data: Buffer, isBinary: boolean) => {
+        if (isBinary) {
+          return;
+        }
 
         try {
-          const msgString = data.toString();
-          if (!msgString.startsWith('{')) return;
-
-          const parsedData = JSON.parse(msgString);
-
-          if (parsedData.type === "keep_alive") {
+          const message = JSON.parse(data.toString());
+          if (message.type === "keep_alive") {
             sessionSocketManager.acknowledgeWarning(sessionId);
-            return;
           }
-
-          if (parsedData.type === "activity") {
+          if (message.type === "activity") {
             sessionSocketManager.recordActivity(sessionId);
-            return;
           }
-
-          if (parsedData.type === "chat_message") {
-            const msgUsername = parsedData.payload?.username || username;
-            const msgText = parsedData.payload?.text || "";
-
-            await CollaborationSession.updateOne(
-              { sessionId },
-              {
-                $push: {
-                  messages: {
-                    username: msgUsername,
-                    text: msgText,
-                    timestamp: new Date(),
-                  },
-                },
-              }
-            );
-            sessionSocketManager.broadcastToSession(sessionId, parsedData);
-          }
-        } catch (err) {
-          // Quietly ignore malformed JSON (could be partial Yjs strings)
+        } catch {
+          // Ignore malformed JSON and any Yjs transport noise.
         }
+      });
+
+      ws.on("close", (code) => {
+        clearInterval(pingTimer);
+        console.log(
+          `[WS] User ${username} (${userId}) disconnected (Code: ${code}) from session ${sessionId}`,
+        );
+        sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
 
       ws.on("error", (err) => {
         console.error(`[WS] Error for user ${userId}:`, err);
         sessionSocketManager.leave(sessionId, `yjs:${userId}`);
       });
+
+      console.log(
+        `[WS] User ${username} (${userId}) connected to Yjs session ${sessionId}`,
+      );
     })
     .catch((err) => {
       console.error("[WS] Handler error:", err);

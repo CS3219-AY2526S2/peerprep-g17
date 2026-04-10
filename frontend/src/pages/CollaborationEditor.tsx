@@ -1,4 +1,4 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { yCollab } from "y-codemirror.next";
@@ -12,8 +12,13 @@ interface EditorProps {
   sessionId: string;
   username: string;
   token: string;
+  initialCode?: string;
+  sharedCode?: string;
+  sharedYjsState?: string | null;
   onActivity?: () => void;
-  onConnectionStatusChange?: (status: "connecting" | "connected" | "disconnected") => void;
+  onConnectionStatusChange?: (
+    status: "connecting" | "connected" | "disconnected",
+  ) => void;
 }
 
 export interface CodeEditorHandle {
@@ -23,16 +28,33 @@ export interface CodeEditorHandle {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
-  ({ sessionId, username, token, onActivity, onConnectionStatusChange }, ref) => {
+  (
+    {
+      sessionId,
+      username,
+      token,
+      initialCode = "",
+      sharedCode = "",
+      sharedYjsState = null,
+      onActivity,
+      onConnectionStatusChange,
+    },
+    ref,
+  ) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
     const onActivityRef = useRef(onActivity);
+    const initialCodeRef = useRef(initialCode);
 
     useEffect(() => {
       onActivityRef.current = onActivity;
     }, [onActivity]);
+
+    useEffect(() => {
+      initialCodeRef.current = initialCode;
+    }, [initialCode]);
 
     useImperativeHandle(ref, () => ({
       disconnect() {
@@ -70,45 +92,100 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
+      if (sharedYjsState) {
+        try {
+          const binaryString = atob(sharedYjsState);
+          const update = Uint8Array.from(binaryString, (char) =>
+            char.charCodeAt(0),
+          );
+          Y.applyUpdate(ydoc, update);
+        } catch {
+          // Fall back to the live socket sync path below.
+        }
+      }
+
+      const ytext = ydoc.getText("codemirror");
+      ytextRef.current = ytext;
+
+      const collapseDuplicateStarterCode = () => {
+        const starterCode = initialCodeRef.current;
+        if (!starterCode.trim()) {
+          return;
+        }
+
+        const currentText = ytext.toString();
+        if (!currentText) {
+          return;
+        }
+
+        let dedupedText = currentText;
+        let repeatCount = 0;
+        while (dedupedText.startsWith(starterCode)) {
+          dedupedText = dedupedText.slice(starterCode.length);
+          repeatCount += 1;
+        }
+
+        if (repeatCount > 1 && dedupedText.length === 0) {
+          dedupedText = starterCode;
+        } else {
+          dedupedText = currentText;
+        }
+
+        if (dedupedText !== currentText) {
+          ydoc.transact(() => {
+            ytext.delete(0, ytext.length);
+            ytext.insert(0, dedupedText);
+          });
+        }
+      };
+
       const provider = new WebsocketProvider(
-        `${wsUrl}/ws/sessions/`, 
+        `${wsUrl}/ws/sessions/`,
         sessionId,
         ydoc,
-        { 
-          params: { 
+        {
+          params: {
             token,
-            username 
-          } 
-        }
+            username,
+          },
+        },
       );
-
-      onConnectionStatusChange?.("connecting");
 
       const setupWsFilter = () => {
         if (provider.ws) {
-          const originalOnMessage = provider.ws.onmessage;
-          provider.ws.onmessage = (event) => {
+          const socket = provider.ws;
+          const originalOnMessage = socket.onmessage;
+          socket.onmessage = (event) => {
             if (typeof event.data === "string" && event.data.startsWith("{")) {
               return;
             }
-            originalOnMessage?.call(provider.ws!, event);
+            originalOnMessage?.call(socket, event);
           };
         }
       };
 
-      const handleProviderStatus = (event: { status: "connected" | "disconnected" | "connecting" }) => {
+      const handleProviderStatus = (event: {
+        status: "connected" | "disconnected" | "connecting";
+      }) => {
         onConnectionStatusChange?.(event.status);
       };
 
+      const handleSync = (isSynced: boolean) => {
+        if (isSynced) {
+          queueMicrotask(collapseDuplicateStarterCode);
+        }
+      };
+
+      onConnectionStatusChange?.("connecting");
       setupWsFilter();
+      provider.on("sync", handleSync);
       provider.on("status", setupWsFilter);
       provider.on("status", handleProviderStatus);
       providerRef.current = provider;
-      
-      // Awareness shows the username for the cursor/presence
+
       provider.awareness.setLocalStateField("user", {
         name: username,
-        color: "#" + Math.floor(Math.random() * 16777215).toString(16),
+        color: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
       });
 
       const filteredAwareness = new Proxy(provider.awareness as Awareness, {
@@ -133,9 +210,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         },
       });
 
-      const ytext = ydoc.getText("codemirror");
-      ytextRef.current = ytext;
-      
       const activityExtension = EditorView.updateListener.of((update) => {
         if (update.docChanged && onActivityRef.current) {
           onActivityRef.current();
@@ -143,6 +217,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       });
 
       const state = EditorState.create({
+        doc: ytext.toString() || sharedCode || "",
         extensions: [
           basicSetup,
           python(),
@@ -157,23 +232,33 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       viewRef.current = view;
 
       return () => {
+        provider.off("sync", handleSync);
         provider.off("status", setupWsFilter);
         provider.off("status", handleProviderStatus);
         onConnectionStatusChange?.("disconnected");
         provider.disconnect();
         provider.destroy();
-        ydoc.destroy();
         view.destroy();
+        viewRef.current = null;
+        ydoc.destroy();
       };
-    }, [sessionId, username, token, onConnectionStatusChange]);
+    }, [
+      initialCode,
+      onConnectionStatusChange,
+      sessionId,
+      sharedCode,
+      sharedYjsState,
+      token,
+      username,
+    ]);
 
     return (
       <div
         ref={editorRef}
-        className="rounded-md border overflow-hidden bg-background shadow-inner"
+        className="overflow-hidden rounded-md border bg-background shadow-inner"
       />
     );
-  }
+  },
 );
 
 export default CodeEditor;
