@@ -37,7 +37,6 @@ import type { CodeEditorHandle } from "./CollaborationEditor";
 const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
 
 type ResultTab = "testcase" | "result" | "console" | "chat";
-type SelectedTestCase = `sample-${number}` | "custom";
 
 function InactivityWarning({
   secondsLeft,
@@ -78,18 +77,6 @@ function InactivityWarning({
 
 function isFunctionCase(testCase: JudgeTestCase): testCase is FunctionJudgeTestCase {
   return "args" in testCase;
-}
-
-function isClassCase(testCase: JudgeTestCase): testCase is ClassJudgeTestCase {
-  return "operations" in testCase;
-}
-
-function toPrettyJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value ?? "");
-  }
 }
 
 function toDisplayJson(value: unknown): string {
@@ -134,21 +121,6 @@ function workspaceTabStyles(tab: ResultTab, activeTab: ResultTab) {
     default:
       return "";
   }
-}
-
-function buildFunctionCustomState(question: QuestionRecord | null): string {
-  const firstCase = question?.visibleTestCases.find(isFunctionCase);
-  return toPrettyJson(firstCase?.args || []);
-}
-
-function buildClassOperationState(question: QuestionRecord | null): string {
-  const firstCase = question?.visibleTestCases.find(isClassCase);
-  return toPrettyJson(firstCase?.operations || []);
-}
-
-function buildClassArgumentState(question: QuestionRecord | null): string {
-  const firstCase = question?.visibleTestCases.find(isClassCase);
-  return toPrettyJson(firstCase?.arguments || []);
 }
 
 function ValuePreview({
@@ -463,11 +435,6 @@ export default function CollaborationPage() {
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [runningMode, setRunningMode] = useState<"run" | "submit" | null>(null);
   const [resultTab, setResultTab] = useState<ResultTab>("result");
-  const [selectedTestCase, setSelectedTestCase] =
-    useState<SelectedTestCase>("sample-0");
-  const [customFunctionArgs, setCustomFunctionArgs] = useState("[]");
-  const [customClassOperations, setCustomClassOperations] = useState("[]");
-  const [customClassArguments, setCustomClassArguments] = useState("[]");
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
@@ -646,17 +613,6 @@ export default function CollaborationPage() {
       );
     }
   }, []);
-
-  useEffect(() => {
-    if (!question) {
-      return;
-    }
-
-    setCustomFunctionArgs(buildFunctionCustomState(question));
-    setCustomClassOperations(buildClassOperationState(question));
-    setCustomClassArguments(buildClassArgumentState(question));
-      setSelectedTestCase("sample-0");
-  }, [question?.id]);
 
   useEffect(() => {
     if (!token) return;
@@ -1157,35 +1113,6 @@ export default function CollaborationPage() {
     }
   }
 
-  function buildCustomPayload() {
-    if (!question || selectedTestCase !== "custom") {
-      return undefined;
-    }
-
-    if (question.executionMode === "python_function") {
-      const parsedArgs = JSON.parse(customFunctionArgs);
-      if (!Array.isArray(parsedArgs)) {
-        throw new Error("Custom args must be a JSON array.");
-      }
-      return { args: parsedArgs };
-    }
-
-    const operations = JSON.parse(customClassOperations);
-    const argumentsPayload = JSON.parse(customClassArguments);
-
-    if (!Array.isArray(operations) || !Array.isArray(argumentsPayload)) {
-      throw new Error("Operations and arguments must both be JSON arrays.");
-    }
-    if (operations.length !== argumentsPayload.length) {
-      throw new Error("Operations and arguments must be the same length.");
-    }
-
-    return {
-      operations,
-      arguments: argumentsPayload,
-    };
-  }
-
   async function execute(mode: "run" | "submit") {
     const code = editorRef.current?.getCode();
     if (!code?.trim() || !token || !sessionId) {
@@ -1199,12 +1126,6 @@ export default function CollaborationPage() {
       setRunningMode(mode);
       setResultTab("result");
 
-      const body: Record<string, unknown> = { code };
-      const customPayload = buildCustomPayload();
-      if (customPayload) {
-        body.customTestCase = customPayload;
-      }
-
       const response = await fetch(
         `${COLLABORATION_API_URL}/sessions/${sessionId}/${mode}`,
         {
@@ -1213,7 +1134,7 @@ export default function CollaborationPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ code }),
         },
       );
 
@@ -1420,56 +1341,6 @@ export default function CollaborationPage() {
                           {question.description}
                         </p>
 
-                        {question.examples.length > 0 && (
-                      <div className="space-y-2">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                              Examples
-                            </p>
-                            {question.examples.map((example, index) => (
-                              <div
-                                key={index}
-                                className="rounded-xl border border-sky-200/80 bg-white/90 px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-none"
-                              >
-                                <div className="flex gap-2">
-                                  <span className="w-16 shrink-0 text-muted-foreground">
-                                    Input:
-                                  </span>
-                                  <span>{example.input}</span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <span className="w-16 shrink-0 text-muted-foreground">
-                                    Output:
-                                  </span>
-                                  <span>{example.output}</span>
-                                </div>
-                                {example.explanation && (
-                                  <div className="mt-2 border-t border-border/10 pt-2 text-xs italic">
-                                    <span className="mr-2 not-italic text-muted-foreground">
-                                      Explanation:
-                                    </span>
-                                    {example.explanation}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {question.visibleTestCases.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                              Sample Testcases
-                            </p>
-                            {question.visibleTestCases.map((testCase, index) => (
-                              <TestCaseView
-                                key={testCase.id}
-                                testCase={testCase}
-                                title={`Sample ${index + 1}`}
-                              />
-                            ))}
-                          </div>
-                        )}
-
                         {question.link && (
                           <div className="pt-2">
                             <a
@@ -1492,68 +1363,17 @@ export default function CollaborationPage() {
                         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                           Test Cases
                         </p>
-                        <Button
-                          variant={selectedTestCase === "custom" ? "default" : "outline"}
-                          className={`min-w-24 text-sm ${
-                            selectedTestCase === "custom"
-                              ? "border-indigo-200 bg-indigo-100 text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-100"
-                              : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                          }`}
-                          onClick={() => setSelectedTestCase("custom")}
-                        >
-                          Custom
-                        </Button>
                       </div>
 
-                      {selectedTestCase === "custom" ? (
-                        <div className="space-y-3">
-                          {question.executionMode === "python_function" ? (
-                            <div className="space-y-2">
-                              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                Args JSON
-                              </p>
-                              <textarea
-                                className="min-h-32 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
-                                value={customFunctionArgs}
-                                onChange={(event) => setCustomFunctionArgs(event.target.value)}
-                              />
-                            </div>
-                          ) : (
-                            <>
-                              <div className="space-y-2">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                  Operations JSON
-                                </p>
-                                <textarea
-                                  className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
-                                  value={customClassOperations}
-                                  onChange={(event) => setCustomClassOperations(event.target.value)}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                  Arguments JSON
-                                </p>
-                                <textarea
-                                  className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
-                                  value={customClassArguments}
-                                  onChange={(event) => setCustomClassArguments(event.target.value)}
-                                />
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {question.visibleTestCases.map((testCase, index) => (
-                            <TestCaseView
-                              key={testCase.id}
-                              testCase={testCase}
-                              title={`Sample ${index + 1}`}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      <div className="space-y-3">
+                        {question.visibleTestCases.map((testCase, index) => (
+                          <TestCaseView
+                            key={testCase.id}
+                            testCase={testCase}
+                            title={`Sample ${index + 1}`}
+                          />
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -1875,15 +1695,15 @@ export default function CollaborationPage() {
                                 <span className="mb-1 text-xs font-semibold text-muted-foreground">
                                   {message.username}
                                 </span>
-                                <div
-                                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
-                                    message.username === user?.username
-                                      ? "bg-gradient-to-r from-slate-950 to-sky-900 text-white dark:from-sky-900 dark:to-slate-950 dark:text-slate-100"
-                                      : "border border-slate-200/80 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                                  }`}
-                                >
-                                  {message.text}
-                                </div>
+                                  <div
+                                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
+                                      message.username === user?.username
+                                        ? "border border-sky-200/80 bg-sky-100 text-sky-950 dark:border-sky-800 dark:bg-sky-900/45 dark:text-sky-50"
+                                        : "border border-emerald-200/80 bg-emerald-100 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-50"
+                                    }`}
+                                  >
+                                    {message.text}
+                                  </div>
                               </div>
                             ))
                           ) : (
