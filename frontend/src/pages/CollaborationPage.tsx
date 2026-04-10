@@ -688,6 +688,28 @@ export default function CollaborationPage() {
     else if (mode === "leave") await completeSession(false);
   };
 
+  const redirectAfterSharedCompletion = useCallback(
+    (outcome: "submitted" | "ended") => {
+      if (isRedirecting.current) {
+        return;
+      }
+
+      isRedirecting.current = true;
+      terminatedRef.current = true;
+      localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+      editorRef.current?.disconnect();
+      setSessionUnavailable(false);
+      setTerminated(true);
+      setError(
+        outcome === "submitted"
+          ? "The collaboration session was completed and submitted."
+          : "The collaboration session was ended.",
+      );
+      setTimeout(() => navigate("/match"), 1500);
+    },
+    [navigate],
+  );
+
   const connectChatSocket = useCallback(() => {
     if (
       !token ||
@@ -743,6 +765,8 @@ export default function CollaborationPage() {
           if (data.payload.userId !== user?.id) {
             setPeerOnline(data.payload.isConnected);
           }
+        } else if (data.type === "session_completed") {
+          redirectAfterSharedCompletion(data.payload?.outcome || "ended");
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
@@ -812,6 +836,7 @@ export default function CollaborationPage() {
     cancelCountdown,
     clearReconnectTimer,
     navigate,
+    redirectAfterSharedCompletion,
     sessionId,
     startCountdown,
     syncQuestionChange,
@@ -863,6 +888,12 @@ export default function CollaborationPage() {
       });
       if (res.ok) {
         const json = await res.json();
+        if (json.data?.status === "completed" && !isRedirecting.current) {
+          redirectAfterSharedCompletion(
+            json.data?.lastSubmittedAt ? "submitted" : "ended",
+          );
+          return;
+        }
         setSession(json.data);
         setSessionUnavailable(false);
         clearSessionRetryTimer();
@@ -888,7 +919,13 @@ export default function CollaborationPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyExecutionResult, clearSessionRetryTimer, sessionId, token]);
+  }, [
+    applyExecutionResult,
+    clearSessionRetryTimer,
+    redirectAfterSharedCompletion,
+    sessionId,
+    token,
+  ]);
 
   useEffect(() => {
     void loadSession();

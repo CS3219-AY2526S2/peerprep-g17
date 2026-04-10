@@ -32,6 +32,23 @@ function findFirstFailingCase(result: ExecutionResult) {
   return result.cases.find((testCase) => testCase.verdict !== "Accepted") || null;
 }
 
+function broadcastSessionCompletion(
+  sessionId: string,
+  completedByUserId: string,
+  outcome: "submitted" | "ended",
+  completedAt: Date,
+): void {
+  sessionSocketManager.broadcastToSession(sessionId, {
+    type: "session_completed",
+    payload: {
+      sessionId,
+      completedByUserId,
+      outcome,
+      completedAt: completedAt.toISOString(),
+    },
+  });
+}
+
 export class CollaborationService {
   constructor(
     private readonly matchingServiceClient: MatchingServiceClient,
@@ -313,6 +330,12 @@ export class CollaborationService {
     session.status = "completed";
     session.completedAt = new Date();
     await session.save();
+    broadcastSessionCompletion(
+      sessionId,
+      userId,
+      "submitted",
+      session.completedAt,
+    );
     return session;
   }
 
@@ -331,6 +354,7 @@ export class CollaborationService {
     session.status = "completed";
     session.completedAt = new Date();
     await session.save();
+    broadcastSessionCompletion(sessionId, userId, "ended", session.completedAt);
     return session;
   }
 
