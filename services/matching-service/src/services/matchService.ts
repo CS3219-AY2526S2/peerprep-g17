@@ -16,6 +16,7 @@ import {
   bucketLockKey,
   queueKey,
   queueSequenceKey,
+  relaxationRecentPartnerZsetKey,
   relaxationT1ZsetKey,
   relaxationT2ZsetKey,
   requestKey,
@@ -124,6 +125,7 @@ function parseRequestRecord(
     timeoutAt: Number(raw.timeoutAt),
     t1At: Number(raw.t1At),
     t2At: Number(raw.t2At),
+    recentPartnerAt: Number(raw.recentPartnerAt || 0),
     status: raw.status as RequestRecord["status"],
     sessionId: raw.sessionId || "",
     cancelRequested: parseBoolean(raw.cancelRequested),
@@ -145,6 +147,7 @@ function serializeRequestRecord(
     timeoutAt: String(request.timeoutAt),
     t1At: String(request.t1At),
     t2At: String(request.t2At),
+    recentPartnerAt: String(request.recentPartnerAt),
     status: request.status,
     sessionId: request.sessionId,
     cancelRequested: request.cancelRequested ? "1" : "0",
@@ -239,6 +242,7 @@ export class MatchService {
         timeoutAt: now + config.matchRequestTimeoutMs,
         t1At: now + config.relaxationT1Ms,
         t2At: now + config.relaxationT2Ms,
+        recentPartnerAt: now + config.recentPartnerRelaxationMs,
         status: "searching",
         sessionId: "",
         cancelRequested: false,
@@ -398,6 +402,10 @@ export class MatchService {
     let matched = 0;
     matched += await this.processRelaxationTier(relaxationT1ZsetKey, now);
     matched += await this.processRelaxationTier(relaxationT2ZsetKey, now);
+    matched += await this.processRelaxationTier(
+      relaxationRecentPartnerZsetKey,
+      now,
+    );
     return matched;
   }
 
@@ -503,6 +511,11 @@ export class MatchService {
     multi.zadd(timeoutZsetKey, String(request.timeoutAt), request.id);
     multi.zadd(relaxationT1ZsetKey, String(request.t1At), request.id);
     multi.zadd(relaxationT2ZsetKey, String(request.t2At), request.id);
+    multi.zadd(
+      relaxationRecentPartnerZsetKey,
+      String(request.recentPartnerAt),
+      request.id,
+    );
     await multi.exec();
   }
 
@@ -511,6 +524,16 @@ export class MatchService {
       queueKey(request.topic, request.difficulty),
       String(request.queueScore),
       request.queueMember,
+    );
+  }
+
+  private async scheduleRecentPartnerRelaxation(
+    request: RequestRecord,
+  ): Promise<void> {
+    await this.redis.zadd(
+      relaxationRecentPartnerZsetKey,
+      String(request.recentPartnerAt),
+      request.id,
     );
   }
 
@@ -589,10 +612,6 @@ export class MatchService {
         return null;
       }
 
-      if (recentPartnerId && candidate.userId === recentPartnerId) {
-        return null;
-      }
-
       const elapsedRequesterMs = Date.now() - requester.createdAt;
       const elapsedCandidateMs = Date.now() - candidate.createdAt;
       const requiredDistance = difficultyDistance(
@@ -603,6 +622,19 @@ export class MatchService {
         getAllowedDistance(elapsedRequesterMs),
         getAllowedDistance(elapsedCandidateMs),
       );
+      const recentPartnerRelaxed =
+        Date.now() >=
+        Math.min(requester.recentPartnerAt, candidate.recentPartnerAt);
+
+      if (
+        recentPartnerId &&
+        candidate.userId === recentPartnerId &&
+        !recentPartnerRelaxed
+      ) {
+        await this.scheduleRecentPartnerRelaxation(requester);
+        await this.scheduleRecentPartnerRelaxation(candidate);
+        return null;
+      }
 
       if (requiredDistance > allowedDistance) {
         return null;
@@ -782,6 +814,7 @@ export class MatchService {
     multi.zrem(timeoutZsetKey, requestId);
     multi.zrem(relaxationT1ZsetKey, requestId);
     multi.zrem(relaxationT2ZsetKey, requestId);
+    multi.zrem(relaxationRecentPartnerZsetKey, requestId);
     await multi.exec();
   }
 
@@ -793,6 +826,7 @@ export class MatchService {
     multi.zrem(timeoutZsetKey, requestId);
     multi.zrem(relaxationT1ZsetKey, requestId);
     multi.zrem(relaxationT2ZsetKey, requestId);
+    multi.zrem(relaxationRecentPartnerZsetKey, requestId);
     if (userId) {
       multi.del(userRequestKey(userId));
     }

@@ -1,3 +1,4 @@
+import * as Y from "yjs";
 import CollaborationSession, {
   ICollaborationSession,
 } from "../models/CollaborationSession";
@@ -12,7 +13,12 @@ import {
 import { MatchingServiceClient } from "./matchingServiceClient";
 import { QuestionServiceClient } from "./questionServiceClient";
 import { ExecutionService } from "./executionService";
-import { ensureStarterCode, getSessionCode, replaceSessionCode } from "./yjsUtils";
+import {
+  docs,
+  ensureStarterCode,
+  getSessionCode,
+  replaceSessionCode,
+} from "./yjsUtils";
 import { sessionSocketManager } from "./sessionSocketManager";
 import { config } from "../config";
 
@@ -161,7 +167,8 @@ export class CollaborationService {
       await session.save();
 
       if (mode === "submit") {
-        const attemptData = {
+        await Attempt.create({
+          userId,
           sessionId,
           questionId: session.questionId,
           topic: session.topic,
@@ -169,7 +176,7 @@ export class CollaborationService {
           language: session.language,
           code,
           attemptedAt: new Date(),
-          mode: "submit" as const,
+          mode: "submit",
           verdict: result.verdict,
           passedCount: result.passedCount,
           totalCount: result.totalCount,
@@ -178,12 +185,7 @@ export class CollaborationService {
           executionMode: result.executionMode,
           firstFailingCase: findFirstFailingCase(result),
           submittedAt: new Date(result.initiatedAt),
-        };
-
-        await Attempt.insertMany([
-          { ...attemptData, userId: session.userAId },
-          { ...attemptData, userId: session.userBId },
-        ]);
+        });
       }
 
       sessionSocketManager.broadcastToSession(sessionId, {
@@ -214,7 +216,9 @@ export class CollaborationService {
 
     const question = await this.questionServiceClient.getQuestion(questionId);
     if (question.executionMode === "unsupported") {
-      throw new ValidationError("That question is not runnable in the collaboration judge yet.");
+      throw new ValidationError(
+        "That question is not runnable in the collaboration judge yet.",
+      );
     }
 
     session.questionId = question.id;
@@ -251,46 +255,53 @@ export class CollaborationService {
   async completeSession(
     sessionId: string,
     userId: string,
+    submittedCode?: string,
   ): Promise<ICollaborationSession | null> {
     const session = await this.getSessionForUser(sessionId, userId);
-    if (!session) return null;
-    if (session.status === "completed") return session;
-
-    let code = "";
-    try {
-      code = await getSessionCode(sessionId);
-    } catch {
-      code = "";
+    if (!session) {
+      return null;
     }
+
+    const code = (submittedCode ?? "").trim()
+      ? submittedCode
+      : await this.resolveSessionCode(sessionId, session);
 
     const lastSubmit =
       session.lastExecutionResult?.mode === "submit"
         ? session.lastExecutionResult
         : null;
 
-    const attemptData = {
-      sessionId,
-      questionId: session.questionId,
-      topic: session.topic,
-      difficulty: session.difficulty,
-      language: session.language,
-      code,
-      attemptedAt: new Date(),
-      mode: "session_complete" as const,
-      verdict: lastSubmit?.verdict,
-      passedCount: lastSubmit?.passedCount,
-      totalCount: lastSubmit?.totalCount,
-      runtimeMs: lastSubmit?.runtimeMs,
-      memoryKb: lastSubmit?.memoryKb,
-      executionMode: lastSubmit?.executionMode,
-      firstFailingCase: lastSubmit ? findFirstFailingCase(lastSubmit) : null,
-      submittedAt: session.lastSubmittedAt || null,
-    };
+    await Attempt.findOneAndUpdate(
+      { userId, sessionId, mode: "session_complete" },
+      {
+        userId,
+        sessionId,
+        questionId: session.questionId,
+        topic: session.topic,
+        difficulty: session.difficulty,
+        language: session.language,
+        code,
+        attemptedAt: new Date(),
+        mode: "session_complete",
+        verdict: lastSubmit?.verdict,
+        passedCount: lastSubmit?.passedCount,
+        totalCount: lastSubmit?.totalCount,
+        runtimeMs: lastSubmit?.runtimeMs,
+        memoryKb: lastSubmit?.memoryKb,
+        executionMode: lastSubmit?.executionMode,
+        firstFailingCase: lastSubmit ? findFirstFailingCase(lastSubmit) : null,
+        submittedAt: session.lastSubmittedAt || null,
+      },
+      {
+        upsert: true,
+        returnDocument: "after",
+        setDefaultsOnInsert: true,
+      },
+    );
 
-    await Attempt.insertMany([
-      { ...attemptData, userId: session.userAId },
-      { ...attemptData, userId: session.userBId },
-    ]);
+    if (session.status === "completed") {
+      return session;
+    }
 
     try {
       await this.matchingServiceClient.completeSession(sessionId);
@@ -305,8 +316,55 @@ export class CollaborationService {
     return session;
   }
 
+  async terminateSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<ICollaborationSession | null> {
+    const session = await this.getSessionForUser(sessionId, userId);
+    if (!session) {
+      return null;
+    }
+    if (session.status === "completed") {
+      return session;
+    }
+
+    session.status = "completed";
+    session.completedAt = new Date();
+    await session.save();
+    return session;
+  }
+
   async getAttemptHistory(userId: string): Promise<IAttempt[]> {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
+  }
+
+  private async resolveSessionCode(
+    sessionId: string,
+    session: ICollaborationSession,
+  ): Promise<string> {
+    try {
+      const liveCode = docs.get(sessionId);
+      if (liveCode) {
+        return liveCode.getText("codemirror").toString();
+      }
+
+      const yjsCode = await getSessionCode(sessionId);
+      if (yjsCode.trim()) {
+        return yjsCode;
+      }
+
+      if (session.yjsState) {
+        const tempDoc = new Y.Doc();
+        Y.applyUpdate(tempDoc, new Uint8Array(session.yjsState));
+        const persistedCode = tempDoc.getText("codemirror").toString();
+        tempDoc.destroy();
+        return persistedCode;
+      }
+    } catch {
+      // Fall through to the empty string return below.
+    }
+
+    return "";
   }
 }
 

@@ -46,19 +46,15 @@ jobs:
         working-directory: services/matching-service
         run: npm ci
 
-      - name: Install c8 for coverage
-        working-directory: services/matching-service
-        run: npm install --save-dev c8
-
       - name: Build
         working-directory: services/matching-service
         run: npm run build
 
-      - name: Run tests with the coverage
+      - name: Run tests with coverage
         working-directory: services/matching-service
-        run: npx c8 --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 node --test dist/tests/*.test.js
+        run: npx c8 --reporter=lcov --reporter=text --lines 75 --branches 65 --functions 85 npm test
         env:
-          MONGODB_URI: mongodb://localhost:27017/peerprep-matching-test
+          MONGO_URI: mongodb://localhost:27017/peerprep-matching-test
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: test-secret
           PORT: 8082

@@ -1,10 +1,20 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 
+const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
+
 export default function HomePage() {
   const { isAuthenticated } = useAuth();
+  const activeSessionId =
+    typeof window !== "undefined"
+      ? localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)
+      : null;
+
+  if (isAuthenticated && activeSessionId) {
+    return <Navigate to={`/collaboration/${activeSessionId}`} replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">

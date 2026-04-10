@@ -24,6 +24,8 @@ export const config = {
   matchRequestTimeoutMs: Number(process.env.MATCH_REQUEST_TIMEOUT_MS) || 180000,
   relaxationT1Ms: Number(process.env.MATCH_RELAXATION_T1_MS) || 30000,
   relaxationT2Ms: Number(process.env.MATCH_RELAXATION_T2_MS) || 60000,
+  recentPartnerRelaxationMs:
+    Number(process.env.MATCH_RECENT_PARTNER_RELAXATION_MS) || 120000,
   timeoutPollIntervalMs:
     Number(process.env.MATCH_TIMEOUT_POLL_INTERVAL_MS) || 1000,
   relaxationPollIntervalMs:

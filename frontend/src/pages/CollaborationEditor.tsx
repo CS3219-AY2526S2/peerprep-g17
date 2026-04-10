@@ -1,4 +1,4 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
+import { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 import { yCollab } from "y-codemirror.next";
@@ -6,6 +6,7 @@ import { EditorView, basicSetup } from "codemirror";
 import { python } from "@codemirror/lang-python";
 import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
+import type { Awareness } from "y-protocols/awareness";
 
 interface EditorProps {
   sessionId: string;
@@ -15,6 +16,9 @@ interface EditorProps {
   sharedCode?: string;
   sharedYjsState?: string | null;
   onActivity?: () => void;
+  onConnectionStatusChange?: (
+    status: "connecting" | "connected" | "disconnected",
+  ) => void;
 }
 
 export interface CodeEditorHandle {
@@ -33,6 +37,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       sharedCode = "",
       sharedYjsState = null,
       onActivity,
+      onConnectionStatusChange,
     },
     ref,
   ) => {
@@ -42,7 +47,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     const providerRef = useRef<WebsocketProvider | null>(null);
     const onActivityRef = useRef(onActivity);
     const initialCodeRef = useRef(initialCode);
-    const hasSyncedRef = useRef(false);
 
     useEffect(() => {
       onActivityRef.current = onActivity;
@@ -87,6 +91,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
+
       if (sharedYjsState) {
         try {
           const binaryString = atob(sharedYjsState);
@@ -98,6 +103,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
           // Fall back to the live socket sync path below.
         }
       }
+
       const ytext = ydoc.getText("codemirror");
       ytextRef.current = ytext;
 
@@ -137,21 +143,71 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         `${wsUrl}/ws/sessions/`,
         sessionId,
         ydoc,
-        { params: { token } },
+        {
+          params: {
+            token,
+            username,
+          },
+        },
       );
 
+      const setupWsFilter = () => {
+        if (provider.ws) {
+          const socket = provider.ws;
+          const originalOnMessage = socket.onmessage;
+          socket.onmessage = (event) => {
+            if (typeof event.data === "string" && event.data.startsWith("{")) {
+              return;
+            }
+            originalOnMessage?.call(socket, event);
+          };
+        }
+      };
+
+      const handleProviderStatus = (event: {
+        status: "connected" | "disconnected" | "connecting";
+      }) => {
+        onConnectionStatusChange?.(event.status);
+      };
+
       const handleSync = (isSynced: boolean) => {
-        hasSyncedRef.current = isSynced;
         if (isSynced) {
           queueMicrotask(collapseDuplicateStarterCode);
         }
       };
 
+      onConnectionStatusChange?.("connecting");
+      setupWsFilter();
       provider.on("sync", handleSync);
+      provider.on("status", setupWsFilter);
+      provider.on("status", handleProviderStatus);
       providerRef.current = provider;
+
       provider.awareness.setLocalStateField("user", {
         name: username,
-        color: "#" + Math.floor(Math.random() * 16777215).toString(16),
+        color: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
+      });
+
+      const filteredAwareness = new Proxy(provider.awareness as Awareness, {
+        get(target, prop, receiver) {
+          if (prop === "getStates") {
+            return () => {
+              const states = target.getStates();
+              const filtered = new Map(states);
+              filtered.forEach((state, clientId) => {
+                if (
+                  clientId !== target.doc.clientID &&
+                  state?.user?.name === username
+                ) {
+                  filtered.delete(clientId);
+                }
+              });
+              return filtered;
+            };
+          }
+
+          return Reflect.get(target, prop, receiver);
+        },
       });
 
       const activityExtension = EditorView.updateListener.of((update) => {
@@ -166,7 +222,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
           basicSetup,
           python(),
           oneDark,
-          yCollab(ytext, provider.awareness),
+          yCollab(ytext, filteredAwareness),
           activityExtension,
           EditorView.theme({ "&": { height: "450px" } }),
         ],
@@ -177,21 +233,32 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       return () => {
         provider.off("sync", handleSync);
+        provider.off("status", setupWsFilter);
+        provider.off("status", handleProviderStatus);
+        onConnectionStatusChange?.("disconnected");
         provider.disconnect();
         provider.destroy();
-        viewRef.current?.destroy();
+        view.destroy();
         viewRef.current = null;
         ydoc.destroy();
       };
-    }, [sessionId, sharedCode, sharedYjsState, token, username]);
+    }, [
+      initialCode,
+      onConnectionStatusChange,
+      sessionId,
+      sharedCode,
+      sharedYjsState,
+      token,
+      username,
+    ]);
 
     return (
       <div
         ref={editorRef}
-        className="rounded-md border overflow-hidden bg-background shadow-inner"
+        className="overflow-hidden rounded-md border bg-background shadow-inner"
       />
     );
-  }
+  },
 );
 
 export default CodeEditor;
