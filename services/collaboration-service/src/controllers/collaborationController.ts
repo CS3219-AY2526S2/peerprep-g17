@@ -12,7 +12,7 @@ import {
   ExecutionRequestBody,
   SessionQuestionSwitchBody,
 } from "../types";
-import SessionModel from "../models/CollaborationSession"; 
+import SessionModel from "../models/CollaborationSession";
 import { getSessionCode } from "../services/yjsUtils";
 function formatSessionResponse(session: any) {
   return {
@@ -24,7 +24,7 @@ function formatSessionResponse(session: any) {
     questionId: session.questionId,
     language: session.language,
     status: session.status,
-    messages: session.messages || [], 
+    messages: session.messages || [],
     createdAt: session.createdAt.toISOString(),
     completedAt: session.completedAt?.toISOString(),
     starterCodeSeededAt: session.starterCodeSeededAt?.toISOString(),
@@ -52,7 +52,7 @@ async function formatSessionResponseWithSharedCode(session: any) {
 }
 
 export class CollaborationController {
-  constructor(private readonly collaborationService: CollaborationService) {}
+  constructor(private readonly collaborationService: CollaborationService) { }
 
   handoffSession = async (req: Request, res: Response): Promise<void> => {
     const payload = req.body as Partial<CollaborationSessionPayload>;
@@ -89,7 +89,7 @@ export class CollaborationController {
   terminateSession = async (req: AuthRequest, res: Response) => {
     try {
       const { sessionId } = req.params;
-      await SessionModel.deleteOne({ sessionId }); 
+      await SessionModel.deleteOne({ sessionId });
       res.status(200).json({ message: "Session ended." });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete session." });
@@ -135,73 +135,76 @@ export class CollaborationController {
     }
   };
 
-  runCode = async (req: AuthRequest, res: Response): Promise<void> => {
+  explainCode = async (req: AuthRequest, res: Response): Promise<void> => {
     if (!req.userId) {
       res.status(401).json({ error: "Unauthorized." });
       return;
     }
 
-    try {
-      const result = await this.collaborationService.executeSessionCode(
-        String(req.params.sessionId),
-        req.userId,
-        "run",
-        req.body as ExecutionRequestBody,
-      );
-      res.status(200).json({ data: result });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        res.status(404).json({ error: error.message });
-        return;
-      }
-      if (error instanceof ConflictError) {
-        res.status(409).json({ error: error.message });
-        return;
-      }
-      if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message });
-        return;
-      }
-      res.status(502).json({
-        error:
-          error instanceof Error ? error.message : "Failed to run submitted code.",
-      });
-    }
-  };
+    const { code } = req.body as { code?: string };
 
-  submitCode = async (req: AuthRequest, res: Response): Promise<void> => {
-    if (!req.userId) {
-      res.status(401).json({ error: "Unauthorized." });
+    if (!code?.trim()) {
+      res.status(400).json({ error: "No code provided." });
+      return;
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+
+    if (!apiKey) {
+      res.status(503).json({ error: "AI explanation service is not configured." });
       return;
     }
 
     try {
-      const result = await this.collaborationService.executeSessionCode(
-        String(req.params.sessionId),
-        req.userId,
-        "submit",
-        req.body as ExecutionRequestBody,
-      );
-      res.status(200).json({ data: result });
-    } catch (error) {
-      if (error instanceof NotFoundError) {
-        res.status(404).json({ error: error.message });
-        return;
-      }
-      if (error instanceof ConflictError) {
-        res.status(409).json({ error: error.message });
-        return;
-      }
-      if (error instanceof ValidationError) {
-        res.status(400).json({ error: error.message });
-        return;
-      }
-      res.status(502).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to submit code to the judge.",
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.3,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You explain code for students in clear markdown. Use short sections, bullet points when helpful, and wrap code identifiers in backticks. Keep the explanation concise but useful.",
+            },
+            {
+              role: "user",
+              content: `Explain this code:\n\n\`\`\`\n${code}\n\`\`\``,
+            },
+          ],
+        }),
       });
+
+      const result = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        res.status(502).json({
+          error:
+            result.error?.message || "OpenAI explanation request failed.",
+        });
+        return;
+      }
+
+      const explanation = result.choices?.[0]?.message?.content?.trim();
+
+      if (!explanation) {
+        res.status(502).json({ error: "OpenAI did not return an explanation." });
+        return;
+      }
+
+      res.status(200).json({ data: { explanation } });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate explanation.";
+      res.status(502).json({ error: message });
     }
   };
 

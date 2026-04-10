@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -261,6 +269,147 @@ function TestCaseView({
       showExpected={showExpected}
     />
   );
+}
+
+function renderInlineText(text: string) {
+  return text.split(/(`[^`]+`)/g).map((part, index) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code
+          key={`${part}-${index}`}
+          className="rounded bg-zinc-950/80 px-1.5 py-0.5 font-mono text-[12px] text-violet-100"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+
+    return <Fragment key={`${part}-${index}`}>{part}</Fragment>;
+  });
+}
+
+function ExplanationContent({ content }: { content: string }) {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  const elements: ReactNode[] = [];
+  const lines = normalized.split("\n");
+
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index];
+
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    if (line.startsWith("```")) {
+      const language = line.slice(3).trim();
+      const codeLines: string[] = [];
+      index += 1;
+
+      while (index < lines.length && !lines[index].startsWith("```")) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+
+      if (index < lines.length) {
+        index += 1;
+      }
+
+      elements.push(
+        <div key={`code-${elements.length}`} className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-950">
+          {language && (
+            <div className="border-b border-zinc-800 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+              {language}
+            </div>
+          )}
+          <pre className="overflow-x-auto p-3 text-xs text-zinc-100">
+            <code>{codeLines.join("\n")}</code>
+          </pre>
+        </div>,
+      );
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      elements.push(
+        <h4 key={`heading-${elements.length}`} className="text-sm font-semibold text-violet-100">
+          {headingMatch[2]}
+        </h4>,
+      );
+      index += 1;
+      continue;
+    }
+
+    const unorderedMatch = line.match(/^[-*]\s+(.+)$/);
+    if (unorderedMatch) {
+      const items: string[] = [];
+
+      while (index < lines.length) {
+        const match = lines[index].match(/^[-*]\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        index += 1;
+      }
+
+      elements.push(
+        <ul key={`ul-${elements.length}`} className="list-disc space-y-2 pl-5 text-foreground/80">
+          {items.map((item, itemIndex) => (
+            <li key={`ul-item-${itemIndex}`}>{renderInlineText(item)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    const orderedMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (orderedMatch) {
+      const items: string[] = [];
+
+      while (index < lines.length) {
+        const match = lines[index].match(/^\d+\.\s+(.+)$/);
+        if (!match) break;
+        items.push(match[1]);
+        index += 1;
+      }
+
+      elements.push(
+        <ol key={`ol-${elements.length}`} className="list-decimal space-y-2 pl-5 text-foreground/80">
+          {items.map((item, itemIndex) => (
+            <li key={`ol-item-${itemIndex}`}>{renderInlineText(item)}</li>
+          ))}
+        </ol>,
+      );
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (index < lines.length && lines[index].trim()) {
+      if (
+        lines[index].startsWith("```") ||
+        /^#{1,6}\s+/.test(lines[index]) ||
+        /^[-*]\s+/.test(lines[index]) ||
+        /^\d+\.\s+/.test(lines[index])
+      ) {
+        break;
+      }
+      paragraphLines.push(lines[index]);
+      index += 1;
+    }
+
+    elements.push(
+      <p key={`p-${elements.length}`} className="leading-7 text-foreground/80">
+        {paragraphLines.map((paragraphLine, paragraphIndex) => (
+          <Fragment key={`paragraph-${paragraphIndex}`}>
+            {paragraphIndex > 0 && <br />}
+            {renderInlineText(paragraphLine)}
+          </Fragment>
+        ))}
+      </p>,
+    );
+  }
+
+  return <div className="space-y-4">{elements}</div>;
 }
 
 export default function CollaborationPage() {
@@ -695,22 +844,25 @@ export default function CollaborationPage() {
       setExplaining(true);
       setExplanation(null);
       setExplainError(null);
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const response = await fetch(`${COLLABORATION_API_URL}/sessions/explain`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
-          messages: [
-            { role: "system", content: "Explain this code clearly." },
-            { role: "user", content: code },
-          ],
+          code,
         }),
       });
+
       const result = await response.json();
-      setExplanation(result?.choices?.[0]?.message?.content || "No explanation returned.");
+
+      if (!response.ok) {
+        setExplainError(result?.error || "Explanation failed.");
+        return;
+      }
+
+      setExplanation(result?.data?.explanation || "");
     } catch (err: any) {
       setExplainError(err.message || "Explanation failed.");
     } finally {
@@ -1353,18 +1505,14 @@ export default function CollaborationPage() {
                         </button>
                       </div>
                       {explaining && (
-                        <div className="animate-pulse text-xs text-violet-300">
-                          Analysing...
+                        <div className="text-xs animate-pulse text-violet-300">
+                          Analyzing...
                         </div>
                       )}
                       {explainError && (
                         <p className="text-xs text-rose-400">{explainError}</p>
                       )}
-                      {explanation && (
-                        <div className="whitespace-pre-wrap text-foreground/80">
-                          {explanation}
-                        </div>
-                      )}
+                      {explanation && <ExplanationContent content={explanation} />}
                     </div>
                   )}
                 </div>

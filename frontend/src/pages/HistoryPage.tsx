@@ -35,7 +35,7 @@ export default function HistoryPage() {
     if (!token) return;
     async function load() {
       try {
-        const res = await fetch(`${COLLABORATION_API_URL}/history`, {
+        const res = await fetch(`${COLLABORATION_API_URL}/sessions/history`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {

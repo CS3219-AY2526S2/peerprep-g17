@@ -20,8 +20,7 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test:
-        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,7 +31,7 @@ services:
     restart: unless-stopped
     command: redis-server --save "" --appendonly no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -95,13 +94,12 @@ services:
       MONGO_URI: mongodb://mongo:27017/collaboration-service
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       USER_SERVICE_URL: http://user-service:8081
-      QUESTION_SERVICE_URL: http://question-service:8080
       MATCHING_SERVICE_URL: http://matching-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-service-token
       JWT_SECRET: dev-secret-change-me
       PISTON_URL: http://piston:2000
-      EXECUTION_SOURCE_SIZE_LIMIT_BYTES: 100000
-      EXECUTION_OUTPUT_LIMIT_BYTES: 65536
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
     depends_on:
       mongo:
         condition: service_healthy
@@ -119,6 +117,8 @@ services:
       COLLABORATION_SERVICE_URL: http://collaboration-service:8083
       INTERNAL_SERVICE_TOKEN: dev-internal-service-token
       JWT_SECRET: dev-secret-change-me
+      MATCH_RELAXATION_T1_MS: 10000
+      MATCH_RELAXATION_T2_MS: 20000
     depends_on:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -126,8 +126,6 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        VITE_GROQ_API_KEY: ${VITE_GROQ_API_KEY}
     restart: unless-stopped
 
   question-seeder:
