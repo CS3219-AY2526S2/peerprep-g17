@@ -41,7 +41,7 @@ test.beforeEach(async () => {
   );
 });
 
-test("completeSession prefers the submitted code and saves an attempt", async () => {
+test("completeSession prefers the submitted code and saves attempts for both participants", async () => {
   await CollaborationSession.create({
     sessionId: "session-1",
     userAId: "user-a",
@@ -63,12 +63,15 @@ test("completeSession prefers the submitted code and saves an attempt", async ()
   assert.equal(session.status, "completed");
   assert.deepEqual(matchingServiceClient.completedSessionIds, ["session-1"]);
 
-  const attempt = await Attempt.findOne({ sessionId: "session-1", userId: "user-a" });
-  assert.ok(attempt);
-  assert.equal(attempt.code, "print('submitted')");
+  const attempts = await Attempt.find({ sessionId: "session-1" }).sort({ userId: 1 });
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0]?.userId, "user-a");
+  assert.equal(attempts[0]?.code, "print('submitted')");
+  assert.equal(attempts[1]?.userId, "user-b");
+  assert.equal(attempts[1]?.code, "print('submitted')");
 });
 
-test("completeSession falls back to the in-memory Yjs doc when no code is submitted", async () => {
+test("completeSession falls back to the in-memory Yjs doc and saves for both users", async () => {
   await CollaborationSession.create({
     sessionId: "session-2",
     userAId: "user-a",
@@ -86,12 +89,13 @@ test("completeSession falls back to the in-memory Yjs doc when no code is submit
 
   await collaborationService.completeSession("session-2", "user-a");
 
-  const attempt = await Attempt.findOne({ sessionId: "session-2", userId: "user-a" });
-  assert.ok(attempt);
-  assert.equal(attempt.code, "print('from-doc')");
+  const attempts = await Attempt.find({ sessionId: "session-2" }).sort({ userId: 1 });
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0]?.code, "print('from-doc')");
+  assert.equal(attempts[1]?.code, "print('from-doc')");
 });
 
-test("completeSession falls back to persisted Yjs state when no in-memory doc exists", async () => {
+test("completeSession falls back to persisted Yjs state and saves for both users", async () => {
   const doc = new Y.Doc();
   doc.getText("codemirror").insert(0, "print('persisted-state')");
   const yjsState = Buffer.from(Y.encodeStateAsUpdate(doc));
@@ -111,9 +115,10 @@ test("completeSession falls back to persisted Yjs state when no in-memory doc ex
 
   await collaborationService.completeSession("session-3", "user-a");
 
-  const attempt = await Attempt.findOne({ sessionId: "session-3", userId: "user-a" });
-  assert.ok(attempt);
-  assert.equal(attempt.code, "print('persisted-state')");
+  const attempts = await Attempt.find({ sessionId: "session-3" }).sort({ userId: 1 });
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0]?.code, "print('persisted-state')");
+  assert.equal(attempts[1]?.code, "print('persisted-state')");
 });
 
 test("terminateSession completes the session without creating an attempt", async () => {

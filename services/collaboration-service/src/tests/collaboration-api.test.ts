@@ -381,7 +381,7 @@ test("POST /api/sessions/:sessionId/complete returns 404 for a non-participant",
   assert.equal(res.status, 404);
 });
 
-test("POST /api/sessions/:sessionId/complete saves an attempt only for the submitting user", async () => {
+test("POST /api/sessions/:sessionId/complete saves attempts for both session participants", async () => {
   const app = createTestApp();
 
   await CollaborationSession.create({
@@ -403,9 +403,11 @@ test("POST /api/sessions/:sessionId/complete saves an attempt only for the submi
   assert.equal(res.status, 200);
 
   const attempts = await Attempt.find({ sessionId: "session-1" }).sort({ userId: 1 });
-  assert.equal(attempts.length, 1);
+  assert.equal(attempts.length, 2);
   assert.equal(attempts[0]?.userId, "user-a");
   assert.equal(attempts[0]?.code, "print('saved by user a')");
+  assert.equal(attempts[1]?.userId, "user-b");
+  assert.equal(attempts[1]?.code, "print('saved by user a')");
 });
 
 test("DELETE /api/sessions/:sessionId ends the session without creating an attempt", async () => {
