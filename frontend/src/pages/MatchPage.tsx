@@ -250,16 +250,16 @@ export default function MatchPage() {
       <Navbar />
 
       <main className="relative mx-auto flex max-w-6xl flex-col gap-6 px-6 pb-12 pt-24">
-        <div className="pointer-events-none absolute inset-x-6 top-10 -z-10 h-[24rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-emerald-50/80 blur-3xl dark:from-sky-950/20 dark:via-transparent dark:to-slate-950/20" />
+        <div className="pointer-events-none absolute inset-x-6 top-10 -z-10 h-[24rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-emerald-50/80 blur-3xl dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/60" />
 
-        <div className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/90">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1 text-xs text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1 text-xs text-sky-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
             <span className="h-1.5 w-1.5 rounded-full bg-sky-600 dark:bg-sky-300" />
             Matchmaking
           </div>
 
           <div className="mt-5 space-y-3">
-            <h1 className="text-4xl font-bold tracking-tight text-slate-950 dark:text-white">
+            <h1 className="text-4xl font-bold tracking-tight text-slate-950 dark:text-slate-100">
               Find a Peer
             </h1>
             <p className="max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
@@ -270,7 +270,7 @@ export default function MatchPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card className="rounded-3xl border-slate-200/90 bg-white/95 shadow-[0_18px_60px_-36px_rgba(15,23,42,0.22)] dark:border-slate-800 dark:bg-slate-950/90">
+          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <CardHeader>
               <CardTitle className="text-2xl tracking-tight">Queue Request</CardTitle>
               <CardDescription>
@@ -335,7 +335,7 @@ export default function MatchPage() {
             </CardFooter>
           </Card>
 
-          <Card className="rounded-3xl border-slate-200/90 bg-white/95 shadow-[0_18px_60px_-36px_rgba(15,23,42,0.22)] dark:border-slate-800 dark:bg-slate-950/90">
+          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <CardHeader>
               <CardTitle className="text-2xl tracking-tight">Current State</CardTitle>
               <CardDescription>
@@ -343,11 +343,11 @@ export default function MatchPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/70 to-cyan-50/60 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/90">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-800">
                 <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                   Status
                 </div>
-                <div className="mt-2 text-2xl font-semibold">
+                <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
                   {loading ? "Loading..." : matchState?.status || "idle"}
                 </div>
               </div>
