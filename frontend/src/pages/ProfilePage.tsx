@@ -8,10 +8,62 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 
-
+const presetProfilePhotos = [
+  {
+    id: "leopard",
+    label: "Leopard",
+    url: "https://pixabay.com/images/download/designerpoint-leopard-515509_1920.jpg",
+  },
+  {
+    id: "dog",
+    label: "Dog",
+    url: "https://pixabay.com/images/download/melissa197-dog-8781844_1920.jpg",
+  },
+  {
+    id: "cat",
+    label: "Cat",
+    url: "https://pixabay.com/images/download/alex_dorohov-cat-7489398_1920.jpg",
+  },
+  {
+    id: "groyne",
+    label: "Groyne",
+    url: "https://pixabay.com/images/download/dbu_direktessehen-groyne-7917596_1920.jpg",
+  },
+  {
+    id: "moon",
+    label: "Moon",
+    url: "https://pixabay.com/images/download/andsproject-moon-8915307_1920.png",
+  },
+  {
+    id: "hill",
+    label: "Hill",
+    url: "https://pixabay.com/images/download/milaoktasafitri-hill-9026381_1920.png",
+  },
+  {
+    id: "wave",
+    label: "Wave",
+    url: "https://pixabay.com/images/download/x-6814275_1920.png",
+  },
+  {
+    id: "orange",
+    label: "Orange",
+    url: "https://pixabay.com/images/download/orange-4547207_1920.png",
+  },
+  {
+    id: "swordfish",
+    label: "Swordfish",
+    url: "https://pixabay.com/images/download/swordfish-295149_1920.png",
+  },
+  {
+    id: "plant",
+    label: "Plant",
+    url: "https://pixabay.com/images/download/x-6009034_1920.png",
+  },
+] as const;
 
 export default function ProfilePage() {
-  const { user, token, refreshProfile, updateProfile, uploadProfilePhoto } = useAuth();
+  const { user, token, refreshProfile, updateProfile, uploadProfilePhoto } =
+    useAuth();
 
   const [username, setUsername] = useState("");
   const [university, setUniversity] = useState("");
@@ -37,26 +89,28 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-    const navigation = useNavigate();
-    const [deleteError, setDeleteError] = useState("")
-  
-    async function handleDeletionOfAccount() {
-      if (!confirm("Are you sure you want to delete your account? This cannot be undone.")) {
-        return;
-      }
-      const res = await fetch(`${USER_API_URL}/me`, {
+  const navigation = useNavigate();
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleDeletionOfAccount() {
+    if (
+      !confirm("Are you sure you want to delete your account? This cannot be undone.")
+    ) {
+      return;
+    }
+
+    const res = await fetch(`${USER_API_URL}/me`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
-    })
-  
+    });
+
     if (res.ok) {
-      navigation("/login")
+      navigation("/login");
     } else {
-      const json = await res.json()
-      setDeleteError(json.error || "Failed to delete account.")
+      const json = await res.json();
+      setDeleteError(json.error || "Failed to delete account.");
     }
   }
-  
 
   async function fetchMyAdminRequests() {
     if (!token) {
@@ -132,8 +186,16 @@ export default function ProfilePage() {
         return;
       }
 
+      if (!user.profilePhotoUrl.includes("/api/users/")) {
+        setPhotoPreview(user.profilePhotoUrl);
+        return;
+      }
+
       try {
-        const objectUrl = await createProtectedImageUrl(user.profilePhotoUrl, token);
+        const objectUrl = await createProtectedImageUrl(
+          user.profilePhotoUrl,
+          token,
+        );
         if (cancelled) {
           URL.revokeObjectURL(objectUrl);
           return;
@@ -158,27 +220,36 @@ export default function ProfilePage() {
     };
   }, [token, user?.profilePhotoUrl]);
 
-  /**
-   * Immediately uploads the selected photo when the user picks a file.
-   * Shows a local preview optimistically while uploading.
-   */
+  async function handlePresetPhotoSelect(photoUrl: string) {
+    setError("");
+    setSuccess("");
+    setUploading(true);
+
+    try {
+      await updateProfile({ profilePhotoUrl: photoUrl });
+      setPhotoPreview(photoUrl);
+      setSuccess("Profile photo updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set profile photo");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    // Reset the input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
 
     setError("");
     setSuccess("");
 
-    // Show optimistic preview
     const objectUrl = URL.createObjectURL(file);
     setPhotoPreview((prev) => {
       if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
       return objectUrl;
     });
 
-    // Upload immediately
     setUploading(true);
     try {
       await uploadProfilePhoto(file);
@@ -249,43 +320,27 @@ export default function ProfilePage() {
     (request) => request.status === "pending",
   );
 
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      <main className="mx-auto max-w-3xl px-6 pt-24 pb-12">
-        <h1 className="text-3xl font-bold tracking-tight">Profile Settings</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Update your public profile details.
-        </p>
+      <main className="relative overflow-hidden px-6 pb-12 pt-24">
+        <div className="pointer-events-none absolute inset-x-8 top-14 -z-10 h-[24rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-emerald-50/80 blur-3xl dark:from-sky-950/20 dark:via-transparent dark:to-slate-950/20" />
 
-        {error && (
-          <div className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+        <div className="mx-auto max-w-5xl">
+          <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/85">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1 text-xs text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-600 dark:bg-sky-300" />
+              Profile workspace
+            </div>
 
-        {success && (
-          <div className="mt-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
-            {success}
-          </div>
-        )}
-
-        {loading ? (
-          <p className="mt-10 text-sm text-muted-foreground">Loading profile...</p>
-        ) : (
-          <div className="mt-8 grid gap-8 md:grid-cols-[220px_1fr]">
-            <section className="rounded-xl border border-border/50 p-5">
-              <h2 className="text-sm font-medium">Profile Photo</h2>
-
-              <div className="mt-4 flex flex-col items-center gap-3">
-                {/* Clickable avatar — opens file picker */}
+            <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
+              <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/80 to-cyan-50/70 p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-950/65">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="group relative flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-3xl font-semibold text-muted-foreground transition-opacity focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group relative mx-auto flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-sky-200/80 bg-white text-3xl font-semibold text-slate-500 shadow-sm transition-opacity focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-700 dark:bg-slate-900"
                 >
                   {photoPreview ? (
                     <img
@@ -297,24 +352,21 @@ export default function ProfilePage() {
                     <span>{user?.username?.[0]?.toUpperCase() || "?"}</span>
                   )}
 
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-slate-950/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-                      <circle cx="12" cy="13" r="3"/>
+                      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                      <circle cx="12" cy="13" r="3" />
                     </svg>
-                    <span className="mt-1 text-xs font-medium">Change</span>
+                    <span className="mt-1 text-xs font-medium">Change photo</span>
                   </div>
 
-                  {/* Uploading spinner overlay */}
                   {uploading && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/40">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                     </div>
                   )}
                 </button>
 
-                {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -323,162 +375,275 @@ export default function ProfilePage() {
                   className="hidden"
                 />
 
-                <p className="text-xs text-muted-foreground">
-                  {uploading ? "Uploading…" : "Click photo to change"}
+                <p className="mt-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {user?.username || "User"}
                 </p>
-                <p className="text-[11px] text-muted-foreground/60">
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {uploading ? "Uploading..." : "Click the avatar to update it"}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground/70">
                   JPEG, PNG, or WEBP up to 5MB
                 </p>
-              </div>
-            </section>
 
-            <section className="rounded-xl border border-border/50 p-5">
-              <form onSubmit={handleProfileSave} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value)}
-                    required
-                  />
-                </div>
+                <div className="mt-5 w-full text-left">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Quick Picks
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {presetProfilePhotos.map((photo) => {
+                      const selected = user?.profilePhotoUrl === photo.url;
 
-                <div className="space-y-2">
-                  <Label htmlFor="university">University</Label>
-                  <Input
-                    id="university"
-                    value={university}
-                    onChange={(event) => setUniversity(event.target.value)}
-                    maxLength={120}
-                    placeholder="e.g. National University of Singapore"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <textarea
-                    id="bio"
-                    value={bio}
-                    onChange={(event) => setBio(event.target.value)}
-                    maxLength={500}
-                    rows={6}
-                    className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                    placeholder="Tell others what topics you're practicing and your interview goals."
-                  />
-                  <p className="text-xs text-muted-foreground">{bio.length}/500</p>
-                </div>
-
-                <Button type="submit" className="w-full" size="lg" disabled={saving}>
-                  {saving ? "Saving..." : "Save Profile"}
-                </Button>
-              </form>
-            </section>
-          </div>
-        )}
-
-        {user?.role !== "admin" && user?.role !== "superadmin" && (
-          <section className="mt-8 rounded-xl border border-border/50 p-5">
-            <h2 className="text-lg font-semibold tracking-tight">
-              Request Admin Privileges
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Submit a short reason for why you should be granted admin access.
-            </p>
-
-            <form onSubmit={handleAdminRequestSubmit} className="mt-4 space-y-3">
-              <textarea
-                value={adminRequestReason}
-                onChange={(event) => setAdminRequestReason(event.target.value)}
-                rows={4}
-                maxLength={500}
-                required
-                className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                placeholder="Describe your responsibilities and why you need admin access."
-              />
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{adminRequestReason.length}/500</span>
-                {hasPendingAdminRequest && (
-                  <span>You already have a pending request.</span>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                disabled={
-                  adminRequestSubmitting ||
-                  hasPendingAdminRequest ||
-                  !adminRequestReason.trim()
-                }
-              >
-                {adminRequestSubmitting ? "Submitting..." : "Submit Request"}
-              </Button>
-            </form>
-
-            <div className="mt-6">
-              <h3 className="text-sm font-medium">Request History</h3>
-              {adminRequestLoading ? (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Loading requests...
-                </p>
-              ) : adminRequests.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  No admin requests submitted yet.
-                </p>
-              ) : (
-                <div className="mt-3 space-y-3">
-                  {adminRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="rounded-lg border border-border/50 p-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(request.createdAt).toLocaleString()}
-                        </span>
-                        <span
-                          className={`rounded-md px-2 py-0.5 text-xs font-medium ${
-                            request.status === "approved"
-                              ? "bg-emerald-500/10 text-emerald-700"
-                              : request.status === "rejected"
-                                ? "bg-destructive/10 text-destructive"
-                                : "bg-primary/10 text-primary"
+                      return (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          disabled={uploading}
+                          onClick={() => void handlePresetPhotoSelect(photo.url)}
+                          className={`overflow-hidden rounded-2xl border text-left transition-all ${
+                            selected
+                              ? "border-sky-400 ring-4 ring-sky-100 dark:border-sky-500 dark:ring-sky-950/50"
+                              : "border-slate-200 hover:border-sky-300 dark:border-slate-700 dark:hover:border-sky-700"
                           }`}
                         >
-                          {request.status}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {request.reason}
-                      </p>
-                      {request.reviewedAt && (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Reviewed: {new Date(request.reviewedAt).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+                          <img
+                            src={photo.url}
+                            alt={photo.label}
+                            className="h-20 w-full object-cover"
+                          />
+                          <div className="bg-white px-3 py-2 text-xs font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                            {photo.label}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground/70">
+                    Upload your own photo or choose a preset image.
+                  </p>
                 </div>
-              )}
+              </div>
+
+              <div>
+                <h1 className="text-4xl font-bold tracking-tight text-slate-950 dark:text-white">
+                  Profile Settings
+                </h1>
+                <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
+                  Keep your profile demo-ready with a clear photo, university,
+                  and short bio so people can understand who you are at a glance.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                    Role: {user?.role}
+                  </span>
+                  {user?.university && (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
+                      {user.university}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
-        )}
-          <section className="mt-8 rounded-xl border border-destructive/30 p-5">
-            <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Permanently delete your account. Note that this cannot be undone.
-              </p>
-          <Button
-              variant="destructive"
-              className="mt-4"
-              onClick={handleDeletionOfAccount}
-          >
-            Delete Account
-          </Button>
-          {deleteError && (
-            <p className="mt-2 text-sm text-destructive">{deleteError}</p>
+
+          {error && (
+            <div className="mt-6 rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+              {error}
+            </div>
           )}
-          </section>
+
+          {success && (
+            <div className="mt-6 rounded-2xl border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-200">
+              {success}
+            </div>
+          )}
+
+          {loading ? (
+            <p className="mt-10 text-sm text-muted-foreground">Loading profile...</p>
+          ) : (
+            <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_18px_60px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/85">
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold tracking-tight">Public Profile</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Update the details other users will see when they visit your
+                    profile.
+                  </p>
+                </div>
+
+                <form onSubmit={handleProfileSave} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="username" className="text-sm font-medium">
+                      Username
+                    </Label>
+                    <Input
+                      id="username"
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      required
+                      className="h-11"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="university" className="text-sm font-medium">
+                      University
+                    </Label>
+                    <Input
+                      id="university"
+                      value={university}
+                      onChange={(event) => setUniversity(event.target.value)}
+                      maxLength={120}
+                      placeholder="e.g. National University of Singapore"
+                      className="h-11"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bio" className="text-sm font-medium">
+                      Bio
+                    </Label>
+                    <textarea
+                      id="bio"
+                      value={bio}
+                      onChange={(event) => setBio(event.target.value)}
+                      maxLength={500}
+                      rows={6}
+                      className="min-h-40 w-full rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-base outline-none transition-colors focus-visible:border-sky-300 focus-visible:ring-4 focus-visible:ring-sky-100 dark:border-slate-800 dark:bg-slate-950/70 dark:focus-visible:border-sky-800 dark:focus-visible:ring-sky-950/40"
+                      placeholder="Tell others what topics you're practicing and your interview goals."
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Make this easy to scan in a quick demo.</span>
+                      <span>{bio.length}/500</span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full sm:w-auto min-w-40"
+                    size="lg"
+                    disabled={saving}
+                  >
+                    {saving ? "Saving..." : "Save Profile"}
+                  </Button>
+                </form>
+              </section>
+
+              <div className="space-y-6">
+                {user?.role !== "admin" && user?.role !== "superadmin" && (
+                  <section className="rounded-3xl border border-amber-200/90 bg-gradient-to-br from-white via-amber-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(245,158,11,0.35)] dark:border-slate-800 dark:bg-slate-950/85">
+                    <h2 className="text-xl font-semibold tracking-tight">
+                      Request Admin Privileges
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Submit a short reason for why you should be granted admin
+                      access.
+                    </p>
+
+                    <form onSubmit={handleAdminRequestSubmit} className="mt-4 space-y-4">
+                      <textarea
+                        value={adminRequestReason}
+                        onChange={(event) => setAdminRequestReason(event.target.value)}
+                        rows={4}
+                        maxLength={500}
+                        required
+                        className="w-full rounded-2xl border border-amber-200/80 bg-white/90 px-4 py-3 text-sm outline-none transition-colors focus-visible:border-amber-300 focus-visible:ring-4 focus-visible:ring-amber-100 dark:border-slate-800 dark:bg-slate-950/70 dark:focus-visible:border-amber-900 dark:focus-visible:ring-amber-950/40"
+                        placeholder="Describe your responsibilities and why you need admin access."
+                      />
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{adminRequestReason.length}/500</span>
+                        {hasPendingAdminRequest && (
+                          <span>You already have a pending request.</span>
+                        )}
+                      </div>
+
+                      <Button
+                        type="submit"
+                        disabled={
+                          adminRequestSubmitting ||
+                          hasPendingAdminRequest ||
+                          !adminRequestReason.trim()
+                        }
+                      >
+                        {adminRequestSubmitting ? "Submitting..." : "Submit Request"}
+                      </Button>
+                    </form>
+
+                    <div className="mt-6">
+                      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        Request History
+                      </h3>
+                      {adminRequestLoading ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Loading requests...
+                        </p>
+                      ) : adminRequests.length === 0 ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          No admin requests submitted yet.
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-3">
+                          {adminRequests.map((request) => (
+                            <div
+                              key={request.id}
+                              className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(request.createdAt).toLocaleString()}
+                                </span>
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    request.status === "approved"
+                                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200"
+                                      : request.status === "rejected"
+                                        ? "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-200"
+                                        : "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-200"
+                                  }`}
+                                >
+                                  {request.status}
+                                </span>
+                              </div>
+                              <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                {request.reason}
+                              </p>
+                              {request.reviewedAt && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  Reviewed: {new Date(request.reviewedAt).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                <section className="rounded-3xl border border-rose-200/90 bg-gradient-to-br from-white via-rose-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(244,63,94,0.28)] dark:border-rose-950/60 dark:bg-slate-950/85">
+                  <h2 className="text-xl font-semibold text-rose-700 dark:text-rose-300">
+                    Danger Zone
+                  </h2>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    Permanently delete your account. This cannot be undone, so this
+                    section is intentionally separated from the rest of your
+                    profile actions.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    className="mt-5"
+                    onClick={handleDeletionOfAccount}
+                  >
+                    Delete Account
+                  </Button>
+                  {deleteError && (
+                    <p className="mt-3 text-sm text-destructive">{deleteError}</p>
+                  )}
+                </section>
+              </div>
+            </div>
+          )}
+        </div>
       </main>
     </div>
   );

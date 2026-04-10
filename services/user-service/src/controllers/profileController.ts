@@ -50,12 +50,23 @@ export async function updateMe(
     username: req.body.username,
     university: req.body.university,
     bio: req.body.bio,
+    profilePhotoUrl:
+      req.body.profilePhotoUrl === undefined ? undefined : req.body.profilePhotoUrl,
   });
 
   if (updateError) {
     const statusCode = updateError.includes("already exists") ? 409 : 400;
     res.status(statusCode).json({ error: updateError });
     return;
+  }
+
+  if (typeof req.body.profilePhotoUrl === "string" && user.profilePhotoFileId) {
+    await removePreviousPhoto(user);
+    user.profilePhotoFileId = null;
+  }
+
+  if (req.body.profilePhotoUrl === null && user.profilePhotoPresetUrl) {
+    user.profilePhotoPresetUrl = null;
   }
 
   await user.save();
@@ -85,6 +96,7 @@ export async function uploadMePhoto(
 
   const newPhotoId = await uploadPhotoToGridFS(req.file, req.userId);
   user.profilePhotoFileId = newPhotoId;
+  user.profilePhotoPresetUrl = null;
   await user.save();
 
   res.status(200).json({ data: toSelfProfile(user) });

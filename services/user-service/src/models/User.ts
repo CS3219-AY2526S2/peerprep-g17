@@ -16,6 +16,7 @@ export interface IUser extends Document {
   googleId: string | null;
   githubId: String | null;
   profilePhotoFileId: mongoose.Types.ObjectId | null;
+  profilePhotoPresetUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +61,11 @@ const userSchema = new Schema<IUser>(
     },
     profilePhotoFileId: {
       type: Schema.Types.ObjectId,
+      default: null,
+    },
+    profilePhotoPresetUrl: {
+      type: String,
+      trim: true,
       default: null,
     },
     googleId: {

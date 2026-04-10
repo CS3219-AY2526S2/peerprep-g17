@@ -28,6 +28,7 @@ interface ProfileUpdatePayload {
   username?: string;
   university?: string;
   bio?: string;
+  profilePhotoUrl?: string | null;
 }
 
 interface AuthContextType {
