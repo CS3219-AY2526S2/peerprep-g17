@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { CollaborationService } from "../services/collaborationService";
 import { CollaborationSessionPayload, DIFFICULTIES } from "../types";
-import SessionModel from "../models/CollaborationSession"; 
+
 function formatSessionResponse(session: any) {
   return {
     sessionId: session.sessionId,
@@ -56,11 +56,25 @@ export class CollaborationController {
 
   terminateSession = async (req: AuthRequest, res: Response) => {
     try {
-      const { sessionId } = req.params;
-      await SessionModel.deleteOne({ sessionId }); 
-      res.status(200).json({ message: "Session ended." });
+      const sessionId = String(req.params.sessionId);
+      if (!req.userId) {
+        res.status(401).json({ error: "Unauthorized." });
+        return;
+      }
+
+      const session = await this.collaborationService.terminateSession(
+        sessionId,
+        req.userId,
+      );
+
+      if (!session) {
+        res.status(404).json({ error: "Session not found." });
+        return;
+      }
+
+      res.status(200).json({ data: formatSessionResponse(session) });
     } catch (error) {
-      res.status(500).json({ error: "Failed to delete session." });
+      res.status(500).json({ error: "Failed to end session." });
     }
   };
 
@@ -198,10 +212,15 @@ export class CollaborationController {
       return;
     }
 
+    const { code } = (req.body ?? {}) as {
+      code?: string;
+    };
+
     try {
       const session = await this.collaborationService.completeSession(
         String(req.params.sessionId),
         req.userId,
+        code,
       );
       if (!session) {
         res.status(404).json({ error: "Session not found." });

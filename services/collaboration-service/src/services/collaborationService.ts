@@ -2,7 +2,7 @@ import * as Y from "yjs";
 import CollaborationSession, {
   ICollaborationSession,
 } from "../models/CollaborationSession";
-import Attempt from "../models/Attempt";
+import Attempt, { IAttempt } from "../models/Attempt";
 import { CollaborationSessionPayload } from "../types";
 import { MatchingServiceClient } from "./matchingServiceClient";
 import { docs } from "./yjsUtils";
@@ -44,37 +44,37 @@ export class CollaborationService {
   async completeSession(
     sessionId: string,
     userId: string,
+    submittedCode?: string,
   ): Promise<ICollaborationSession | null> {
     const session = await this.getSessionForUser(sessionId, userId);
     if (!session) return null;
-    if (session.status === "completed") return session;
-    let code = "";
-    try {
-      const doc = docs.get(sessionId);
-      if (doc) {
-        code = doc.getText("codemirror").toString();
-      } else if (session.yjsState) {
-        const tempDoc = new Y.Doc();
-        Y.applyUpdate(tempDoc, new Uint8Array(session.yjsState));
-        code = tempDoc.getText("codemirror").toString();
-        tempDoc.destroy();
-      }
-    } catch (_) {}
 
-    const attemptData = {
-      sessionId,
-      questionId: session.questionId,
-      topic: session.topic,
-      difficulty: session.difficulty,
-      language: session.language,
-      code,
-      attemptedAt: new Date(),
-    };
+    const code = (submittedCode ?? "").trim()
+      ? submittedCode
+      : await this.resolveSessionCode(sessionId, session);
 
-    await Attempt.insertMany([
-      { ...attemptData, userId: session.userAId },
-      { ...attemptData, userId: session.userBId },
-    ]);
+    await Attempt.findOneAndUpdate(
+      { userId, sessionId },
+      {
+        userId,
+        sessionId,
+        questionId: session.questionId,
+        topic: session.topic,
+        difficulty: session.difficulty,
+        language: session.language,
+        code,
+        attemptedAt: new Date(),
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
+    if (session.status === "completed") {
+      return session;
+    }
 
     try {
       await this.matchingServiceClient.completeSession(sessionId);
@@ -82,14 +82,50 @@ export class CollaborationService {
     } catch (err) {
       console.error(`[Collab] Failed to notify matching service:`, err);
     }
+
     session.status = "completed";
     session.completedAt = new Date();
     await session.save();
     return session;
   }
+
+  async terminateSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<ICollaborationSession | null> {
+    const session = await this.getSessionForUser(sessionId, userId);
+    if (!session) return null;
+    if (session.status === "completed") return session;
+
+    session.status = "completed";
+    session.completedAt = new Date();
+    await session.save();
+    return session;
+  }
+
   async getAttemptHistory(userId: string): Promise<IAttempt[]> {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
   }
-}
 
-import { IAttempt } from "../models/Attempt";
+  private async resolveSessionCode(
+    sessionId: string,
+    session: ICollaborationSession,
+  ): Promise<string> {
+    try {
+      const doc = docs.get(sessionId);
+      if (doc) {
+        return doc.getText("codemirror").toString();
+      }
+
+      if (session.yjsState) {
+        const tempDoc = new Y.Doc();
+        Y.applyUpdate(tempDoc, new Uint8Array(session.yjsState));
+        const code = tempDoc.getText("codemirror").toString();
+        tempDoc.destroy();
+        return code;
+      }
+    } catch (_) {}
+
+    return "";
+  }
+}

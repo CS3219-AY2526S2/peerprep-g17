@@ -10,6 +10,8 @@ import CodeEditor from "./CollaborationEditor";
 import type { CodeEditorHandle } from "./CollaborationEditor";
 import { QUESTION_API_URL } from "@/config";
 
+const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
+
 function InactivityWarning({ secondsLeft, onKeepAlive }: { secondsLeft: number; onKeepAlive: () => void; }) {
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
@@ -170,6 +172,9 @@ function ExplanationContent({ content }: { content: string }) {
 }
 
 export default function CollaborationPage() {
+  const CHAT_RECONNECT_DELAY_MS = 2000;
+  const CHAT_MAX_RECONNECT_ATTEMPTS = 10;
+  const SESSION_RETRY_DELAY_MS = 3000;
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
@@ -178,8 +183,8 @@ export default function CollaborationPage() {
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [socket, setSocket] = useState<WebSocket | null>(null);
   const [terminated, setTerminated] = useState(false);
+  const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [warningActive, setWarningActive] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [output, setOutput] = useState<string | null>(null);
@@ -191,17 +196,46 @@ export default function CollaborationPage() {
   const [completing, setCompleting] = useState(false);
   const [question, setQuestion] = useState<any>(null);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(null);
+  const [peerOnline, setPeerOnline] = useState(false);
+  const [chatStatus, setChatStatus] = useState<"connecting" | "connected" | "reconnecting" | "offline">(
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting"
+  );
+  const [editorStatus, setEditorStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
 
   const editorRef = useRef<CodeEditorHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatCleanupRef = useRef(false);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const terminatedRef = useRef(false);
   const isRedirecting = useRef(false);
 
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const clearSessionRetryTimer = useCallback(() => {
+    if (sessionRetryTimerRef.current) {
+      clearTimeout(sessionRetryTimerRef.current);
+      sessionRetryTimerRef.current = null;
+    }
+  }, []);
+
   const sendKeepAlive = useCallback(() => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: "keep_alive", payload: {} }));
+    }
+  }, []);
+
+  const sendActivity = useCallback(() => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: "activity", payload: {} }));
     }
   }, []);
 
@@ -212,54 +246,84 @@ export default function CollaborationPage() {
   }, []);
 
   const startCountdown = useCallback((seconds: number) => {
-  cancelCountdown();
-  setCountdown(seconds);
-  setWarningActive(true);
+    cancelCountdown();
+    setCountdown(seconds);
+    setWarningActive(true);
 
-  countdownTimerRef.current = setInterval(() => {
-    setCountdown((prev) => {
-      if (prev <= 1) {
-        clearInterval(countdownTimerRef.current!);
-        console.log("⏰ Timer hit zero. Auto-redirecting...");
-        window.location.href = "/match"; 
-        return 0;
-      }
-      return prev - 1;
-    });
-  }, 1000);
-}, [cancelCountdown]);
+    countdownTimerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownTimerRef.current!);
+          console.log("⏰ Timer hit zero. Auto-redirecting...");
+          window.location.href = "/match"; 
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [cancelCountdown]);
 
   const handleKeepAlive = () => {
-    sendKeepAlive();
     cancelCountdown();
+    sendKeepAlive();
   };
 
-  async function completeSession(shouldSave: boolean = true) {
-    if (!token || !sessionId || isRedirecting.current) return;
-    
-    isRedirecting.current = true;
-    terminatedRef.current = true;
+ async function completeSession(shouldSave: boolean = true) {
+  if (!token || !sessionId || isRedirecting.current) return;
+
+  // --- ADDED: Send explicit leave signal to the chat ---
+  if (socketRef.current?.readyState === WebSocket.OPEN) {
+    socketRef.current.send(JSON.stringify({
+      type: "explicit_leave",
+      payload: { 
+        reason: shouldSave ? "submitted the solution" : "left the session" 
+      }
+    }));
+  }
+
+  isRedirecting.current = true;
+  terminatedRef.current = true;
 
     try {
       setCompleting(true);
       const collabUrl = shouldSave 
         ? `${COLLABORATION_API_URL}/sessions/${sessionId}/complete`
         : `${COLLABORATION_API_URL}/sessions/${sessionId}`;
+      const code = editorRef.current?.getCode() ?? "";
 
-      await fetch(collabUrl, {
+      const collabRes = await fetch(collabUrl, {
         method: shouldSave ? "POST" : "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code }),
       });
-      await fetch(`${MATCHING_API_URL}/requests/me/session`, {
+      if (!collabRes.ok) {
+        const json = await collabRes.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to complete session.");
+      }
+
+      const matchingRes = await fetch(`${MATCHING_API_URL}/requests/me/session`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!matchingRes.ok) {
+        const json = await matchingRes.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to clear match state.");
+      }
 
     } catch (err) {
       console.error("Cleanup failed:", err);
+      setError(err instanceof Error ? err.message : "Failed to end session.");
+      isRedirecting.current = false;
+      terminatedRef.current = false;
     } finally {
       setCompleting(false);
-      window.location.href = "/match";
+      if (isRedirecting.current) {
+        localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+        window.location.href = "/match";
+      }
     }
   }
 
@@ -270,11 +334,38 @@ export default function CollaborationPage() {
     else if (mode === "leave") await completeSession(false);
   };
 
-  useEffect(() => {
-    if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
-const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
-const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    socketRef.current = ws;
-    ws.onopen = () => console.log("[WS] Chat socket opened");
+  const connectChatSocket = useCallback(() => {
+    if (
+      !token ||
+      !sessionId ||
+      terminatedRef.current ||
+      isRedirecting.current ||
+      chatCleanupRef.current
+    ) {
+      return;
+    }
+
+    const currentSocket = socketRef.current;
+    if (
+      currentSocket &&
+      (currentSocket.readyState === WebSocket.OPEN ||
+        currentSocket.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
+    const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
+    const ws = new WebSocket(
+      `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${user?.username || "Guest"}`
+    );
+    socketRef.current = ws;
+    ws.onopen = () => {
+      reconnectAttemptsRef.current = 0;
+      clearReconnectTimer();
+      setPeerOnline(false);
+      setChatStatus("connected");
+      console.log("[WS] Chat socket opened");
+    };
     ws.onmessage = (event) => {
       if (typeof event.data !== 'string') return;
       try {
@@ -284,10 +375,23 @@ const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    soc
           data.payload.cancelled ? cancelCountdown() : startCountdown(data.payload.countdownSeconds);
         } else if (data.type === "chat_message") {
           setMessages((prev) => [...prev, data.payload]);
+        } else if (data.type === "chat_history") {
+          setMessages(data.payload);
+        } else if (data.type === "peer_status_snapshot") {
+          const onlineUserIds: string[] = data.payload?.onlineUserIds ?? [];
+          setPeerOnline(
+            onlineUserIds.some((onlineUserId) => onlineUserId !== user?.id),
+          );
+        } else if (data.type === "peer_status_change") {
+          if (data.payload.userId !== user?.id) {
+            setPeerOnline(data.payload.isConnected);
+          }
         } else if (data.type === "session_terminated") {
           if (isRedirecting.current) return;
           isRedirecting.current = true;
+          localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
           editorRef.current?.disconnect();
+          setSessionUnavailable(false);
           setTerminated(true);
           setTimeout(() => navigate("/match"), 3000);
         }
@@ -296,41 +400,133 @@ const ws = new WebSocket(`${wsUrl}/ws/chat/${sessionId}?token=${token}`);    soc
 
     ws.onclose = (e) => {
       console.log("[WS] Chat socket closed", e.code, e.reason);
-      setSocket(null);
+      if (socketRef.current === ws) {
+        socketRef.current = null;
+      }
+      setPeerOnline(false);
+      if (!navigator.onLine) {
+        setChatStatus("offline");
+      } else {
+        setChatStatus("reconnecting");
+      }
       if (terminatedRef.current && !isRedirecting.current) {
         isRedirecting.current = true;
         navigate("/match");
+        return;
       }
+
+      if (
+        chatCleanupRef.current ||
+        isRedirecting.current ||
+        terminatedRef.current ||
+        reconnectAttemptsRef.current >= CHAT_MAX_RECONNECT_ATTEMPTS
+      ) {
+        return;
+      }
+
+      reconnectAttemptsRef.current += 1;
+      clearReconnectTimer();
+      reconnectTimerRef.current = setTimeout(() => {
+        connectChatSocket();
+      }, CHAT_RECONNECT_DELAY_MS * reconnectAttemptsRef.current);
     };
-    ws.onerror = (e) => console.log("[WS] Chat socket error", e);
-    setSocket(ws);
-    return () => { ws.close(); socketRef.current = null; cancelCountdown(); };
-  }, [sessionId, token, navigate, startCountdown, cancelCountdown, user?.username]);
+    ws.onerror = (e) => {
+      console.log("[WS] Chat socket error", e);
+      setPeerOnline(false);
+      ws.close();
+    };
+  }, [clearReconnectTimer, navigate, sessionId, token, user?.username]);
+
   useEffect(() => {
+    if (!token || !sessionId || terminatedRef.current || isRedirecting.current) return;
+    chatCleanupRef.current = false;
+    localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, sessionId);
+    connectChatSocket();
+
+    const handleOnline = () => {
+      reconnectAttemptsRef.current = 0;
+      setChatStatus("reconnecting");
+      connectChatSocket();
+    };
+
+    const handleOffline = () => {
+      setChatStatus("offline");
+      setPeerOnline(false);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      chatCleanupRef.current = true;
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearReconnectTimer();
+      clearSessionRetryTimer();
+      socketRef.current?.close();
+      socketRef.current = null;
+    };
+  }, [clearReconnectTimer, clearSessionRetryTimer, connectChatSocket, sessionId, token]);
+
+  const loadSession = useCallback(async () => {
     if (!token || !sessionId || isRedirecting.current) return;
-    async function load() {
-      try {
-        setLoading(true);
-        const res = await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const json = await res.json();
-          setSession(json.data);
-          if (json.data?.messages) setMessages(json.data.messages);
-        } else if (res.status === 404 && !isRedirecting.current) {
-          setTerminated(true);
-        }
-      } catch (_) { setError("Failed to load session."); }
-      finally { setLoading(false); }
+
+    try {
+      setLoading(true);
+      setSessionUnavailable(false);
+      setError("");
+      const res = await fetch(`${COLLABORATION_API_URL}/sessions/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSession(json.data);
+        setSessionUnavailable(false);
+        clearSessionRetryTimer();
+        if (json.data?.messages) setMessages(json.data.messages);
+      } else if (res.status === 404 && !isRedirecting.current) {
+        setSession(null);
+        setSessionUnavailable(true);
+        setError("The collaboration session is unavailable right now.");
+      } else {
+        setSession(null);
+        setSessionUnavailable(true);
+        setError("Unable to reach the collaboration service right now.");
+      }
+    } catch (_) {
+      setSession(null);
+      setSessionUnavailable(true);
+      setError("Unable to reach the collaboration service right now.");
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, [sessionId, token]);
+  }, [clearSessionRetryTimer, sessionId, token]);
+
+  useEffect(() => {
+    void loadSession();
+  }, [loadSession, user?.username]);
+
+  useEffect(() => {
+    if (!sessionUnavailable || terminated || isRedirecting.current) {
+      clearSessionRetryTimer();
+      return;
+    }
+
+    clearSessionRetryTimer();
+    sessionRetryTimerRef.current = setTimeout(() => {
+      void loadSession();
+    }, SESSION_RETRY_DELAY_MS);
+
+    return () => {
+      clearSessionRetryTimer();
+    };
+  }, [clearSessionRetryTimer, loadSession, sessionUnavailable, terminated]);
 
   useEffect(() => {
     if (!session?.questionId || !token) return;
     async function loadQuestion() {
       try {
-
-const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
+        const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -341,14 +537,20 @@ const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
     }
     loadQuestion();
   }, [session?.questionId, token]);
+
+  useEffect(() => {
+    if (terminated) {
+      localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+    }
+  }, [terminated]);
   
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const sendMessage = () => {
-    if (socket && chatInput.trim() && !terminated) {
-      socket.send(JSON.stringify({ type: "chat_message", payload: { text: chatInput, username: user?.username } }));
+    if (socketRef.current?.readyState === WebSocket.OPEN && chatInput.trim() && !terminated) {
+      socketRef.current.send(JSON.stringify({ type: "chat_message", payload: { text: chatInput, username: user?.username } }));
       setChatInput("");
-      handleKeepAlive();
+      sendActivity();
     }
   };
 
@@ -490,8 +692,16 @@ const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
                       sessionId={session.sessionId} 
                       username={user?.username || "Guest"} 
                       token={token || ""} 
-                      onActivity={handleKeepAlive} 
+                      onActivity={sendActivity}
+                      onConnectionStatusChange={setEditorStatus}
                     />
+                    {editorStatus !== "connected" && (
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                        {editorStatus === "connecting"
+                          ? "Shared editor connecting..."
+                          : "Shared editor disconnected. Your chat may still work while code sync reconnects."}
+                      </div>
+                    )}
                   </div>
 
                   {(output || runError) && (
@@ -516,6 +726,22 @@ const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
                     </div>
                   )}
                 </div>
+              ) : !terminated && (loading || sessionUnavailable) ? (
+                <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">
+                  <p className="text-xl font-black uppercase text-zinc-500">
+                    {loading ? "Reconnecting" : "Connection Lost"}
+                  </p>
+                  <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
+                    {loading
+                      ? "Trying to restore the collaboration session..."
+                      : "The collaboration service is unavailable right now. This session has not been confirmed as ended."}
+                  </p>
+                  {!loading && (
+                    <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+                      Retry Connection
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">
                   <p className="text-xl font-black uppercase text-zinc-500">Session Ended</p>
@@ -533,7 +759,30 @@ const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
         </div>
 
         <div className="w-full md:w-80 flex flex-col border rounded-xl bg-card shadow-lg h-[600px]">
-          <div className="p-4 border-b font-bold text-[10px] uppercase text-muted-foreground">Session Chat</div>
+          <div className="p-4 border-b font-bold text-[10px] uppercase text-muted-foreground flex items-center justify-between">
+            Session Chat
+            <div className="flex flex-col items-end gap-1">
+              <span className="flex items-center gap-1">
+                <span className={`w-2 h-2 rounded-full ${chatStatus === "connected" && peerOnline ? "bg-green-500" : "bg-zinc-500"}`} />
+                <span className="normal-case font-normal">
+                  {chatStatus !== "connected"
+                    ? "Peer status unavailable"
+                    : peerOnline
+                    ? "Peer online"
+                    : "Peer offline"}
+                </span>
+              </span>
+              <span className="normal-case text-[10px] font-normal text-muted-foreground">
+                {chatStatus === "connected"
+                  ? "Chat connected"
+                  : chatStatus === "reconnecting"
+                  ? "Chat reconnecting..."
+                  : chatStatus === "offline"
+                  ? "You are offline"
+                  : "Chat connecting..."}
+              </span>
+            </div>
+          </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages?.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.username === user?.username ? "items-end" : "items-start"}`}>
@@ -546,10 +795,25 @@ const res = await fetch(`${QUESTION_API_URL}/${session!.questionId}`, {
             <div ref={scrollRef} />
           </div>
           <div className="p-4 border-t">
+            {chatStatus !== "connected" && !terminated && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {chatStatus === "offline"
+                  ? "Chat is unavailable while offline. It will reconnect when your internet comes back."
+                  : "Chat is reconnecting. Messages can be sent again once the connection is restored."}
+              </p>
+            )}
             <input 
-              disabled={terminated} 
+              disabled={terminated || chatStatus !== "connected"} 
               className="w-full bg-background border rounded px-3 py-2 text-sm" 
-              placeholder="Message..." 
+              placeholder={
+                terminated
+                  ? "Session ended"
+                  : chatStatus === "offline"
+                  ? "Offline..."
+                  : chatStatus === "connected"
+                  ? "Message..."
+                  : "Reconnecting..."
+              } 
               value={chatInput} 
               onChange={(e) => setChatInput(e.target.value)} 
               onKeyDown={(e) => e.key === "Enter" && sendMessage()} 

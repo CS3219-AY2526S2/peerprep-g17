@@ -36,9 +36,17 @@ jobs:
         working-directory: services/collaboration-service
         run: npm ci
 
-      - name: Run tests
+      - name: Build
         working-directory: services/collaboration-service
-        run: echo "tests pending"
+        run: npm run build
+
+      - name: Run tests with coverage
+        working-directory: services/collaboration-service
+        run: npx c8 --exclude dist/services/yjsUtils.js --reporter=lcov --reporter=text --lines 70 --branches 65 --functions 65 npm test
+        env:
+          MONGO_URI: mongodb://localhost:27017/peerprep-collaboration-test
+          JWT_SECRET: test-secret
+          PORT: 8083
 
       - name: Security scan
         working-directory: services/collaboration-service
