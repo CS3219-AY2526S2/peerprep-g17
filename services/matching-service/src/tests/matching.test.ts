@@ -263,7 +263,7 @@ test("matches adjacent difficulties after the first relaxation window", async ()
 
   assert.equal(resultB.matched, true);
   assert.equal(resultB.state.status, "matched");
-  assert.equal(collaborationClient.payloads.at(-1)?.questionId, "q-arrays-easy");
+  assert.equal(collaborationClient.payloads.at(-1)?.questionId, "q-arrays-medium");
 });
 
 test("does not match the immediate previous partner when they are at the FIFO head", async () => {
