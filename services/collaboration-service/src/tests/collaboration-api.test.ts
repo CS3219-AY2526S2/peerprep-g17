@@ -478,12 +478,14 @@ test("POST /api/sessions/execute maps piston failures to 502", async () => {
     .send({ code: "print('hello')" });
 
   assert.equal(res.status, 502);
+});
+
 test("POST /api/sessions/explain returns an AI explanation", async () => {
   const app = createTestApp();
 
   const res = await request(app)
     .post("/api/sessions/explain")
-    .set("Authorization", "Bearer user-a-token")
+    .set("Authorization", `Bearer ${tokenFor("user-a")}`)
     .send({ code: "print('hello')" });
 
   assert.equal(res.status, 200);
