@@ -486,12 +486,6 @@ export default function CollaborationPage() {
     "connecting" | "connected" | "disconnected"
   >("connecting");
 
-  const selectedVisibleCase = useMemo(() => {
-    if (!question) return null;
-    const index = Number(selectedTestCase.replace("sample-", ""));
-    return question.visibleTestCases[index] || null;
-  }, [question, selectedTestCase]);
-
   const currentQuestionIndex = useMemo(() => {
     if (!session?.questionId) return -1;
     return questionCatalog.findIndex(
@@ -1534,11 +1528,15 @@ export default function CollaborationPage() {
                       ) : (
                         <div className="space-y-3">
                           <p className="text-sm text-muted-foreground">
-                            The selected sample testcase stays here while you code on the right.
+                            All visible sample testcases stay here while you code on the right.
                           </p>
-                          {selectedVisibleCase && (
-                            <TestCaseView testCase={selectedVisibleCase} />
-                          )}
+                          {question.visibleTestCases.map((testCase, index) => (
+                            <TestCaseView
+                              key={testCase.id}
+                              testCase={testCase}
+                              title={`Sample ${index + 1}`}
+                            />
+                          ))}
                         </div>
                       )}
                     </div>

@@ -10,64 +10,9 @@ import { useNavigate } from "react-router-dom";
 
 const presetProfilePhotos = [
   {
-    id: "leopard",
-    label: "Leopard",
-    url: "https://pixabay.com/images/download/designerpoint-leopard-515509_1920.jpg",
-  },
-  {
-    id: "dog",
-    label: "Dog",
-    url: "https://pixabay.com/images/download/melissa197-dog-8781844_1920.jpg",
-  },
-  {
-    id: "cat",
-    label: "Cat",
-    url: "https://pixabay.com/images/download/alex_dorohov-cat-7489398_1920.jpg",
-  },
-  {
-    id: "groyne",
-    label: "Groyne",
-    url: "https://pixabay.com/images/download/dbu_direktessehen-groyne-7917596_1920.jpg",
-  },
-  {
-    id: "moon",
-    label: "Moon",
-    url: "https://pixabay.com/images/download/andsproject-moon-8915307_1920.png",
-  },
-  {
-    id: "hill",
-    label: "Hill",
-    url: "https://pixabay.com/images/download/milaoktasafitri-hill-9026381_1920.png",
-  },
-  {
-    id: "wave",
-    label: "Wave",
-    url: "https://pixabay.com/images/download/x-6814275_1920.png",
-  },
-  {
-    id: "orange",
-    label: "Orange",
-    url: "https://pixabay.com/images/download/orange-4547207_1920.png",
-  },
-  {
-    id: "swordfish",
-    label: "Swordfish",
-    url: "https://pixabay.com/images/download/swordfish-295149_1920.png",
-  },
-  {
-    id: "plant",
-    label: "Plant",
-    url: "https://pixabay.com/images/download/x-6009034_1920.png",
-  },
-  {
     id: "owl",
     label: "Owl",
     url: "https://cdn.pixabay.com/photo/2024/12/27/14/58/owl-9294302_1280.jpg",
-  },
-  {
-    id: "forest",
-    label: "Forest",
-    url: "https://cdn.pixabay.com/photo/2017/01/03/19/41/forest-1950402_1280.jpg",
   },
   {
     id: "meadow",
@@ -394,114 +339,24 @@ export default function ProfilePage() {
               Profile workspace
             </div>
 
-            <div className="mt-6 grid gap-6 xl:grid-cols-[220px_1fr] xl:items-center">
-              <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/80 to-cyan-50/70 p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/95 dark:shadow-none">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="group relative mx-auto flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-sky-200/80 bg-white text-3xl font-semibold text-slate-500 shadow-sm transition-opacity focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-700 dark:bg-slate-900"
-                >
-                  {photoPreview ? (
-                    <img
-                      src={photoPreview}
-                      alt={`${user?.username || "User"} profile`}
-                      className={`h-full w-full object-cover ${uploading ? "opacity-50" : ""}`}
-                    />
-                  ) : (
-                    <span>{user?.username?.[0]?.toUpperCase() || "?"}</span>
-                  )}
+            <div className="mt-6">
+              <h1 className="text-4xl font-bold tracking-tight text-slate-950 dark:text-white">
+                Profile Settings
+              </h1>
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
+                Keep your profile demo-ready with a clear photo, university,
+                and short bio so people can understand who you are at a glance.
+              </p>
 
-                  <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-slate-950/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-                      <circle cx="12" cy="13" r="3" />
-                    </svg>
-                    <span className="mt-1 text-xs font-medium">Change photo</span>
-                  </div>
-
-                  {uploading && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/40">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    </div>
-                  )}
-                </button>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handlePhotoChange}
-                  className="hidden"
-                />
-
-                <p className="mt-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                  {user?.username || "User"}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {uploading ? "Uploading..." : "Click the avatar to update it"}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground/70">
-                  JPEG, PNG, or WEBP up to 5MB
-                </p>
-
-                <div className="mt-5 w-full text-left">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    Quick Picks
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                    {presetProfilePhotos.map((photo) => {
-                      const selected = user?.profilePhotoUrl === photo.url;
-
-                      return (
-                        <button
-                          key={photo.id}
-                          type="button"
-                          disabled={uploading}
-                          onClick={() => void handlePresetPhotoSelect(photo.url)}
-                          className={`overflow-hidden rounded-xl border text-left transition-all ${
-                            selected
-                              ? "border-sky-400 ring-4 ring-sky-100 dark:border-sky-500 dark:ring-sky-950/50"
-                              : "border-slate-200 hover:border-sky-300 dark:border-slate-700 dark:hover:border-slate-600"
-                          }`}
-                        >
-                          <img
-                            src={photo.url}
-                            alt={photo.label}
-                            className="h-14 w-full object-cover"
-                          />
-                          <div className="bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:bg-slate-950 dark:text-slate-200">
-                            {photo.label}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-2 text-[11px] text-muted-foreground/70">
-                    Upload your own photo or choose a preset image.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <h1 className="text-4xl font-bold tracking-tight text-slate-950 dark:text-white">
-                  Profile Settings
-                </h1>
-                <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
-                  Keep your profile demo-ready with a clear photo, university,
-                  and short bio so people can understand who you are at a glance.
-                </p>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                    Role: {user?.role}
+              <div className="mt-5 flex flex-wrap gap-3">
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  Role: {user?.role}
+                </span>
+                {user?.university && (
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
+                    {user.university}
                   </span>
-                  {user?.university && (
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/40 dark:text-emerald-200">
-                      {user.university}
-                    </span>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </section>
@@ -521,7 +376,100 @@ export default function ProfilePage() {
           {loading ? (
             <p className="mt-10 text-sm text-muted-foreground">Loading profile...</p>
           ) : (
-            <div className="mt-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="mt-8 grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
+              <div className="space-y-6">
+                <section className="rounded-3xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/80 to-cyan-50/70 p-5 shadow-[0_18px_60px_-36px_rgba(14,116,144,0.24)] dark:border-slate-800 dark:bg-slate-900/95 dark:shadow-none">
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="group relative mx-auto flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-sky-200/80 bg-white text-3xl font-semibold text-slate-500 shadow-sm transition-opacity focus-visible:ring-2 focus-visible:ring-ring dark:border-slate-700 dark:bg-slate-900"
+                    >
+                      {photoPreview ? (
+                        <img
+                          src={photoPreview}
+                          alt={`${user?.username || "User"} profile`}
+                          className={`h-full w-full object-cover ${uploading ? "opacity-50" : ""}`}
+                        />
+                      ) : (
+                        <span>{user?.username?.[0]?.toUpperCase() || "?"}</span>
+                      )}
+
+                      <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-slate-950/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                          <circle cx="12" cy="13" r="3" />
+                        </svg>
+                        <span className="mt-1 text-xs font-medium">Change photo</span>
+                      </div>
+
+                      {uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/40">
+                          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        </div>
+                      )}
+                    </button>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
+
+                    <p className="mt-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {user?.username || "User"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {uploading ? "Uploading..." : "Click the avatar to update it"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground/70">
+                      JPEG, PNG, or WEBP up to 5MB
+                    </p>
+                  </div>
+
+                  <div className="mt-5 text-left">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Quick Picks
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-5">
+                      {presetProfilePhotos.map((photo) => {
+                        const selected = user?.profilePhotoUrl === photo.url;
+
+                        return (
+                          <button
+                            key={photo.id}
+                            type="button"
+                            disabled={uploading}
+                            onClick={() => void handlePresetPhotoSelect(photo.url)}
+                            className={`overflow-hidden rounded-xl border text-left transition-all ${
+                              selected
+                                ? "border-sky-400 ring-4 ring-sky-100 dark:border-sky-500 dark:ring-sky-950/50"
+                                : "border-slate-200 hover:border-sky-300 dark:border-slate-700 dark:hover:border-slate-600"
+                            }`}
+                          >
+                            <img
+                              src={photo.url}
+                              alt={photo.label}
+                              className="h-14 w-full object-cover"
+                            />
+                            <div className="bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                              {photo.label}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground/70">
+                      Upload your own photo or choose a preset image.
+                    </p>
+                  </div>
+                </section>
+              </div>
+
+              <div className="space-y-6">
               <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_18px_60px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
                 <div className="mb-6">
                   <h2 className="text-xl font-semibold tracking-tight">Public Profile</h2>
@@ -588,8 +536,6 @@ export default function ProfilePage() {
                   </Button>
                 </form>
               </section>
-
-              <div className="space-y-6">
                 {user?.role !== "admin" && user?.role !== "superadmin" && (
                   <section className="rounded-3xl border border-amber-200/90 bg-gradient-to-br from-white via-amber-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(245,158,11,0.35)] dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
                     <h2 className="text-xl font-semibold tracking-tight">
