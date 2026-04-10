@@ -15,4 +15,7 @@ export const config = {
 
   userServiceUrl:
     process.env.USER_SERVICE_URL || "http://localhost:8081",
+
+  internalServiceToken:
+    process.env.INTERNAL_SERVICE_TOKEN || "dev-internal-service-token",
 } as const;

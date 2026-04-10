@@ -11,12 +11,19 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",
 
   userServiceUrl: process.env.USER_SERVICE_URL || "http://localhost:8081",
+  questionServiceUrl:
+    process.env.QUESTION_SERVICE_URL || "http://localhost:8080",
   matchingServiceUrl:
     process.env.MATCHING_SERVICE_URL || "http://localhost:8082",
 
   internalServiceToken:
     process.env.INTERNAL_SERVICE_TOKEN || "dev-internal-service-token",
 
-  pistonUrl: process.env.PISTON_URL || "http://localhost:2000"
+  pistonUrl: process.env.PISTON_URL || "http://localhost:2000",
+  pistonMaxTimeoutMs: Number(process.env.PISTON_MAX_TIMEOUT_MS) || 3_000,
+  executionSourceSizeLimitBytes:
+    Number(process.env.EXECUTION_SOURCE_SIZE_LIMIT_BYTES) || 100_000,
+  executionOutputLimitBytes:
+    Number(process.env.EXECUTION_OUTPUT_LIMIT_BYTES) || 65_536,
 
 } as const;

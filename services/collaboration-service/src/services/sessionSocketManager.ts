@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { config } from "../config"; 
+import { config } from "../config";
 
 interface ConnectedUser {
   ws: WebSocket;
@@ -18,7 +18,7 @@ interface SessionRoom {
 
 export class SessionSocketManager {
   private rooms = new Map<string, SessionRoom>();
-  private terminatedSessions = new Set<string>(); 
+  private terminatedSessions = new Set<string>();
 
   private getDistinctConnectedUserCount(room: SessionRoom): number {
     const baseUsers = new Set<string>();
@@ -44,17 +44,24 @@ export class SessionSocketManager {
 
   join(sessionId: string, userId: string, ws: WebSocket, username: string): void {
     if (this.terminatedSessions.has(sessionId)) {
-      console.log(`[WS] Hard Blocking User ${userId} from Terminated Session ${sessionId}`);
+      console.log(
+        `[WS] Hard Blocking User ${userId} from Terminated Session ${sessionId}`,
+      );
       try {
-        ws.send(JSON.stringify({ 
-          type: "session_terminated", 
-          payload: { reason: "expired" },
-          timestamp: new Date().toISOString()
-        }));
-      } catch (_) { }
+        ws.send(
+          JSON.stringify({
+            type: "session_terminated",
+            payload: { reason: "expired" },
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      } catch {
+        // Ignore send failures during forced termination.
+      }
       setTimeout(() => ws.close(4000, "Session terminated"), 150);
       return;
     }
+
     if (!this.rooms.has(sessionId)) {
       this.rooms.set(sessionId, {
         sessionId,
@@ -64,59 +71,86 @@ export class SessionSocketManager {
       });
       this.startInactivityCheck(sessionId);
     }
+
     const room = this.rooms.get(sessionId)!;
     const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
     const wasAlreadyConnected =
       room.users.has(`yjs:${baseUserId}`) ||
       room.users.has(`chat:${baseUserId}`);
+
     room.users.set(userId, { ws, userId, username });
     room.lastActivityAt = Date.now();
+
     if (!wasAlreadyConnected) {
-      room.users.forEach((u, id) => {
-        if (id !== userId && u.ws.readyState === WebSocket.OPEN) {
-          u.ws.send(JSON.stringify({
-            type: "peer_status_change",
-            payload: { userId: baseUserId, isConnected: true }
-          }));
+      room.users.forEach((connectedUser, id) => {
+        if (id !== userId && connectedUser.ws.readyState === WebSocket.OPEN) {
+          connectedUser.ws.send(
+            JSON.stringify({
+              type: "peer_status_change",
+              payload: { userId: baseUserId, isConnected: true },
+            }),
+          );
         }
       });
     }
+
     if (userId.startsWith("chat:")) {
       const onlineUsers = new Set<string>();
       room.users.forEach((_, id) => {
-        const base = id.replace(/^(yjs:|chat:)/, "");
-        if (base !== baseUserId) onlineUsers.add(base);
+        const peerId = id.replace(/^(yjs:|chat:)/, "");
+        if (peerId !== baseUserId) {
+          onlineUsers.add(peerId);
+        }
       });
-      onlineUsers.forEach(peerId => {
+
+      onlineUsers.forEach((peerId) => {
         try {
-          ws.send(JSON.stringify({
-            type: "peer_status_change",
-            payload: { userId: peerId, isConnected: true }
-          }));
-        } catch (_) {}
+          ws.send(
+            JSON.stringify({
+              type: "peer_status_change",
+              payload: { userId: peerId, isConnected: true },
+            }),
+          );
+        } catch {
+          // Ignore send failures during snapshot sync.
+        }
       });
     }
   }
-  leave(sessionId: string, userId: string, isManual: boolean = false): void {
+
+  leave(sessionId: string, userId: string, isManual = false): void {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
+
     room.users.delete(userId);
     const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
     const stillConnected =
       room.users.has(`yjs:${baseUserId}`) ||
       room.users.has(`chat:${baseUserId}`);
-    console.log(`[Inactivity] User left, room size: ${room.users.size}, lastActivityAt: ${room.lastActivityAt}`);
+
+    console.log(
+      `[Inactivity] User left, room size: ${room.users.size}, lastActivityAt: ${room.lastActivityAt}`,
+    );
+
     if (!stillConnected) {
       this.broadcastToSession(sessionId, {
         type: "peer_status_change",
-        payload: { userId: baseUserId, isConnected: false, reason: isManual ? "manual" : "disconnect" }
+        payload: {
+          userId: baseUserId,
+          isConnected: false,
+          reason: isManual ? "manual" : "disconnect",
+        },
       });
     }
 
     if (room.users.size === 0) {
       setTimeout(() => {
-        const r = this.rooms.get(sessionId);
-        if (r && r.users.size === 0) this.cleanupRoom(sessionId);
+        const currentRoom = this.rooms.get(sessionId);
+        if (currentRoom && currentRoom.users.size === 0) {
+          this.cleanupRoom(sessionId);
+        }
       }, 30000);
     }
   }
@@ -130,7 +164,9 @@ export class SessionSocketManager {
 
   recordActivity(sessionId: string): void {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
     if (room.warningActive) {
       return;
     }
@@ -139,59 +175,79 @@ export class SessionSocketManager {
 
   acknowledgeWarning(sessionId: string): void {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
     room.lastActivityAt = Date.now();
     this.cancelWarning(sessionId, room);
   }
 
   private startInactivityCheck(sessionId: string): void {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
+
     room.inactivityCheckTimer = setInterval(() => {
-      const r = this.rooms.get(sessionId);
-      if (!r || r.users.size === 0) return;
-      if (this.getDistinctConnectedUserCount(r) < 2) {
+      const currentRoom = this.rooms.get(sessionId);
+      if (!currentRoom || currentRoom.users.size === 0) {
         return;
       }
-      const idleMs = Date.now() - r.lastActivityAt;
-      if (idleMs > 25 * 60 * 1000 && !r.warningActive) { 
-        r.warningActive = true;
+      if (this.getDistinctConnectedUserCount(currentRoom) < 2) {
+        return;
+      }
+
+      const idleMs = Date.now() - currentRoom.lastActivityAt;
+      if (idleMs > 25 * 60 * 1000 && !currentRoom.warningActive) {
+        currentRoom.warningActive = true;
         this.broadcastToSession(sessionId, {
           type: "session_warning",
           payload: { countdownSeconds: 300, cancelled: false },
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-        r.terminationTimer = setTimeout(() => this.terminateSession(sessionId), 5 * 60 * 1000);
+        currentRoom.terminationTimer = setTimeout(
+          () => this.terminateSession(sessionId),
+          5 * 60 * 1000,
+        );
       }
     }, 1000);
   }
 
   private async terminateSession(sessionId: string): Promise<void> {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
+
     this.terminatedSessions.add(sessionId);
+
     try {
-      await fetch(`${config.matchingServiceUrl}/api/matches/sessions/${sessionId}/complete`, {
-        method: 'PATCH',
-        headers: { 
-          'x-internal-service-token': config.internalServiceToken,
-          'Content-Type': 'application/json'
-        } 
-      });
+      await fetch(
+        `${config.matchingServiceUrl}/api/matches/sessions/${sessionId}/complete`,
+        {
+          method: "PATCH",
+          headers: {
+            "x-internal-service-token": config.internalServiceToken,
+            "Content-Type": "application/json",
+          },
+        },
+      );
       console.log(`[Sync] Matching Service: Session ${sessionId} cleared.`);
-    } catch (_) {
+    } catch {
       console.error("[Sync] Failed to notify Matching Service of termination");
     }
 
     this.broadcastToSession(sessionId, {
       type: "session_terminated",
       payload: { reason: "inactivity" },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     for (const user of room.users.values()) {
-      if (user.ws.readyState === WebSocket.OPEN) user.ws.close(4000);
+      if (user.ws.readyState === WebSocket.OPEN) {
+        user.ws.close(4000);
+      }
     }
     this.cleanupRoom(sessionId);
     setTimeout(() => this.terminatedSessions.delete(sessionId), 60000);
@@ -199,17 +255,23 @@ export class SessionSocketManager {
 
   private cleanupRoom(sessionId: string): void {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
+    if (!room) {
+      return;
+    }
     clearInterval(room.inactivityCheckTimer);
     clearTimeout(room.terminationTimer);
     this.rooms.delete(sessionId);
   }
 
-  public broadcastToSession(sessionId: string, message: any): void {
+  public broadcastToSession(sessionId: string, message: unknown): void {
     const room = this.rooms.get(sessionId);
-    if (!room) return;
-    room.users.forEach(u => {
-      if (u.ws.readyState === WebSocket.OPEN) u.ws.send(JSON.stringify(message));
+    if (!room) {
+      return;
+    }
+    room.users.forEach((user) => {
+      if (user.ws.readyState === WebSocket.OPEN) {
+        user.ws.send(JSON.stringify(message));
+      }
     });
   }
 
@@ -220,7 +282,9 @@ export class SessionSocketManager {
 
   public getConnectedPeerIds(sessionId: string, userId: string): string[] {
     const room = this.rooms.get(sessionId);
-    if (!room) return [];
+    if (!room) {
+      return [];
+    }
 
     const baseUserId = userId.replace(/^(yjs:|chat:)/, "");
     const peerIds = new Set<string>();

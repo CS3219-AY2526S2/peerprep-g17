@@ -6,11 +6,15 @@ interface QuestionServiceResponse {
     id: string;
     title: string;
     difficulty: string;
+    categories: string[];
+    executionMode?: string;
   }>;
   meta?: {
     categories?: string[];
   };
 }
+
+const SUPPORTED_EXECUTION_MODES = ["python_function", "python_class"].join(",");
 
 const DIFFICULTY_RANK: Record<Difficulty, number> = {
   Easy: 0,
@@ -50,7 +54,9 @@ export class QuestionCatalogService {
       return this.cachedTopics;
     }
 
-    const response = await fetch(`${config.questionServiceUrl}/api/questions`, {
+    const url = new URL(`${config.questionServiceUrl}/api/questions`);
+    url.searchParams.set("executionModes", SUPPORTED_EXECUTION_MODES);
+    const response = await fetch(url, {
       headers: { Authorization: authHeader },
     });
 
@@ -74,6 +80,7 @@ export class QuestionCatalogService {
       const url = new URL(`${config.questionServiceUrl}/api/questions`);
       url.searchParams.set("difficulty", currentDifficulty);
       url.searchParams.set("categories", topic);
+      url.searchParams.set("executionModes", SUPPORTED_EXECUTION_MODES);
 
       const response = await fetch(url, {
         headers: { Authorization: authHeader },

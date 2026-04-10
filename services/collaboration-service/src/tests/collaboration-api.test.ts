@@ -14,6 +14,8 @@ import { config } from "../config";
 const originalFetch = global.fetch;
 
 let mongoServer: MongoMemoryServer;
+const RESULT_START_MARKER = "__PEERPREP_EXECUTION_RESULT_START__";
+const RESULT_END_MARKER = "__PEERPREP_EXECUTION_RESULT_END__";
 
 function createFetchMock() {
   return (async (input: string | URL, init?: RequestInit) => {
@@ -85,6 +87,77 @@ function createFetchMock() {
         ok: true,
         async json() {
           return { data: { status: "completed" } };
+        },
+      } as Response;
+    }
+
+    if (url.includes("/api/questions/q-1/judge")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            data: {
+              id: "q-1",
+              title: "Roman to Integer",
+              executionMode: "python_function",
+              starterCode: {
+                python: "class Solution:\n    def romanToInt(self, s):\n        return 0",
+              },
+              visibleTestCases: [
+                { id: "visible-1", args: ["III"], expected: 3 },
+              ],
+              hiddenTestCases: [
+                { id: "hidden-1", args: ["LVIII"], expected: 58 },
+              ],
+              judgeConfig: {
+                className: "Solution",
+                methodName: "romanToInt",
+                comparisonMode: "exact_json",
+                timeLimitMs: 4000,
+                memoryLimitMb: 256,
+              },
+            },
+          };
+        },
+      } as Response;
+    }
+
+    if (url.includes("/api/v2/execute")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            run: {
+              stdout: [
+                RESULT_START_MARKER,
+                JSON.stringify({
+                  verdict: "Accepted",
+                  stdout: "",
+                  stderr: "",
+                  runtimeMs: 5,
+                  memoryKb: 12,
+                  passedCount: 1,
+                  totalCount: 1,
+                  cases: [
+                    {
+                      id: "visible-1",
+                      verdict: "Accepted",
+                      inputPreview: '["III"]',
+                      expectedPreview: "3",
+                      actualPreview: "3",
+                      stdout: "",
+                      stderr: "",
+                      errorMessage: "",
+                    },
+                  ],
+                }),
+                RESULT_END_MARKER,
+              ].join("\n"),
+              stderr: "",
+              output: "",
+              code: 0,
+            },
+          };
         },
       } as Response;
     }

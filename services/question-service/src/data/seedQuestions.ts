@@ -1,7 +1,7 @@
 /**
  * Shared seed data – used by both the CLI script and the /seed API endpoint.
  */
-export const SEED_QUESTIONS = [
+const BASE_SEED_QUESTIONS = [
   {
     title: "Reverse a String",
     difficulty: "Easy",
@@ -243,3 +243,517 @@ export const SEED_QUESTIONS = [
     link: "https://leetcode.com/problems/trips-and-users/",
   },
 ];
+
+type ExecutionMode = "python_function" | "python_class" | "unsupported";
+type ComparisonMode = "exact_json" | "float_tolerance";
+
+interface SeedExecutionMetadata {
+  executionMode: ExecutionMode;
+  starterCode: { python: string };
+  visibleTestCases: unknown[];
+  hiddenTestCases: unknown[];
+  judgeConfig: {
+    className?: string;
+    methodName?: string;
+    comparisonMode: ComparisonMode;
+    timeLimitMs: number;
+    memoryLimitMb: number;
+  } | null;
+}
+
+const DEFAULT_LIMITS = {
+  comparisonMode: "exact_json" as const,
+  timeLimitMs: 4000,
+  memoryLimitMb: 256,
+};
+
+function functionTemplate(methodName: string, signature: string, _body: string): string {
+  return [
+    "class Solution:",
+    `    def ${methodName}(self, ${signature}):`,
+    "        pass",
+  ].join("\n");
+}
+
+function classTemplate(className: string, methods: string[]): string {
+  const skeletonMethods = methods
+    .map((method) => method.trim())
+    .filter((method) => method.startsWith("def "))
+    .flatMap((method) => [`    ${method}`, "        pass", ""]);
+
+  return [
+    `class ${className}:`,
+    ...skeletonMethods.slice(0, -1),
+  ].join("\n");
+}
+
+const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
+  "Roman to Integer": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "romanToInt",
+        "s",
+        [
+          "values = {",
+          "    'I': 1, 'V': 5, 'X': 10, 'L': 50,",
+          "    'C': 100, 'D': 500, 'M': 1000,",
+          "}",
+          "total = 0",
+          "for index, char in enumerate(s):",
+          "    if index + 1 < len(s) and values[char] < values[s[index + 1]]:",
+          "        total -= values[char]",
+          "    else:",
+          "        total += values[char]",
+          "return total",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "roman-visible-1", args: ["III"], expected: 3 },
+      { id: "roman-visible-2", args: ["MCMXCIV"], expected: 1994 },
+    ],
+    hiddenTestCases: [
+      { id: "roman-hidden-1", args: ["LVIII"], expected: 58 },
+      { id: "roman-hidden-2", args: ["XL"], expected: 40 },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "romanToInt",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Add Binary": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "addBinary",
+        "a, b",
+        ["carry = 0", "result = []", "i = len(a) - 1", "j = len(b) - 1", "while i >= 0 or j >= 0 or carry:", "    total = carry", "    if i >= 0:", "        total += int(a[i])", "        i -= 1", "    if j >= 0:", "        total += int(b[j])", "        j -= 1", "    result.append(str(total % 2))", "    carry = total // 2", "return ''.join(reversed(result))"].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "binary-visible-1", args: ["11", "1"], expected: "100" },
+      { id: "binary-visible-2", args: ["1010", "1011"], expected: "10101" },
+    ],
+    hiddenTestCases: [
+      { id: "binary-hidden-1", args: ["0", "0"], expected: "0" },
+      { id: "binary-hidden-2", args: ["1111", "1"], expected: "10000" },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "addBinary",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Fibonacci Number": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "fib",
+        "n",
+        ["if n <= 1:", "    return n", "prev, curr = 0, 1", "for _ in range(2, n + 1):", "    prev, curr = curr, prev + curr", "return curr"].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "fib-visible-1", args: [2], expected: 1 },
+      { id: "fib-visible-2", args: [4], expected: 3 },
+    ],
+    hiddenTestCases: [
+      { id: "fib-hidden-1", args: [0], expected: 0 },
+      { id: "fib-hidden-2", args: [10], expected: 55 },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "fib",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Implement Stack using Queues": {
+    executionMode: "python_class",
+    starterCode: {
+      python: classTemplate("MyStack", [
+        "def __init__(self):",
+        "    self.items = []",
+        "",
+        "def push(self, x):",
+        "    self.items.append(x)",
+        "",
+        "def pop(self):",
+        "    return self.items.pop()",
+        "",
+        "def top(self):",
+        "    return self.items[-1]",
+        "",
+        "def empty(self):",
+        "    return len(self.items) == 0",
+      ]),
+    },
+    visibleTestCases: [
+      {
+        id: "stack-visible-1",
+        operations: ["MyStack", "push", "push", "top", "pop", "empty"],
+        arguments: [[], [1], [2], [], [], []],
+        expected: [null, null, null, 2, 2, false],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "stack-hidden-1",
+        operations: ["MyStack", "push", "empty", "pop", "empty"],
+        arguments: [[], [5], [], [], []],
+        expected: [null, null, false, 5, true],
+      },
+    ],
+    judgeConfig: {
+      className: "MyStack",
+      comparisonMode: "exact_json",
+      timeLimitMs: 4000,
+      memoryLimitMb: 256,
+    },
+  },
+  "Repeated DNA Sequences": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "findRepeatedDnaSequences",
+        "s",
+        [
+          "seen = set()",
+          "duplicates = set()",
+          "for index in range(max(0, len(s) - 9)):",
+          "    segment = s[index:index + 10]",
+          "    if segment in seen:",
+          "        duplicates.add(segment)",
+          "    else:",
+          "        seen.add(segment)",
+          "return sorted(duplicates)",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "dna-visible-1",
+        args: ["AAAAACCCCCAAAAACCCCCCAAAAAGGGTTT"],
+        expected: ["AAAAACCCCC", "CCCCCAAAAA"],
+      },
+      { id: "dna-visible-2", args: ["AAAAAAAAAAAAA"], expected: ["AAAAAAAAAA"] },
+    ],
+    hiddenTestCases: [
+      { id: "dna-hidden-1", args: ["ACGTACGTAC"], expected: [] },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "findRepeatedDnaSequences",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Course Schedule": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "canFinish",
+        "numCourses, prerequisites",
+        [
+          "from collections import defaultdict, deque",
+          "graph = defaultdict(list)",
+          "indegree = [0] * numCourses",
+          "for course, prereq in prerequisites:",
+          "    graph[prereq].append(course)",
+          "    indegree[course] += 1",
+          "queue = deque(index for index, degree in enumerate(indegree) if degree == 0)",
+          "visited = 0",
+          "while queue:",
+          "    node = queue.popleft()",
+          "    visited += 1",
+          "    for neighbor in graph[node]:",
+          "        indegree[neighbor] -= 1",
+          "        if indegree[neighbor] == 0:",
+          "            queue.append(neighbor)",
+          "return visited == numCourses",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "course-visible-1", args: [2, [[1, 0]]], expected: true },
+      { id: "course-visible-2", args: [2, [[1, 0], [0, 1]]], expected: false },
+    ],
+    hiddenTestCases: [
+      { id: "course-hidden-1", args: [3, [[1, 0], [2, 1]]], expected: true },
+      { id: "course-hidden-2", args: [3, [[0, 1], [1, 2], [2, 0]]], expected: false },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "canFinish",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "LRU Cache Design": {
+    executionMode: "python_class",
+    starterCode: {
+      python: classTemplate("LRUCache", [
+        "def __init__(self, capacity):",
+        "    from collections import OrderedDict",
+        "    self.capacity = capacity",
+        "    self.cache = OrderedDict()",
+        "",
+        "def get(self, key):",
+        "    if key not in self.cache:",
+        "        return -1",
+        "    self.cache.move_to_end(key)",
+        "    return self.cache[key]",
+        "",
+        "def put(self, key, value):",
+        "    if key in self.cache:",
+        "        self.cache.move_to_end(key)",
+        "    self.cache[key] = value",
+        "    if len(self.cache) > self.capacity:",
+        "        self.cache.popitem(last=False)",
+      ]),
+    },
+    visibleTestCases: [
+      {
+        id: "lru-visible-1",
+        operations: ["LRUCache", "put", "put", "get", "put", "get", "put", "get", "get", "get"],
+        arguments: [[2], [1, 1], [2, 2], [1], [3, 3], [2], [4, 4], [1], [3], [4]],
+        expected: [null, null, null, 1, null, -1, null, -1, 3, 4],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "lru-hidden-1",
+        operations: ["LRUCache", "put", "put", "get", "put", "get", "get"],
+        arguments: [[1], [2, 1], [3, 2], [2], [4, 3], [2], [4]],
+        expected: [null, null, null, -1, null, -1, 3],
+      },
+    ],
+    judgeConfig: {
+      className: "LRUCache",
+      comparisonMode: "exact_json",
+      timeLimitMs: 4000,
+      memoryLimitMb: 256,
+    },
+  },
+  "Longest Common Subsequence": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "longestCommonSubsequence",
+        "text1, text2",
+        [
+          "rows = len(text1) + 1",
+          "cols = len(text2) + 1",
+          "dp = [[0] * cols for _ in range(rows)]",
+          "for i in range(len(text1) - 1, -1, -1):",
+          "    for j in range(len(text2) - 1, -1, -1):",
+          "        if text1[i] == text2[j]:",
+          "            dp[i][j] = 1 + dp[i + 1][j + 1]",
+          "        else:",
+          "            dp[i][j] = max(dp[i + 1][j], dp[i][j + 1])",
+          "return dp[0][0]",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "lcs-visible-1", args: ["abcde", "ace"], expected: 3 },
+      { id: "lcs-visible-2", args: ["abc", "def"], expected: 0 },
+    ],
+    hiddenTestCases: [
+      { id: "lcs-hidden-1", args: ["abc", "abc"], expected: 3 },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "longestCommonSubsequence",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Airplane Seat Assignment Probability": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "nthPersonGetsNthSeat",
+        "n",
+        ["if n == 1:", "    return 1.0", "return 0.5"].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "seat-visible-1", args: [1], expected: 1 },
+      { id: "seat-visible-2", args: [2], expected: 0.5 },
+    ],
+    hiddenTestCases: [
+      { id: "seat-hidden-1", args: [5], expected: 0.5 },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "nthPersonGetsNthSeat",
+      comparisonMode: "float_tolerance",
+      timeLimitMs: 4000,
+      memoryLimitMb: 256,
+    },
+  },
+  "Sliding Window Maximum": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "maxSlidingWindow",
+        "nums, k",
+        [
+          "from collections import deque",
+          "window = deque()",
+          "result = []",
+          "for index, value in enumerate(nums):",
+          "    while window and window[0] <= index - k:",
+          "        window.popleft()",
+          "    while window and nums[window[-1]] <= value:",
+          "        window.pop()",
+          "    window.append(index)",
+          "    if index >= k - 1:",
+          "        result.append(nums[window[0]])",
+          "return result",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "window-visible-1", args: [[1, 3, -1, -3, 5, 3, 6, 7], 3], expected: [3, 3, 5, 5, 6, 7] },
+      { id: "window-visible-2", args: [[1], 1], expected: [1] },
+    ],
+    hiddenTestCases: [
+      { id: "window-hidden-1", args: [[9, 8, 7, 6, 5], 2], expected: [9, 8, 7, 6] },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "maxSlidingWindow",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "N-Queen Problem": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "solveNQueens",
+        "n",
+        [
+          "results = []",
+          "cols = set()",
+          "diag1 = set()",
+          "diag2 = set()",
+          "board = [['.'] * n for _ in range(n)]",
+          "",
+          "def backtrack(row):",
+          "    if row == n:",
+          "        results.append([''.join(line) for line in board])",
+          "        return",
+          "    for col in range(n):",
+          "        if col in cols or (row - col) in diag1 or (row + col) in diag2:",
+          "            continue",
+          "        cols.add(col)",
+          "        diag1.add(row - col)",
+          "        diag2.add(row + col)",
+          "        board[row][col] = 'Q'",
+          "        backtrack(row + 1)",
+          "        board[row][col] = '.'",
+          "        cols.remove(col)",
+          "        diag1.remove(row - col)",
+          "        diag2.remove(row + col)",
+          "",
+          "backtrack(0)",
+          "return sorted(results)",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "queen-visible-1",
+        args: [4],
+        expected: [[".Q..", "...Q", "Q...", "..Q."], ["..Q.", "Q...", "...Q", ".Q.."]],
+      },
+    ],
+    hiddenTestCases: [
+      { id: "queen-hidden-1", args: [1], expected: [["Q"]] },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "solveNQueens",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Wildcard Matching": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "isMatch",
+        "s, p",
+        [
+          "rows = len(s) + 1",
+          "cols = len(p) + 1",
+          "dp = [[False] * cols for _ in range(rows)]",
+          "dp[0][0] = True",
+          "for j in range(1, cols):",
+          "    if p[j - 1] == '*':",
+          "        dp[0][j] = dp[0][j - 1]",
+          "for i in range(1, rows):",
+          "    for j in range(1, cols):",
+          "        if p[j - 1] == '*':",
+          "            dp[i][j] = dp[i][j - 1] or dp[i - 1][j]",
+          "        elif p[j - 1] == '?' or s[i - 1] == p[j - 1]:",
+          "            dp[i][j] = dp[i - 1][j - 1]",
+          "return dp[-1][-1]",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "wild-visible-1", args: ["aa", "a"], expected: false },
+      { id: "wild-visible-2", args: ["aa", "*"], expected: true },
+    ],
+    hiddenTestCases: [
+      { id: "wild-hidden-1", args: ["cb", "?a"], expected: false },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "isMatch",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Chalkboard XOR Game": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "xorGame",
+        "nums",
+        ["xor_total = 0", "for value in nums:", "    xor_total ^= value", "return xor_total == 0 or len(nums) % 2 == 0"].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      { id: "xor-visible-1", args: [[1, 1, 2]], expected: false },
+      { id: "xor-visible-2", args: [[0, 1]], expected: true },
+    ],
+    hiddenTestCases: [
+      { id: "xor-hidden-1", args: [[1, 2, 3]], expected: false },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "xorGame",
+      ...DEFAULT_LIMITS,
+    },
+  },
+};
+
+export const SEED_QUESTIONS = BASE_SEED_QUESTIONS.map((question) => {
+  const metadata = EXECUTION_METADATA_BY_TITLE[question.title];
+
+  if (!metadata) {
+    return {
+      ...question,
+      executionMode: "unsupported",
+      starterCode: { python: "" },
+      visibleTestCases: [],
+      hiddenTestCases: [],
+      judgeConfig: null,
+    };
+  }
+
+  return {
+    ...question,
+    ...metadata,
+  };
+});

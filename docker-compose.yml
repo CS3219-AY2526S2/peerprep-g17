@@ -20,8 +20,7 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test:
-        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,7 +31,7 @@ services:
     restart: unless-stopped
     command: redis-server --save "" --appendonly no
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -82,6 +81,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/question-service
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       USER_SERVICE_URL: http://user-service:8081
+      INTERNAL_SERVICE_TOKEN: dev-internal-service-token
     depends_on:
       mongo:
         condition: service_healthy
@@ -94,6 +94,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/collaboration-service
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       USER_SERVICE_URL: http://user-service:8081
+      QUESTION_SERVICE_URL: http://question-service:8080
       MATCHING_SERVICE_URL: http://matching-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-service-token
       JWT_SECRET: dev-secret-change-me
@@ -103,6 +104,8 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      question-service:
+        condition: service_started
 
   matching-service:
     build: ./services/matching-service

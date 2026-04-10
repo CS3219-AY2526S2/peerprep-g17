@@ -1,7 +1,18 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware";
-import { CollaborationService } from "../services/collaborationService";
-import { CollaborationSessionPayload, DIFFICULTIES } from "../types";
+import {
+  CollaborationService,
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../services/collaborationService";
+import {
+  CollaborationSessionPayload,
+  DIFFICULTIES,
+  ExecutionRequestBody,
+  SessionQuestionSwitchBody,
+} from "../types";
+import { getSessionCode } from "../services/yjsUtils";
 
 function formatSessionResponse(session: any) {
   return {
@@ -13,9 +24,30 @@ function formatSessionResponse(session: any) {
     questionId: session.questionId,
     language: session.language,
     status: session.status,
-    messages: session.messages || [], 
+    messages: session.messages || [],
     createdAt: session.createdAt.toISOString(),
     completedAt: session.completedAt?.toISOString(),
+    starterCodeSeededAt: session.starterCodeSeededAt?.toISOString(),
+    lastExecutionResult: session.lastExecutionResult || null,
+    lastExecutionAt: session.lastExecutionAt?.toISOString(),
+    lastSubmittedAt: session.lastSubmittedAt?.toISOString(),
+  };
+}
+
+async function formatSessionResponseWithSharedCode(session: any) {
+  let sharedCode = "";
+  try {
+    sharedCode = await getSessionCode(String(session.sessionId));
+  } catch {
+    sharedCode = "";
+  }
+
+  return {
+    ...formatSessionResponse(session),
+    sharedCode,
+    sharedYjsState: session.yjsState
+      ? Buffer.from(session.yjsState).toString("base64")
+      : null,
   };
 }
 
@@ -54,7 +86,7 @@ export class CollaborationController {
     res.status(201).json({ data: formatSessionResponse(session) });
   };
 
-  terminateSession = async (req: AuthRequest, res: Response) => {
+  terminateSession = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const sessionId = String(req.params.sessionId);
       if (!req.userId) {
@@ -73,7 +105,7 @@ export class CollaborationController {
       }
 
       res.status(200).json({ data: formatSessionResponse(session) });
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to end session." });
     }
   };
@@ -106,15 +138,25 @@ export class CollaborationController {
           files: [{ content: code }],
         }),
       });
+
       if (!response.ok) {
         res.status(502).json({ error: "Code execution service unavailable." });
         return;
       }
+
       const result = await response.json();
       res.status(200).json({ data: result });
-    } catch (error) {
+    } catch {
       res.status(502).json({ error: "Failed to execute code." });
     }
+  };
+
+  runSessionCode = async (req: AuthRequest, res: Response): Promise<void> => {
+    await this.handleSessionExecution("run", req, res);
+  };
+
+  submitSessionCode = async (req: AuthRequest, res: Response): Promise<void> => {
+    await this.handleSessionExecution("submit", req, res);
   };
 
   explainCode = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -169,14 +211,12 @@ export class CollaborationController {
 
       if (!response.ok) {
         res.status(502).json({
-          error:
-            result.error?.message || "OpenAI explanation request failed.",
+          error: result.error?.message || "OpenAI explanation request failed.",
         });
         return;
       }
 
       const explanation = result.choices?.[0]?.message?.content?.trim();
-
       if (!explanation) {
         res.status(502).json({ error: "OpenAI did not return an explanation." });
         return;
@@ -195,6 +235,7 @@ export class CollaborationController {
       res.status(401).json({ error: "Unauthorized." });
       return;
     }
+
     const session = await this.collaborationService.getSessionForUser(
       String(req.params.sessionId),
       req.userId,
@@ -203,7 +244,48 @@ export class CollaborationController {
       res.status(404).json({ error: "Session not found." });
       return;
     }
-    res.status(200).json({ data: formatSessionResponse(session) });
+
+    await this.collaborationService.ensureSessionStarterCode(session);
+    res.status(200).json({
+      data: await formatSessionResponseWithSharedCode(session),
+    });
+  };
+
+  switchSessionQuestion = async (
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    try {
+      const session = await this.collaborationService.switchSessionQuestion(
+        String(req.params.sessionId),
+        req.userId,
+        req.body as SessionQuestionSwitchBody,
+      );
+
+      res.status(200).json({
+        data: await formatSessionResponseWithSharedCode(session),
+      });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to switch collaboration question.",
+      });
+    }
   };
 
   completeSession = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -212,9 +294,7 @@ export class CollaborationController {
       return;
     }
 
-    const { code } = (req.body ?? {}) as {
-      code?: string;
-    };
+    const { code } = (req.body ?? {}) as { code?: string };
 
     try {
       const session = await this.collaborationService.completeSession(
@@ -241,11 +321,52 @@ export class CollaborationController {
       res.status(401).json({ error: "Unauthorized." });
       return;
     }
+
     try {
       const attempts = await this.collaborationService.getAttemptHistory(req.userId);
       res.status(200).json({ data: attempts });
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch attempt history." });
+    }
+  };
+
+  private handleSessionExecution = async (
+    mode: "run" | "submit",
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    try {
+      const result = await this.collaborationService.executeSessionCode(
+        String(req.params.sessionId),
+        req.userId,
+        mode,
+        req.body as ExecutionRequestBody,
+      );
+      res.status(200).json({ data: result });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        res.status(404).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      if (error instanceof ConflictError) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      res.status(502).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : `Failed to ${mode} collaboration code.`,
+      });
     }
   };
 }
