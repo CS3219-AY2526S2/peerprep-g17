@@ -224,7 +224,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
           oneDark,
           yCollab(ytext, filteredAwareness),
           activityExtension,
-          EditorView.theme({ "&": { height: "450px" } }),
+          EditorView.theme({ "&": { height: "clamp(320px, 52vh, 460px)" } }),
         ],
       });
 
@@ -253,10 +253,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     ]);
 
     return (
-      <div
-        ref={editorRef}
-        className="overflow-hidden rounded-md border bg-background shadow-inner"
-      />
+      <div className="rounded-[1.1rem] border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/70 to-sky-50/60 p-2 shadow-[0_18px_44px_-30px_rgba(79,70,229,0.32)] dark:border-slate-800 dark:bg-slate-950/80">
+        <div
+          ref={editorRef}
+          className="overflow-hidden rounded-xl border border-indigo-200/80 bg-background shadow-inner dark:border-slate-800"
+        />
+      </div>
     );
   },
 );

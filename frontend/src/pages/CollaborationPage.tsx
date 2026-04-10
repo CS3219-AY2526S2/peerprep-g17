@@ -36,7 +36,7 @@ import type { CodeEditorHandle } from "./CollaborationEditor";
 
 const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
 
-type ResultTab = "testcase" | "result" | "console";
+type ResultTab = "testcase" | "result" | "console" | "chat";
 type SelectedTestCase = `sample-${number}` | "custom";
 
 function InactivityWarning({
@@ -103,17 +103,36 @@ function toDisplayJson(value: unknown): string {
 function verdictStyles(verdict?: string) {
   switch (verdict) {
     case "Accepted":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+      return "border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300";
     case "Wrong Answer":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+      return "border-amber-200/80 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300";
     case "Runtime Error":
     case "Compilation Error":
     case "Time Limit Exceeded":
     case "Memory Limit Exceeded":
     case "Internal Error":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-300";
+      return "border-rose-200/80 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300";
     default:
       return "border-border/60 bg-muted/20 text-foreground";
+  }
+}
+
+function workspaceTabStyles(tab: ResultTab, activeTab: ResultTab) {
+  if (tab !== activeTab) {
+    return "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800";
+  }
+
+  switch (tab) {
+    case "testcase":
+      return "border-sky-200 bg-sky-100 text-sky-900 shadow-sm hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-100";
+    case "result":
+      return "border-amber-200 bg-amber-100 text-amber-900 shadow-sm hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-100";
+    case "console":
+      return "border-indigo-200 bg-indigo-100 text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-100";
+    case "chat":
+      return "border-emerald-200 bg-emerald-100 text-emerald-900 shadow-sm hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100";
+    default:
+      return "";
   }
 }
 
@@ -148,10 +167,10 @@ function ValuePreview({
 
   return (
     <div className="space-y-1">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+      <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </div>
-      <pre className="overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-zinc-100">
+      <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 text-sm text-slate-800 shadow-inner dark:border-slate-800 dark:bg-slate-950/75 dark:text-slate-100">
         {serialized}
       </pre>
     </div>
@@ -168,8 +187,8 @@ function FunctionTestCaseView({
   showExpected?: boolean;
 }) {
   return (
-    <div className="space-y-3 rounded-md border border-border/40 bg-background/70 p-3">
-      {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+    <div className="space-y-3 rounded-xl border border-slate-200/80 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/45">
+      {title && <div className="text-base font-semibold text-foreground">{title}</div>}
       <div className="grid gap-3 md:grid-cols-2">
         <ValuePreview label="Arguments" value={testCase.args} emptyLabel="[]" />
         {showExpected && (
@@ -194,8 +213,8 @@ function ClassTestCaseView({
   showExpected?: boolean;
 }) {
   return (
-    <div className="space-y-3 rounded-md border border-border/40 bg-background/70 p-3">
-      {title && <div className="text-sm font-semibold text-foreground">{title}</div>}
+    <div className="space-y-3 rounded-xl border border-slate-200/80 bg-white/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/45">
+      {title && <div className="text-base font-semibold text-foreground">{title}</div>}
       <div className="grid gap-3 md:grid-cols-3">
         <ValuePreview
           label="Operations"
@@ -215,15 +234,15 @@ function ClassTestCaseView({
           />
         )}
       </div>
-      <div className="overflow-hidden rounded-md border border-border/40">
-        <div className="bg-muted/40 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800">
+        <div className="bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500 dark:bg-slate-900 dark:text-slate-400">
           Call Flow
         </div>
-        <div className="divide-y divide-border/30">
+        <div className="divide-y divide-slate-200/70 dark:divide-slate-800">
           {testCase.operations.map((operation, index) => (
             <div
               key={`${testCase.id}-${operation}-${index}`}
-              className="grid gap-2 px-3 py-2 text-xs md:grid-cols-[56px_1fr_1fr_1fr]"
+              className="grid gap-2 px-3 py-3 text-sm md:grid-cols-[64px_1fr_1fr_1fr]"
             >
               <span className="font-semibold text-muted-foreground">
                 Step {index + 1}
@@ -233,7 +252,7 @@ function ClassTestCaseView({
                 {toDisplayJson(testCase.arguments[index] ?? [])}
               </span>
               {showExpected && (
-                <span className="font-mono text-emerald-300">
+                <span className="font-mono text-emerald-700 dark:text-emerald-300">
                   {toDisplayJson(testCase.expected?.[index])}
                 </span>
               )}
@@ -279,7 +298,7 @@ function renderInlineText(text: string) {
       return (
         <code
           key={`${part}-${index}`}
-          className="rounded bg-zinc-950/80 px-1.5 py-0.5 font-mono text-[12px] text-violet-100"
+          className="rounded-md border border-sky-200/80 bg-sky-50 px-1.5 py-0.5 font-mono text-[12px] text-sky-950 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-100"
         >
           {part.slice(1, -1)}
         </code>
@@ -318,13 +337,16 @@ function ExplanationContent({ content }: { content: string }) {
       }
 
       elements.push(
-        <div key={`code-${elements.length}`} className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-950">
+        <div
+          key={`code-${elements.length}`}
+          className="overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/80"
+        >
           {language && (
-            <div className="border-b border-zinc-800 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+            <div className="border-b border-slate-200/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:text-slate-400">
               {language}
             </div>
           )}
-          <pre className="overflow-x-auto p-3 text-xs text-zinc-100">
+          <pre className="overflow-x-auto p-3 text-xs text-slate-800 dark:text-slate-100">
             <code>{codeLines.join("\n")}</code>
           </pre>
         </div>,
@@ -335,7 +357,10 @@ function ExplanationContent({ content }: { content: string }) {
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       elements.push(
-        <h4 key={`heading-${elements.length}`} className="text-sm font-semibold text-violet-100">
+        <h4
+          key={`heading-${elements.length}`}
+          className="text-sm font-semibold text-slate-900 dark:text-sky-100"
+        >
           {headingMatch[2]}
         </h4>,
       );
@@ -1238,15 +1263,25 @@ export default function CollaborationPage() {
         />
       )}
 
-      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-12 pt-24 md:flex-row">
-        <div className="min-w-0 flex-1">
+      <main className="relative mx-auto flex max-w-7xl flex-col gap-6 px-6 pb-12 pt-24">
+        <div className="pointer-events-none absolute inset-x-6 top-20 -z-10 h-[32rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-amber-50/90 blur-3xl dark:from-sky-950/20 dark:via-transparent dark:to-slate-950/20" />
+        <div className="pointer-events-none absolute right-12 top-56 -z-10 h-40 w-40 rounded-full bg-cyan-100/70 blur-3xl dark:bg-cyan-900/20" />
+        <div className="min-w-0">
           <Card
-            className={`flex h-full flex-col shadow-lg ${
-              terminated ? "border-destructive/40" : "border-primary/10"
+            className={`flex h-full flex-col border shadow-[0_24px_80px_-36px_rgba(15,23,42,0.32)] ${
+              terminated
+                ? "border-destructive/40 bg-white/95 dark:bg-slate-950/85"
+                : "border-slate-200/90 bg-white/95 dark:border-slate-800 dark:bg-slate-950/85"
             }`}
           >
-            <CardHeader>
-              <CardTitle>Collaboration Session</CardTitle>
+            <CardHeader className="space-y-3">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300/70 bg-white/80 px-3 py-1 text-[11px] text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky-700 dark:bg-sky-300" />
+                Live collaboration
+              </div>
+              <CardTitle className="text-2xl font-semibold tracking-tight">
+                Collaboration Session
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 space-y-6">
               {loading && !terminated && (
@@ -1318,12 +1353,12 @@ export default function CollaborationPage() {
                   )} */}
 
                   {question && (
-                    <details className="rounded-lg border border-border/60 bg-muted/20 p-3" open>
-                      <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold">
+                    <details className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/70 to-cyan-50/60 p-4 shadow-[0_16px_40px_-30px_rgba(14,116,144,0.45)] dark:border-slate-800 dark:bg-slate-950/45" open>
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-base font-semibold">
                         <div className="flex items-center gap-2">
                           <span>{question.title}</span>
                           {question.categories.length > 0 && (
-                            <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="rounded-full border border-sky-200/80 bg-white/90 px-2.5 py-1 text-[11px] text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                               [{question.categories.join(", ")}]
                             </span>
                           )}
@@ -1340,20 +1375,20 @@ export default function CollaborationPage() {
                           {question.difficulty}
                         </span>
                       </summary>
-                      <div className="space-y-4 border-t border-border/40 pt-3">
-                        <p className="text-sm leading-relaxed text-muted-foreground">
+                      <div className="max-h-[24rem] space-y-4 overflow-y-auto border-t border-slate-200/80 pt-4 pr-1 dark:border-slate-800">
+                        <p className="text-base leading-relaxed text-muted-foreground">
                           {question.description}
                         </p>
 
                         {question.examples.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <div className="space-y-2">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                               Examples
                             </p>
                             {question.examples.map((example, index) => (
                               <div
                                 key={index}
-                                className="rounded border border-border/20 bg-muted/40 px-3 py-2 text-xs"
+                                className="rounded-xl border border-sky-200/80 bg-white/90 px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-950/65"
                               >
                                 <div className="flex gap-2">
                                   <span className="w-16 shrink-0 text-muted-foreground">
@@ -1368,7 +1403,7 @@ export default function CollaborationPage() {
                                   <span>{example.output}</span>
                                 </div>
                                 {example.explanation && (
-                                  <div className="mt-1 border-t border-border/10 pt-1 text-[11px] italic">
+                                  <div className="mt-2 border-t border-border/10 pt-2 text-xs italic">
                                     <span className="mr-2 not-italic text-muted-foreground">
                                       Explanation:
                                     </span>
@@ -1382,7 +1417,7 @@ export default function CollaborationPage() {
 
                         {question.visibleTestCases.length > 0 && (
                           <div className="space-y-2">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                               Sample Testcases
                             </p>
                             {question.visibleTestCases.map((testCase, index) => (
@@ -1401,7 +1436,7 @@ export default function CollaborationPage() {
                               href={question.link}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                              className="flex items-center gap-1 text-xs text-primary hover:underline"
                             >
                               View on LeetCode <span className="text-xs">→</span>
                             </a>
@@ -1411,26 +1446,26 @@ export default function CollaborationPage() {
                     </details>
                   )}
 
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold">Shared Editor</h3>
-                      <div className="flex flex-wrap gap-2">
+                  <div className="space-y-4 rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/60 to-sky-50/60 p-4 shadow-[0_18px_44px_-32px_rgba(79,70,229,0.42)] dark:border-slate-800 dark:bg-slate-950/35">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <h3 className="text-base font-semibold">Shared Editor</h3>
+                      <div className="flex flex-wrap gap-2 rounded-xl border border-indigo-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                         <Button
-                          size="sm"
+                          className="min-w-24"
                           onClick={() => execute("run")}
                           disabled={runningMode !== null}
                         >
                           {runningMode === "run" ? "Running..." : "Run"}
                         </Button>
                         <Button
-                          size="sm"
+                          className="min-w-24"
                           onClick={() => execute("submit")}
                           disabled={runningMode !== null}
                         >
                           {runningMode === "submit" ? "Submitting..." : "Submit"}
                         </Button>
                         <Button
-                          size="sm"
+                          className="min-w-24"
                           variant="outline"
                           onClick={explainCode}
                           disabled={explaining}
@@ -1466,29 +1501,47 @@ export default function CollaborationPage() {
                     )}
                   </div>
 
-                  <div className="space-y-4 rounded-xl border border-border/60 bg-card/70 p-4">
-                    <div className="flex flex-wrap gap-2">
+                  <div className="space-y-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-white via-amber-50/70 to-orange-50/60 p-5 shadow-[0_18px_44px_-32px_rgba(245,158,11,0.4)] dark:border-slate-800 dark:bg-slate-950/45">
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                          Results Workspace
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Switch between sample inputs, run results, and console
+                          output without everything blending together.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 rounded-xl border border-amber-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
                       <Button
-                        size="sm"
                         variant={resultTab === "testcase" ? "default" : "outline"}
+                        className={`min-w-24 text-sm ${workspaceTabStyles("testcase", resultTab)}`}
                         onClick={() => setResultTab("testcase")}
                       >
                         Testcase
                       </Button>
                       <Button
-                        size="sm"
                         variant={resultTab === "result" ? "default" : "outline"}
+                        className={`min-w-24 text-sm ${workspaceTabStyles("result", resultTab)}`}
                         onClick={() => setResultTab("result")}
                       >
                         Result
                       </Button>
                       <Button
-                        size="sm"
                         variant={resultTab === "console" ? "default" : "outline"}
+                        className={`min-w-24 text-sm ${workspaceTabStyles("console", resultTab)}`}
                         onClick={() => setResultTab("console")}
                       >
                         Console
                       </Button>
+                      <Button
+                        variant={resultTab === "chat" ? "default" : "outline"}
+                        className={`min-w-24 text-sm ${workspaceTabStyles("chat", resultTab)}`}
+                        onClick={() => setResultTab("chat")}
+                      >
+                        Chat
+                      </Button>
+                      </div>
                     </div>
 
                     {resultTab === "testcase" && question && (
@@ -1497,11 +1550,17 @@ export default function CollaborationPage() {
                           {question.visibleTestCases.map((testCase, index) => (
                             <Button
                               key={testCase.id}
-                              size="sm"
                               variant={
                                 selectedTestCase === `sample-${index}`
                                   ? "default"
                                   : "outline"
+                              }
+                              className={
+                                `${
+                                selectedTestCase === `sample-${index}`
+                                  ? "border-sky-200 bg-sky-100 text-sky-900 shadow-sm hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-100"
+                                  : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                              } min-w-24 text-sm`
                               }
                               onClick={() =>
                                 setSelectedTestCase(`sample-${index}`)
@@ -1511,9 +1570,15 @@ export default function CollaborationPage() {
                             </Button>
                           ))}
                           <Button
-                            size="sm"
                             variant={
                               selectedTestCase === "custom" ? "default" : "outline"
+                            }
+                            className={
+                              `${
+                              selectedTestCase === "custom"
+                                ? "border-indigo-200 bg-indigo-100 text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-100"
+                                : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                            } min-w-24 text-sm`
                             }
                             onClick={() => setSelectedTestCase("custom")}
                           >
@@ -1523,17 +1588,17 @@ export default function CollaborationPage() {
 
                         {selectedTestCase === "custom" ? (
                           <div className="space-y-3">
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               Running with a custom testcase executes only the
                               custom input and returns output/error details.
                             </p>
                             {question.executionMode === "python_function" ? (
                               <div className="space-y-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                                   Args JSON
                                 </p>
                                 <textarea
-                                  className="min-h-32 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                                  className="min-h-32 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
                                   value={customFunctionArgs}
                                   onChange={(event) =>
                                     setCustomFunctionArgs(event.target.value)
@@ -1543,11 +1608,11 @@ export default function CollaborationPage() {
                             ) : (
                               <>
                                 <div className="space-y-2">
-                                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                                     Operations JSON
                                   </p>
                                   <textarea
-                                    className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                                    className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
                                     value={customClassOperations}
                                     onChange={(event) =>
                                       setCustomClassOperations(event.target.value)
@@ -1555,11 +1620,11 @@ export default function CollaborationPage() {
                                   />
                                 </div>
                                 <div className="space-y-2">
-                                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                                     Arguments JSON
                                   </p>
                                   <textarea
-                                    className="min-h-24 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+                                    className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
                                     value={customClassArguments}
                                     onChange={(event) =>
                                       setCustomClassArguments(event.target.value)
@@ -1571,7 +1636,7 @@ export default function CollaborationPage() {
                           </div>
                         ) : (
                           <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-sm text-muted-foreground">
                               Run will execute all visible sample testcases.
                             </p>
                             {selectedVisibleCase && (
@@ -1585,21 +1650,21 @@ export default function CollaborationPage() {
                     {resultTab === "result" && (
                       <div className="space-y-4">
                         {runningMode && (
-                          <div className="rounded-md border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+                          <div className="rounded-xl border border-sky-200/80 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-900/70 dark:bg-sky-950/30 dark:text-sky-200">
                             {runningMode === "run"
                               ? "Running shared testcases..."
                               : "Submitting shared solution..."}
                           </div>
                         )}
                         {executionError && (
-                          <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                          <div className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
                             {executionError}
                           </div>
                         )}
                         {executionResult && (
                           <>
                             <div
-                              className={`rounded-md border px-4 py-3 ${verdictStyles(
+                              className={`rounded-xl border px-4 py-3 shadow-sm ${verdictStyles(
                                 executionResult.verdict,
                               )}`}
                             >
@@ -1640,7 +1705,7 @@ export default function CollaborationPage() {
                                 {executionResult.cases.map((testCase) => (
                                   <div
                                     key={testCase.id}
-                                    className="rounded-md border border-border/60 bg-background/60 p-3 text-sm"
+                                    className="rounded-xl border border-slate-200/80 bg-slate-50/90 p-4 text-sm dark:border-slate-800 dark:bg-slate-950/55"
                                   >
                                     <div className="mb-2 flex items-center justify-between gap-2">
                                       <div className="font-medium">{testCase.id}</div>
@@ -1654,26 +1719,26 @@ export default function CollaborationPage() {
                                     </div>
                                     <div className="grid gap-3 md:grid-cols-3">
                                       <div>
-                                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                                           Input
                                         </div>
-                                        <pre className="overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-100">
+                                        <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-white p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
                                           {testCase.inputPreview || "(none)"}
                                         </pre>
                                       </div>
                                       <div>
-                                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                                           Expected
                                         </div>
-                                        <pre className="overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-100">
+                                        <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-white p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
                                           {testCase.expectedPreview || "(custom testcase)"}
                                         </pre>
                                       </div>
                                       <div>
-                                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                                           Actual
                                         </div>
-                                        <pre className="overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-100">
+                                        <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-white p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
                                           {testCase.actualPreview || "(none)"}
                                         </pre>
                                       </div>
@@ -1705,42 +1770,145 @@ export default function CollaborationPage() {
                     {resultTab === "console" && (
                       <div className="space-y-4">
                         <div>
-                          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                             Stdout
                           </div>
-                          <pre className="max-h-48 overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-zinc-100">
+                          <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
                             {executionResult?.stdout || "(no stdout)"}
                           </pre>
                         </div>
                         <div>
-                          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                             Stderr
                           </div>
-                          <pre className="max-h-48 overflow-auto rounded-md border bg-zinc-950 p-3 text-xs text-rose-300">
+                          <pre className="max-h-56 overflow-auto rounded-xl border border-rose-200/70 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-950/70 dark:bg-rose-950/30 dark:text-rose-200">
                             {executionResult?.stderr || "(no stderr)"}
                           </pre>
+                        </div>
+                      </div>
+                    )}
+
+                    {resultTab === "chat" && (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200/80 bg-gradient-to-r from-white to-emerald-50/70 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              Session Chat
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Keep chat in the same workspace while you demo code,
+                              testcases, and outputs.
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-start gap-1 text-sm md:items-end">
+                            <span className="flex items-center gap-2">
+                              <span
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                  chatStatus === "connected" && peerOnline
+                                    ? "bg-green-500"
+                                    : "bg-zinc-500"
+                                }`}
+                              />
+                              <span className="font-medium text-foreground">
+                                {chatStatus !== "connected"
+                                  ? "Peer status unavailable"
+                                  : peerOnline
+                                    ? "Peer online"
+                                    : "Peer offline"}
+                              </span>
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {chatStatus === "connected"
+                                ? "Chat connected"
+                                : chatStatus === "reconnecting"
+                                  ? "Chat reconnecting..."
+                                  : chatStatus === "offline"
+                                    ? "You are offline"
+                                    : "Chat connecting..."}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="min-h-[280px] max-h-[24rem] space-y-4 overflow-y-auto rounded-2xl border border-emerald-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/50">
+                          {messages?.length ? (
+                            messages.map((message, index) => (
+                              <div
+                                key={index}
+                                className={`flex flex-col ${
+                                  message.username === user?.username
+                                    ? "items-end"
+                                    : "items-start"
+                                }`}
+                              >
+                                <span className="mb-1 text-xs font-semibold text-muted-foreground">
+                                  {message.username}
+                                </span>
+                                <div
+                                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
+                                    message.username === user?.username
+                                      ? "bg-gradient-to-r from-slate-950 to-sky-900 text-white dark:from-slate-100 dark:to-sky-200 dark:text-slate-950"
+                                      : "border border-emerald-200/80 bg-emerald-50/70 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                                  }`}
+                                >
+                                  {message.text}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-emerald-200/80 bg-emerald-50/70 px-6 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-900/40">
+                              Chat messages will appear here once either of you starts the conversation.
+                            </div>
+                          )}
+                          <div ref={scrollRef} />
+                        </div>
+
+                        <div className="rounded-xl border border-emerald-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
+                          {chatStatus !== "connected" && !terminated && (
+                            <p className="mb-3 text-sm text-muted-foreground">
+                              {chatStatus === "offline"
+                                ? "Chat is unavailable while offline. It will reconnect when your internet comes back."
+                                : "Chat is reconnecting. Messages can be sent again once the connection is restored."}
+                            </p>
+                          )}
+                          <input
+                            disabled={terminated || chatStatus !== "connected"}
+                            className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-base dark:border-slate-800 dark:bg-slate-950"
+                            placeholder={
+                              terminated
+                                ? "Session ended"
+                                : chatStatus === "offline"
+                                  ? "Offline..."
+                                  : chatStatus === "connected"
+                                    ? "Type a message..."
+                                    : "Reconnecting..."
+                            }
+                            value={chatInput}
+                            onChange={(event) => setChatInput(event.target.value)}
+                            onKeyDown={(event) => event.key === "Enter" && sendMessage()}
+                          />
                         </div>
                       </div>
                     )}
                   </div>
 
                   {(explanation || explainError || explaining) && (
-                    <div className="max-h-[300px] overflow-y-auto rounded-md border border-violet-500/20 bg-violet-950/10 p-4 text-sm">
-                      <div className="mb-3 flex justify-between border-b border-violet-500/20 pb-2">
-                        <span className="text-[10px] font-bold uppercase text-violet-400">
-                          ✦ AI Explanation
+                    <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-fuchsia-200/80 bg-gradient-to-br from-white via-fuchsia-50/65 to-sky-50/60 p-4 text-sm shadow-[0_18px_40px_-30px_rgba(217,70,239,0.35)] dark:border-sky-900/70 dark:bg-slate-950/80">
+                      <div className="mb-3 flex justify-between border-b border-sky-200/80 pb-2 dark:border-sky-900/60">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                          AI Explanation
                         </span>
                         <button
+                          className="text-sm text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
                           onClick={() => {
                             setExplanation(null);
                             setExplainError(null);
                           }}
                         >
-                          ✕
+                          Close
                         </button>
                       </div>
                       {explaining && (
-                        <div className="text-xs animate-pulse text-violet-300">
+                        <div className="animate-pulse text-sm text-sky-700 dark:text-sky-300">
                           Analyzing...
                         </div>
                       )}
@@ -1802,89 +1970,6 @@ export default function CollaborationPage() {
           </Card>
         </div>
 
-        <div className="w-full md:w-80 flex h-[600px] flex-col rounded-xl border bg-card shadow-lg">
-          <div className="flex items-center justify-between border-b p-4 text-[10px] font-bold uppercase text-muted-foreground">
-            Session Chat
-            <div className="flex flex-col items-end gap-1">
-              <span className="flex items-center gap-1">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    chatStatus === "connected" && peerOnline
-                      ? "bg-green-500"
-                      : "bg-zinc-500"
-                  }`}
-                />
-                <span className="normal-case font-normal">
-                  {chatStatus !== "connected"
-                    ? "Peer status unavailable"
-                    : peerOnline
-                      ? "Peer online"
-                      : "Peer offline"}
-                </span>
-              </span>
-              <span className="normal-case text-[10px] font-normal text-muted-foreground">
-                {chatStatus === "connected"
-                  ? "Chat connected"
-                  : chatStatus === "reconnecting"
-                    ? "Chat reconnecting..."
-                    : chatStatus === "offline"
-                      ? "You are offline"
-                      : "Chat connecting..."}
-              </span>
-            </div>
-          </div>
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            {messages?.map((message, index) => (
-              <div
-                key={index}
-                className={`flex flex-col ${
-                  message.username === user?.username
-                    ? "items-end"
-                    : "items-start"
-                }`}
-              >
-                <span className="mb-1 text-[10px] font-bold text-muted-foreground">
-                  {message.username}
-                </span>
-                <div
-                  className={`rounded-2xl px-3 py-2 text-sm ${
-                    message.username === user?.username
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
-                  }`}
-                >
-                  {message.text}
-                </div>
-              </div>
-            ))}
-            <div ref={scrollRef} />
-          </div>
-          <div className="border-t p-4">
-            {chatStatus !== "connected" && !terminated && (
-              <p className="mb-2 text-xs text-muted-foreground">
-                {chatStatus === "offline"
-                  ? "Chat is unavailable while offline. It will reconnect when your internet comes back."
-                  : "Chat is reconnecting. Messages can be sent again once the connection is restored."}
-              </p>
-            )}
-            <input
-              disabled={terminated || chatStatus !== "connected"}
-              className="w-full rounded border bg-background px-3 py-2 text-sm"
-              placeholder={
-                terminated
-                  ? "Session ended"
-                  : chatStatus === "offline"
-                    ? "Offline..."
-                    : chatStatus === "connected"
-                      ? "Message..."
-                      : "Reconnecting..."
-              }
-              value={chatInput}
-              onChange={(event) => setChatInput(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && sendMessage()}
-            />
-          </div>
-        </div>
       </main>
 
       {confirmMode && (
