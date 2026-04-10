@@ -59,6 +59,66 @@ const presetProfilePhotos = [
     label: "Plant",
     url: "https://pixabay.com/images/download/x-6009034_1920.png",
   },
+  {
+    id: "owl",
+    label: "Owl",
+    url: "https://cdn.pixabay.com/photo/2024/12/27/14/58/owl-9294302_1280.jpg",
+  },
+  {
+    id: "forest",
+    label: "Forest",
+    url: "https://cdn.pixabay.com/photo/2017/01/03/19/41/forest-1950402_1280.jpg",
+  },
+  {
+    id: "meadow",
+    label: "Meadow",
+    url: "https://cdn.pixabay.com/photo/2022/05/14/23/13/meadow-7196549_1280.jpg",
+  },
+  {
+    id: "castle",
+    label: "Castle",
+    url: "https://cdn.pixabay.com/photo/2020/08/23/14/55/castle-5511046_1280.jpg",
+  },
+  {
+    id: "fox",
+    label: "Fox",
+    url: "https://cdn.pixabay.com/photo/2015/04/10/01/41/fox-715588_1280.jpg",
+  },
+  {
+    id: "art",
+    label: "Art",
+    url: "https://cdn.pixabay.com/photo/2016/06/25/12/55/art-1478831_1280.jpg",
+  },
+  {
+    id: "winter-tree",
+    label: "Tree",
+    url: "https://cdn.pixabay.com/photo/2022/11/27/13/22/tree-7619791_1280.jpg",
+  },
+  {
+    id: "bee",
+    label: "Bee",
+    url: "https://cdn.pixabay.com/photo/2020/05/25/18/35/bee-5219887_1280.jpg",
+  },
+  {
+    id: "cortina",
+    label: "Cortina",
+    url: "https://cdn.pixabay.com/photo/2025/01/03/06/55/cortina-dampezzo-9307295_1280.jpg",
+  },
+  {
+    id: "singapore",
+    label: "Singapore",
+    url: "https://cdn.pixabay.com/photo/2017/07/31/06/20/singapore-2556628_1280.jpg",
+  },
+  {
+    id: "skyscrapers",
+    label: "Skyscrapers",
+    url: "https://cdn.pixabay.com/photo/2018/02/27/06/30/skyscrapers-3184798_1280.jpg",
+  },
+  {
+    id: "paris",
+    label: "Paris",
+    url: "https://cdn.pixabay.com/photo/2022/10/22/13/41/paris-7539257_1280.jpg",
+  },
 ] as const;
 
 export default function ProfilePage() {
@@ -325,17 +385,17 @@ export default function ProfilePage() {
       <Navbar />
 
       <main className="relative overflow-hidden px-6 pb-12 pt-24">
-        <div className="pointer-events-none absolute inset-x-8 top-14 -z-10 h-[24rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-emerald-50/80 blur-3xl dark:from-sky-950/20 dark:via-transparent dark:to-slate-950/20" />
+        <div className="pointer-events-none absolute inset-x-8 top-14 -z-10 h-[24rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-emerald-50/80 blur-3xl dark:from-slate-900 dark:via-slate-950 dark:to-slate-900/90" />
 
         <div className="mx-auto max-w-5xl">
-          <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/85">
+          <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
             <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1 text-xs text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200">
               <span className="h-1.5 w-1.5 rounded-full bg-sky-600 dark:bg-sky-300" />
               Profile workspace
             </div>
 
-            <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr] lg:items-center">
-              <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/80 to-cyan-50/70 p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-950/65">
+            <div className="mt-6 grid gap-6 xl:grid-cols-[220px_1fr] xl:items-center">
+              <div className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/80 to-cyan-50/70 p-5 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900/95 dark:shadow-none">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -389,7 +449,7 @@ export default function ProfilePage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Quick Picks
                   </p>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                     {presetProfilePhotos.map((photo) => {
                       const selected = user?.profilePhotoUrl === photo.url;
 
@@ -399,18 +459,18 @@ export default function ProfilePage() {
                           type="button"
                           disabled={uploading}
                           onClick={() => void handlePresetPhotoSelect(photo.url)}
-                          className={`overflow-hidden rounded-2xl border text-left transition-all ${
+                          className={`overflow-hidden rounded-xl border text-left transition-all ${
                             selected
                               ? "border-sky-400 ring-4 ring-sky-100 dark:border-sky-500 dark:ring-sky-950/50"
-                              : "border-slate-200 hover:border-sky-300 dark:border-slate-700 dark:hover:border-sky-700"
+                              : "border-slate-200 hover:border-sky-300 dark:border-slate-700 dark:hover:border-slate-600"
                           }`}
                         >
                           <img
                             src={photo.url}
                             alt={photo.label}
-                            className="h-20 w-full object-cover"
+                            className="h-14 w-full object-cover"
                           />
-                          <div className="bg-white px-3 py-2 text-xs font-medium text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                          <div className="bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 dark:bg-slate-950 dark:text-slate-200">
                             {photo.label}
                           </div>
                         </button>
@@ -461,8 +521,8 @@ export default function ProfilePage() {
           {loading ? (
             <p className="mt-10 text-sm text-muted-foreground">Loading profile...</p>
           ) : (
-            <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-              <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_18px_60px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/85">
+            <div className="mt-8 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_18px_60px_-36px_rgba(15,23,42,0.28)] dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
                 <div className="mb-6">
                   <h2 className="text-xl font-semibold tracking-tight">Public Profile</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -531,7 +591,7 @@ export default function ProfilePage() {
 
               <div className="space-y-6">
                 {user?.role !== "admin" && user?.role !== "superadmin" && (
-                  <section className="rounded-3xl border border-amber-200/90 bg-gradient-to-br from-white via-amber-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(245,158,11,0.35)] dark:border-slate-800 dark:bg-slate-950/85">
+                  <section className="rounded-3xl border border-amber-200/90 bg-gradient-to-br from-white via-amber-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(245,158,11,0.35)] dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
                     <h2 className="text-xl font-semibold tracking-tight">
                       Request Admin Privileges
                     </h2>
@@ -547,7 +607,7 @@ export default function ProfilePage() {
                         rows={4}
                         maxLength={500}
                         required
-                        className="w-full rounded-2xl border border-amber-200/80 bg-white/90 px-4 py-3 text-sm outline-none transition-colors focus-visible:border-amber-300 focus-visible:ring-4 focus-visible:ring-amber-100 dark:border-slate-800 dark:bg-slate-950/70 dark:focus-visible:border-amber-900 dark:focus-visible:ring-amber-950/40"
+                        className="w-full rounded-2xl border border-amber-200/80 bg-white/90 px-4 py-3 text-sm outline-none transition-colors focus-visible:border-amber-300 focus-visible:ring-4 focus-visible:ring-amber-100 dark:border-slate-800 dark:bg-slate-900/95 dark:focus-visible:border-amber-900 dark:focus-visible:ring-amber-950/40"
                         placeholder="Describe your responsibilities and why you need admin access."
                       />
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -586,7 +646,7 @@ export default function ProfilePage() {
                           {adminRequests.map((request) => (
                             <div
                               key={request.id}
-                              className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70"
+                              className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/95 dark:shadow-none"
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-xs text-muted-foreground">
@@ -620,7 +680,7 @@ export default function ProfilePage() {
                   </section>
                 )}
 
-                <section className="rounded-3xl border border-rose-200/90 bg-gradient-to-br from-white via-rose-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(244,63,94,0.28)] dark:border-rose-950/60 dark:bg-slate-950/85">
+                <section className="rounded-3xl border border-rose-200/90 bg-gradient-to-br from-white via-rose-50/70 to-orange-50/60 p-6 shadow-[0_18px_60px_-36px_rgba(244,63,94,0.28)] dark:border-slate-800 dark:bg-slate-950/95 dark:shadow-none">
                   <h2 className="text-xl font-semibold text-rose-700 dark:text-rose-300">
                     Danger Zone
                   </h2>

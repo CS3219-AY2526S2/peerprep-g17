@@ -462,7 +462,7 @@ export default function CollaborationPage() {
   );
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [runningMode, setRunningMode] = useState<"run" | "submit" | null>(null);
-  const [resultTab, setResultTab] = useState<ResultTab>("testcase");
+  const [resultTab, setResultTab] = useState<ResultTab>("result");
   const [selectedTestCase, setSelectedTestCase] =
     useState<SelectedTestCase>("sample-0");
   const [customFunctionArgs, setCustomFunctionArgs] = useState("[]");
@@ -1290,7 +1290,8 @@ export default function CollaborationPage() {
               {error && <p className="text-xs text-destructive">{error}</p>}
 
               {!terminated && session ? (
-                <div className="space-y-6">
+                <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+                  <div className="space-y-6">
                   {/* Temporary question browser hidden for now.
                   {questionCatalog.length > 0 && (
                     <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
@@ -1353,7 +1354,7 @@ export default function CollaborationPage() {
                   )} */}
 
                   {question && (
-                    <details className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/70 to-cyan-50/60 p-4 shadow-[0_16px_40px_-30px_rgba(14,116,144,0.45)] dark:border-slate-800 dark:bg-slate-950/45" open>
+                    <details className="rounded-2xl border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/70 to-cyan-50/60 p-4 shadow-[0_16px_40px_-30px_rgba(14,116,144,0.45)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none" open>
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-base font-semibold">
                         <div className="flex items-center gap-2">
                           <span>{question.title}</span>
@@ -1388,7 +1389,7 @@ export default function CollaborationPage() {
                             {question.examples.map((example, index) => (
                               <div
                                 key={index}
-                                className="rounded-xl border border-sky-200/80 bg-white/90 px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-950/65"
+                                className="rounded-xl border border-sky-200/80 bg-white/90 px-4 py-3 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-none"
                               >
                                 <div className="flex gap-2">
                                   <span className="w-16 shrink-0 text-muted-foreground">
@@ -1446,10 +1447,110 @@ export default function CollaborationPage() {
                     </details>
                   )}
 
-                  <div className="space-y-4 rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/60 to-sky-50/60 p-4 shadow-[0_18px_44px_-32px_rgba(79,70,229,0.42)] dark:border-slate-800 dark:bg-slate-950/35">
+                  {question && (
+                    <div className="space-y-4 rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-[0_18px_44px_-32px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                          Test Cases
+                        </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Keep the prompt and test cases visible on the left while coding on the right.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200/80 bg-slate-50/90 p-2 dark:border-slate-800 dark:bg-slate-900/80">
+                        {question.visibleTestCases.map((testCase, index) => (
+                          <Button
+                            key={testCase.id}
+                            variant={
+                              selectedTestCase === `sample-${index}`
+                                ? "default"
+                                : "outline"
+                            }
+                            className={`min-w-24 text-sm ${
+                              selectedTestCase === `sample-${index}`
+                                ? "border-sky-200 bg-sky-100 text-sky-900 shadow-sm hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-100"
+                                : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                            }`}
+                            onClick={() => setSelectedTestCase(`sample-${index}`)}
+                          >
+                            Sample {index + 1}
+                          </Button>
+                        ))}
+                        <Button
+                          variant={selectedTestCase === "custom" ? "default" : "outline"}
+                          className={`min-w-24 text-sm ${
+                            selectedTestCase === "custom"
+                              ? "border-indigo-200 bg-indigo-100 text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-100"
+                              : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                          }`}
+                          onClick={() => setSelectedTestCase("custom")}
+                        >
+                          Custom
+                        </Button>
+                      </div>
+
+                      {selectedTestCase === "custom" ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            Custom input stays beside the problem statement for easier split-screen presenting.
+                          </p>
+                          {question.executionMode === "python_function" ? (
+                            <div className="space-y-2">
+                              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                Args JSON
+                              </p>
+                              <textarea
+                                className="min-h-32 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
+                                value={customFunctionArgs}
+                                onChange={(event) => setCustomFunctionArgs(event.target.value)}
+                              />
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                  Operations JSON
+                                </p>
+                                <textarea
+                                  className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
+                                  value={customClassOperations}
+                                  onChange={(event) => setCustomClassOperations(event.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                  Arguments JSON
+                                </p>
+                                <textarea
+                                  className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
+                                  value={customClassArguments}
+                                  onChange={(event) => setCustomClassArguments(event.target.value)}
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            The selected sample testcase stays here while you code on the right.
+                          </p>
+                          {selectedVisibleCase && (
+                            <TestCaseView testCase={selectedVisibleCase} />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  </div>
+
+                  <div className="space-y-6">
+                  <div className="space-y-4 rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/60 to-sky-50/60 p-4 shadow-[0_18px_44px_-32px_rgba(79,70,229,0.42)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <h3 className="text-base font-semibold">Shared Editor</h3>
-                      <div className="flex flex-wrap gap-2 rounded-xl border border-indigo-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
+                      <div className="flex flex-wrap gap-2 rounded-xl border border-indigo-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                         <Button
                           className="min-w-24"
                           onClick={() => execute("run")}
@@ -1512,14 +1613,7 @@ export default function CollaborationPage() {
                           output without everything blending together.
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2 rounded-xl border border-amber-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
-                      <Button
-                        variant={resultTab === "testcase" ? "default" : "outline"}
-                        className={`min-w-24 text-sm ${workspaceTabStyles("testcase", resultTab)}`}
-                        onClick={() => setResultTab("testcase")}
-                      >
-                        Testcase
-                      </Button>
+                      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200/80 bg-white/90 p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                       <Button
                         variant={resultTab === "result" ? "default" : "outline"}
                         className={`min-w-24 text-sm ${workspaceTabStyles("result", resultTab)}`}
@@ -1543,109 +1637,6 @@ export default function CollaborationPage() {
                       </Button>
                       </div>
                     </div>
-
-                    {resultTab === "testcase" && question && (
-                      <div className="space-y-4">
-                        <div className="flex flex-wrap gap-2">
-                          {question.visibleTestCases.map((testCase, index) => (
-                            <Button
-                              key={testCase.id}
-                              variant={
-                                selectedTestCase === `sample-${index}`
-                                  ? "default"
-                                  : "outline"
-                              }
-                              className={
-                                `${
-                                selectedTestCase === `sample-${index}`
-                                  ? "border-sky-200 bg-sky-100 text-sky-900 shadow-sm hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-100"
-                                  : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                              } min-w-24 text-sm`
-                              }
-                              onClick={() =>
-                                setSelectedTestCase(`sample-${index}`)
-                              }
-                            >
-                              Sample {index + 1}
-                            </Button>
-                          ))}
-                          <Button
-                            variant={
-                              selectedTestCase === "custom" ? "default" : "outline"
-                            }
-                            className={
-                              `${
-                              selectedTestCase === "custom"
-                                ? "border-indigo-200 bg-indigo-100 text-indigo-900 shadow-sm hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-100"
-                                : "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                            } min-w-24 text-sm`
-                            }
-                            onClick={() => setSelectedTestCase("custom")}
-                          >
-                            Custom
-                          </Button>
-                        </div>
-
-                        {selectedTestCase === "custom" ? (
-                          <div className="space-y-3">
-                            <p className="text-sm text-muted-foreground">
-                              Running with a custom testcase executes only the
-                              custom input and returns output/error details.
-                            </p>
-                            {question.executionMode === "python_function" ? (
-                              <div className="space-y-2">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                  Args JSON
-                                </p>
-                                <textarea
-                                  className="min-h-32 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
-                                  value={customFunctionArgs}
-                                  onChange={(event) =>
-                                    setCustomFunctionArgs(event.target.value)
-                                  }
-                                />
-                              </div>
-                            ) : (
-                              <>
-                                <div className="space-y-2">
-                                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                    Operations JSON
-                                  </p>
-                                  <textarea
-                                    className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
-                                    value={customClassOperations}
-                                    onChange={(event) =>
-                                      setCustomClassOperations(event.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                    Arguments JSON
-                                  </p>
-                                  <textarea
-                                    className="min-h-24 w-full rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950/75"
-                                    value={customClassArguments}
-                                    onChange={(event) =>
-                                      setCustomClassArguments(event.target.value)
-                                    }
-                                  />
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="text-sm text-muted-foreground">
-                              Run will execute all visible sample testcases.
-                            </p>
-                            {selectedVisibleCase && (
-                              <TestCaseView testCase={selectedVisibleCase} />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     {resultTab === "result" && (
                       <div className="space-y-4">
@@ -1790,7 +1781,7 @@ export default function CollaborationPage() {
 
                     {resultTab === "chat" && (
                       <div className="space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200/80 bg-gradient-to-r from-white to-emerald-50/70 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                           <div>
                             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                               Session Chat
@@ -1829,7 +1820,7 @@ export default function CollaborationPage() {
                           </div>
                         </div>
 
-                        <div className="min-h-[280px] max-h-[24rem] space-y-4 overflow-y-auto rounded-2xl border border-emerald-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/50">
+                        <div className="min-h-[280px] max-h-[24rem] space-y-4 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                           {messages?.length ? (
                             messages.map((message, index) => (
                               <div
@@ -1846,8 +1837,8 @@ export default function CollaborationPage() {
                                 <div
                                   className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
                                     message.username === user?.username
-                                      ? "bg-gradient-to-r from-slate-950 to-sky-900 text-white dark:from-slate-100 dark:to-sky-200 dark:text-slate-950"
-                                      : "border border-emerald-200/80 bg-emerald-50/70 text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                                      ? "bg-gradient-to-r from-slate-950 to-sky-900 text-white dark:from-sky-900 dark:to-slate-950 dark:text-slate-100"
+                                      : "border border-slate-200/80 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                                   }`}
                                 >
                                   {message.text}
@@ -1855,14 +1846,14 @@ export default function CollaborationPage() {
                               </div>
                             ))
                           ) : (
-                            <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-emerald-200/80 bg-emerald-50/70 px-6 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-900/40">
+                            <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed border-slate-300/80 bg-slate-50/80 px-6 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-950/80">
                               Chat messages will appear here once either of you starts the conversation.
                             </div>
                           )}
                           <div ref={scrollRef} />
                         </div>
 
-                        <div className="rounded-xl border border-emerald-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
+                        <div className="rounded-xl border border-slate-200/80 bg-white/95 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                           {chatStatus !== "connected" && !terminated && (
                             <p className="mb-3 text-sm text-muted-foreground">
                               {chatStatus === "offline"
@@ -1892,7 +1883,7 @@ export default function CollaborationPage() {
                   </div>
 
                   {(explanation || explainError || explaining) && (
-                    <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-fuchsia-200/80 bg-gradient-to-br from-white via-fuchsia-50/65 to-sky-50/60 p-4 text-sm shadow-[0_18px_40px_-30px_rgba(217,70,239,0.35)] dark:border-sky-900/70 dark:bg-slate-950/80">
+                    <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 text-sm shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
                       <div className="mb-3 flex justify-between border-b border-sky-200/80 pb-2 dark:border-sky-900/60">
                         <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
                           AI Explanation
@@ -1918,6 +1909,7 @@ export default function CollaborationPage() {
                       {explanation && <ExplanationContent content={explanation} />}
                     </div>
                   )}
+                  </div>
                 </div>
               ) : !terminated && (loading || sessionUnavailable) ? (
                 <div className="h-[400px] flex flex-col items-center justify-center border-2 border-dashed rounded-lg">
