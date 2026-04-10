@@ -11,8 +11,11 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="relative mx-auto flex h-14 max-w-6xl items-center px-6">
-        <Link to="/" className="brand-wordmark text-xl text-foreground/90 tracking-tight">
-          PeerPrep
+        <Link to="/" className="flex items-center gap-2 text-foreground/90 tracking-tight">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-900 shadow-sm dark:bg-violet-950/70 dark:text-violet-200">
+            <span className="h-2.5 w-2.5 rounded-full bg-current" />
+          </span>
+          <span className="brand-wordmark text-xl">PeerPrep</span>
         </Link>
         {isAuthenticated && (
           <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1">
