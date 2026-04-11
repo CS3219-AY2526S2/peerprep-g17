@@ -54,6 +54,148 @@ async function formatSessionResponseWithSharedCode(session: any) {
 export class CollaborationController {
   constructor(private readonly collaborationService: CollaborationService) {}
 
+  suggestAttemptImprovement = async (
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    const {
+      questionTitle,
+      questionDescription,
+      difficulty,
+      topics,
+      language,
+      userCode,
+      verdict,
+      passedCount,
+      totalCount,
+      firstFailingCase,
+    } = (req.body ?? {}) as {
+      questionTitle?: string;
+      questionDescription?: string;
+      difficulty?: string;
+      topics?: string[];
+      language?: string;
+      userCode?: string;
+      verdict?: string;
+      passedCount?: number;
+      totalCount?: number;
+      firstFailingCase?: unknown;
+    };
+
+    if (!questionTitle?.trim()) {
+      res.status(400).json({ error: "Question title is required." });
+      return;
+    }
+
+    if (!userCode?.trim()) {
+      res.status(400).json({ error: "Submitted code is required." });
+      return;
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+
+    if (!apiKey) {
+      res.status(503).json({ error: "AI suggestion service is not configured." });
+      return;
+    }
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.4,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a supportive technical interview coach. Return valid JSON only with exactly these string keys: hint, improvementAreas, approach, solution, takeaway. Keep `hint` concise and avoid revealing the full answer. Put the complete answer only in `solution`. Tailor feedback to the student's submitted code and be honest but encouraging.",
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                questionTitle,
+                questionDescription: questionDescription ?? "",
+                difficulty: difficulty ?? "",
+                topics: topics ?? [],
+                language: language ?? "Python",
+                userCode,
+                verdict: verdict ?? null,
+                passedCount: typeof passedCount === "number" ? passedCount : null,
+                totalCount: typeof totalCount === "number" ? totalCount : null,
+                firstFailingCase: firstFailingCase ?? null,
+              }),
+            },
+          ],
+        }),
+      });
+
+      const result = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        res.status(502).json({
+          error: result.error?.message || "OpenAI suggestion request failed.",
+        });
+        return;
+      }
+
+      const rawContent = result.choices?.[0]?.message?.content?.trim();
+      if (!rawContent) {
+        res.status(502).json({ error: "OpenAI did not return a suggestion." });
+        return;
+      }
+
+      const normalized = rawContent
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/\s*```$/i, "");
+
+      const parsed = JSON.parse(normalized) as {
+        hint?: unknown;
+        improvementAreas?: unknown;
+        approach?: unknown;
+        solution?: unknown;
+        takeaway?: unknown;
+      };
+
+      res.status(200).json({
+        data: {
+          hint:
+            typeof parsed.hint === "string" && parsed.hint.trim()
+              ? parsed.hint.trim()
+              : "Review your data flow and edge cases before looking at the full answer.",
+          improvementAreas:
+            typeof parsed.improvementAreas === "string"
+              ? parsed.improvementAreas.trim()
+              : "",
+          approach:
+            typeof parsed.approach === "string" ? parsed.approach.trim() : "",
+          solution:
+            typeof parsed.solution === "string" ? parsed.solution.trim() : "",
+          takeaway:
+            typeof parsed.takeaway === "string" ? parsed.takeaway.trim() : "",
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate suggestion.";
+      res.status(502).json({ error: message });
+    }
+  };
+
   handoffSession = async (req: Request, res: Response): Promise<void> => {
     const payload = req.body as Partial<CollaborationSessionPayload>;
     if (
