@@ -283,10 +283,36 @@ export class CollaborationService {
       ? submittedCode
       : await this.resolveSessionCode(sessionId, session);
 
+    const latestSubmittedAttempt = await Attempt.findOne({
+      userId,
+      sessionId,
+      mode: "submit",
+    }).sort({ submittedAt: -1, attemptedAt: -1 });
+
     const lastSubmit =
       session.lastExecutionResult?.mode === "submit"
         ? session.lastExecutionResult
-        : null;
+        : latestSubmittedAttempt?.executionMode && latestSubmittedAttempt.verdict
+          ? {
+              mode: "submit" as const,
+              executionMode: latestSubmittedAttempt.executionMode,
+              verdict: latestSubmittedAttempt.verdict,
+              status: "finished" as const,
+              stdout: "",
+              stderr: "",
+              runtimeMs: latestSubmittedAttempt.runtimeMs ?? 0,
+              memoryKb: latestSubmittedAttempt.memoryKb ?? 0,
+              passedCount: latestSubmittedAttempt.passedCount ?? 0,
+              totalCount: latestSubmittedAttempt.totalCount ?? 0,
+              cases: latestSubmittedAttempt.firstFailingCase
+                ? [latestSubmittedAttempt.firstFailingCase]
+                : [],
+              initiatedByUserId: userId,
+              initiatedAt:
+                latestSubmittedAttempt.submittedAt?.toISOString() ??
+                latestSubmittedAttempt.attemptedAt.toISOString(),
+            }
+          : null;
 
     await Attempt.findOneAndUpdate(
       { userId, sessionId, mode: "session_complete" },
