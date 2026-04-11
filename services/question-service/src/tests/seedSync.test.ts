@@ -70,7 +70,9 @@ test("syncSeedQuestionExecutionMetadata returns 0 when matching seed metadata is
 });
 
 test("syncSeedQuestionExecutionMetadata writes updates when execution metadata drifted", async () => {
-  const seed = SEED_QUESTIONS[0];
+  const seed = SEED_QUESTIONS.find(
+    (entry) => entry.executionMode && entry.executionMode !== "unsupported",
+  );
   assert.ok(seed);
 
   Question.find = (() => ({
@@ -78,8 +80,11 @@ test("syncSeedQuestionExecutionMetadata writes updates when execution metadata d
       {
         _id: "question-3",
         title: seed.title,
-        executionMode: "unsupported",
-        starterCode: { python: "" },
+        executionMode:
+          seed.executionMode === "python_function"
+            ? "python_class"
+            : "python_function",
+        starterCode: { python: "# stale starter code" },
         visibleTestCases: [],
         hiddenTestCases: [],
         judgeConfig: null,

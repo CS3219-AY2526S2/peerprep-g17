@@ -136,6 +136,19 @@ test("POST /api/questions rejects invalid difficulty values", async () => {
   assert.equal(response.status, 400);
 });
 
+test("POST /api/questions surfaces mongoose validation errors", async () => {
+  const response = await request(app)
+    .post("/api/questions")
+    .set("Authorization", "Bearer admin-token")
+    .send({
+      ...baseQuestion,
+      title: "Bad Example Shape",
+      examples: [{ input: "missing output" }],
+    });
+
+  assert.equal(response.status, 400);
+});
+
 test("GET /api/questions/:id rejects invalid object ids", async () => {
   const response = await request(app)
     .get("/api/questions/not-a-valid-id")
@@ -150,6 +163,18 @@ test("GET /api/questions/:id returns 404 for missing questions", async () => {
     .set("Authorization", "Bearer user-token");
 
   assert.equal(response.status, 404);
+});
+
+test("GET /api/questions/:id/judge rejects invalid ids and missing questions", async () => {
+  const invalid = await request(app)
+    .get("/api/questions/not-a-valid-id/judge")
+    .set("x-internal-service-token", "dev-internal-service-token");
+  assert.equal(invalid.status, 400);
+
+  const missing = await request(app)
+    .get(`/api/questions/${new mongoose.Types.ObjectId().toString()}/judge`)
+    .set("x-internal-service-token", "dev-internal-service-token");
+  assert.equal(missing.status, 404);
 });
 
 test("PATCH /api/questions/:id rejects invalid ids", async () => {
@@ -181,6 +206,22 @@ test("PATCH /api/questions/:id rejects invalid category updates", async () => {
     .send({ categories: ["Made Up"] });
 
   assert.equal(response.status, 400);
+});
+
+test("PATCH /api/questions/:id rejects invalid difficulty and empty category arrays", async () => {
+  const created = await Question.create(baseQuestion);
+
+  const invalidDifficulty = await request(app)
+    .patch(`/api/questions/${String(created._id)}`)
+    .set("Authorization", "Bearer admin-token")
+    .send({ difficulty: "Impossible" });
+  assert.equal(invalidDifficulty.status, 400);
+
+  const emptyCategories = await request(app)
+    .patch(`/api/questions/${String(created._id)}`)
+    .set("Authorization", "Bearer admin-token")
+    .send({ categories: [] });
+  assert.equal(emptyCategories.status, 400);
 });
 
 test("PATCH /api/questions/:id returns 404 when the question does not exist", async () => {

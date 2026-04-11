@@ -26,6 +26,17 @@ test("query helpers build the expected filters", () => {
   });
 });
 
+test("query helpers ignore blank and invalid filter fragments", () => {
+  const filter = buildFilterQuery({
+    difficulty: "",
+    categories: " ,  , ",
+    search: "   ",
+    executionModes: "not-real,also-not-real",
+  });
+
+  assert.deepEqual(filter, {});
+});
+
 test("validation helpers recognize invalid categories, difficulty, and ids", () => {
   assert.deepEqual(findInvalidCategories(["Arrays", "Unknown"]), ["Unknown"]);
   assert.equal(isValidDifficulty("Medium"), true);
@@ -61,4 +72,20 @@ test("format helpers expose API-safe question shapes", () => {
 
   assert.equal(formatted.id, String(id));
   assert.equal(judgeFormatted.hiddenTestCases.length, 1);
+});
+
+test("format helpers preserve string timestamps and default fields", () => {
+  const formatted = formatQuestionResponse({
+    _id: new mongoose.Types.ObjectId(),
+    title: "String Dates",
+    difficulty: "Easy",
+    categories: ["Arrays"],
+    description: "Uses string timestamps from aggregation output.",
+    createdAt: "2026-04-11T00:00:00.000Z",
+    updatedAt: "2026-04-11T01:00:00.000Z",
+  });
+
+  assert.equal(formatted.createdAt, "2026-04-11T00:00:00.000Z");
+  assert.equal(formatted.executionMode, "unsupported");
+  assert.deepEqual(formatted.visibleTestCases, []);
 });

@@ -134,3 +134,28 @@ test("parseProfilePhotoUpload rejects invalid file types", async () => {
   assert.equal(response.status, 400);
   assert.match(String((response.body as { error?: string }).error), /invalid file type/i);
 });
+
+test("parseProfilePhotoUpload rejects oversized images", async () => {
+  const app = express();
+  let calledHandler = false;
+
+  app.post(
+    "/upload",
+    (req, res, next) => parseProfilePhotoUpload(req as AuthRequest, res, next),
+    (_req, res) => {
+      calledHandler = true;
+      res.status(200).json({ ok: true });
+    },
+  );
+
+  const response = await request(app)
+    .post("/upload")
+    .attach("photo", Buffer.alloc(5 * 1024 * 1024 + 1), {
+      filename: "avatar.png",
+      contentType: "image/png",
+    });
+
+  assert.equal(calledHandler, false);
+  assert.equal(response.status, 400);
+  assert.match(String((response.body as { error?: string }).error), /5MB or smaller/i);
+});
