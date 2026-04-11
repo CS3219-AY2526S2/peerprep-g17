@@ -200,7 +200,7 @@ test("DELETE /api/questions/:id rejects invalid ids", async () => {
   assert.equal(response.status, 400);
 });
 
-test("POST /api/questions/seed returns 200 when everything is already seeded", async () => {
+test("POST /api/questions/seed returns 200 when the second sync has no new inserts", async () => {
   const firstResponse = await request(app)
     .post("/api/questions/seed")
     .set("Authorization", "Bearer admin-token");
@@ -212,5 +212,10 @@ test("POST /api/questions/seed returns 200 when everything is already seeded", a
     .set("Authorization", "Bearer admin-token");
 
   assert.equal(secondResponse.status, 200);
-  assert.match(secondResponse.body.data.message, /already exist and are up to date/i);
+  assert.equal(secondResponse.body.data.inserted, 0);
+  assert.ok(typeof secondResponse.body.data.updated === "number");
+  assert.match(
+    secondResponse.body.data.message,
+    /Seed sync complete\. Inserted 0, updated \d+\.|already exist and are up to date/i,
+  );
 });
