@@ -43,6 +43,13 @@ jobs:
         working-directory: frontend
         run: npx vite build
 
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: frontend/dist
+          if-no-files-found: error
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest
