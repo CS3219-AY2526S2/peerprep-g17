@@ -88,6 +88,12 @@ Some failure-injection behavior is covered at integration-test level already, fo
 - auth-service failure handling
 - question-service unavailability branches
 
+In addition, CI now includes lightweight non-functional smoke checks and failure-injection checks under:
+
+- `tests/nonfunctional/smoke-load.mjs`
+- `tests/nonfunctional/failure-injection.mjs`
+- `.github/workflows/nonfunctional.yml`
+
 ### Recommended pass/fail thresholds
 
 For assessment/demo purposes, the following thresholds are recommended:
@@ -97,7 +103,14 @@ For assessment/demo purposes, the following thresholds are recommended:
 - matchmaking request creation: error rate `< 1%` under expected demo-class traffic
 - collaboration handoff failure scenarios: rollback correctness `100%` for tested cases
 
-These thresholds should be used alongside a lightweight load tool such as `k6` or `Artillery` if non-functional CI is expanded further.
+The current CI non-functional stage enforces lightweight smoke/failure thresholds against controlled endpoints:
+
+- health smoke: `p95 <= 300 ms`, `0%` error rate
+- question list smoke: `p95 <= 500 ms`, `0%` error rate
+- match request smoke: `p95 <= 700 ms`, error rate `<= 1%`
+- failure injection: injected dependency failure must return `503` within `500 ms`
+
+These scripts are intentionally lightweight and CI-stable. They can later be extended to run against deployed or containerized service stacks, or replaced with tools such as `k6` or `Artillery`.
 
 ## 5. CI Pipeline
 
@@ -126,6 +139,11 @@ The CI process is structured around:
   - service test suite
   - coverage reporting
   - security/dependency scanning where configured
+- Non-functional CI:
+  - fixture service startup
+  - smoke-load threshold validation
+  - failure-injection threshold validation
+  - JSON artifact upload
 
 ## 6. Evidence Map
 
@@ -137,6 +155,7 @@ Key workflow files:
 - `.github/workflows/question-service.yml`
 - `.github/workflows/matching-service.yml`
 - `.github/workflows/collaboration-service.yml`
+- `.github/workflows/nonfunctional.yml`
 
 Key frontend test entry points:
 
@@ -157,4 +176,4 @@ The repository now demonstrates:
 - browser compatibility via CI matrix
 - CI-based build/test/security/artifact flow
 
-The remaining area that can still be strengthened further is dedicated load/stress automation in CI. If needed, this can be added next with a lightweight performance-testing stage.
+The remaining area that can still be strengthened further is higher-scale load/stress automation against a deployed multi-service environment. The current non-functional stage is intentionally lightweight so it stays reliable in CI while still demonstrating threshold-based smoke and failure-injection testing.

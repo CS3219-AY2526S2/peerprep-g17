@@ -56,7 +56,7 @@ test("QuestionServiceClient maps missing data and upstream failures to errors", 
 
 test("CollaborationService executeSessionCode rejects oversize code and concurrent executions", async () => {
   await CollaborationSession.create({
-    sessionId: "session-1",
+    sessionId: "session-lock-test",
     userAId: "user-a",
     userBId: "user-b",
     topic: "Arrays",
@@ -65,6 +65,8 @@ test("CollaborationService executeSessionCode rejects oversize code and concurre
     language: "Python",
     status: "active",
   });
+
+  let releaseExecution!: () => void;
 
   const service = new CollaborationService(
     { async completeSession() { return; } } as never,
@@ -90,30 +92,53 @@ test("CollaborationService executeSessionCode rejects oversize code and concurre
     } as never,
     {
       async execute() {
-        return new Promise(() => undefined);
+        return new Promise((resolve) => {
+          releaseExecution = () =>
+            resolve({
+              mode: "run",
+              executionMode: "python_function",
+              verdict: "Accepted",
+              status: "finished",
+              stdout: "",
+              stderr: "",
+              runtimeMs: 1,
+              memoryKb: 1,
+              passedCount: 1,
+              totalCount: 1,
+              cases: [],
+              initiatedByUserId: "user-a",
+              initiatedAt: new Date().toISOString(),
+            });
+        });
       },
     } as never,
   );
 
   await assert.rejects(
     () =>
-      service.executeSessionCode("session-1", "user-a", "run", {
+      service.executeSessionCode("session-lock-test", "user-a", "run", {
         code: "x".repeat(300_000),
       }),
     ValidationError,
   );
 
-  const firstExecution = service.executeSessionCode("session-1", "user-a", "run", {
-    code: "print('hello')",
-  });
+  const firstExecution = service.executeSessionCode(
+    "session-lock-test",
+    "user-a",
+    "run",
+    {
+      code: "print('hello')",
+    },
+  );
 
   await assert.rejects(
     () =>
-      service.executeSessionCode("session-1", "user-a", "run", {
+      service.executeSessionCode("session-lock-test", "user-a", "run", {
         code: "print('again')",
       }),
     ConflictError,
   );
 
-  void firstExecution;
+  releaseExecution();
+  await firstExecution;
 });

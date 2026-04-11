@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-04-11T04:46:21.482Z",
+  "results": [
+    {
+      "name": "health_smoke",
+      "method": "GET",
+      "url": "http://127.0.0.1:3100/health",
+      "requests": 20,
+      "maxP95Ms": 300,
+      "maxErrorRate": 0,
+      "p95Ms": 51.02,
+      "averageMs": 58.16300000000001,
+      "errorRate": 0,
+      "passed": true
+    },
+    {
+      "name": "question_list_smoke",
+      "method": "GET",
+      "url": "http://127.0.0.1:3100/api/questions",
+      "requests": 20,
+      "maxP95Ms": 500,
+      "maxErrorRate": 0,
+      "p95Ms": 79.47,
+      "averageMs": 77.84149999999998,
+      "errorRate": 0,
+      "passed": true
+    },
+    {
+      "name": "match_request_smoke",
+      "method": "POST",
+      "url": "http://127.0.0.1:3100/api/matches/requests",
+      "body": {
+        "topic": "Arrays",
+        "difficulty": "Easy"
+      },
+      "requests": 15,
+      "maxP95Ms": 700,
+      "maxErrorRate": 0.01,
+      "p95Ms": 118.23,
+      "averageMs": 103.38866666666667,
+      "errorRate": 0,
+      "passed": true
+    }
+  ]
+}

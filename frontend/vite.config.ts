@@ -13,6 +13,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/tests/setup.ts",
+    exclude: ["e2e/**", "playwright.config.ts"],
   },
   server: {
     host: true,
