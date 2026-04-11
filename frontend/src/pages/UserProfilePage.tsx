@@ -1,112 +1,13 @@
-import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { USER_API_URL } from "@/config";
-import { createProtectedImageUrl } from "@/lib/image";
-
-interface PublicProfile {
-  id: string;
-  username: string;
-  university: string;
-  bio: string;
-  profilePhotoUrl: string | null;
-}
-
-
+import { usePublicProfile } from "@/hooks/usePublicProfile";
 
 export default function UserProfilePage() {
   const { id } = useParams();
   const { token, user: currentUser } = useAuth();
-
-  const [profile, setProfile] = useState<PublicProfile | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchProfile() {
-      if (!id) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${USER_API_URL}/${id}/profile`, token
-          ? { headers: { Authorization: `Bearer ${token}` } }
-          : undefined);
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          throw new Error(json.error || "Failed to fetch profile");
-        }
-
-        if (!cancelled) {
-          setProfile(json.data as PublicProfile);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to fetch profile");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchProfile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id, token]);
-
-  useEffect(() => {
-    let objectUrlToRevoke: string | null = null;
-    let cancelled = false;
-
-    async function fetchPhoto() {
-      if (!profile?.profilePhotoUrl) {
-        setPhotoPreview(null);
-        return;
-      }
-
-      if (!profile.profilePhotoUrl.includes("/api/users/")) {
-        setPhotoPreview(profile.profilePhotoUrl);
-        return;
-      }
-
-      try {
-        const objectUrl = await createProtectedImageUrl(profile.profilePhotoUrl, token);
-
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-
-        objectUrlToRevoke = objectUrl;
-        setPhotoPreview(objectUrl);
-      } catch {
-        if (!cancelled) {
-          setPhotoPreview(null);
-        }
-      }
-    }
-
-    fetchPhoto();
-
-    return () => {
-      cancelled = true;
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke);
-      }
-    };
-  }, [profile?.profilePhotoUrl, token]);
+  const { profile, photoPreview, loading, error } = usePublicProfile(id, token);
 
   const isCurrentUser = !!profile && profile.id === currentUser?.id;
   return (

@@ -12,22 +12,14 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
-import { MATCHING_API_URL, MATCHING_WS_URL, QUESTION_API_URL, USER_API_URL } from "@/config";
-import { createProtectedImageUrl } from "@/lib/image";
+import { MATCHING_API_URL, MATCHING_WS_URL, QUESTION_API_URL } from "@/config";
+import { usePublicProfile } from "@/hooks/usePublicProfile";
 import type { MatchState } from "@/types";
 
 type QuestionMetaResponse = {
   meta?: {
     categories?: string[];
   };
-};
-
-type PublicProfile = {
-  id: string;
-  username: string;
-  university: string;
-  bio: string;
-  profilePhotoUrl: string | null;
 };
 
 function formatRemainingTime(ms: number): string {
@@ -51,8 +43,11 @@ export default function MatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [countdownMs, setCountdownMs] = useState<number | null>(null);
-  const [partnerProfile, setPartnerProfile] = useState<PublicProfile | null>(null);
-  const [partnerPhotoPreview, setPartnerPhotoPreview] = useState<string | null>(null);
+  const { profile: partnerProfile, photoPreview: partnerPhotoPreview } = usePublicProfile(
+    matchState?.partnerUserId,
+    token,
+    { enabled: Boolean(matchState?.partnerUserId) },
+  );
 
   useEffect(() => {
     if (!token) {
@@ -173,90 +168,6 @@ export default function MatchPage() {
     const intervalId = window.setInterval(tick, 1000);
     return () => window.clearInterval(intervalId);
   }, [matchState]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPartnerProfile() {
-      if (!matchState?.partnerUserId) {
-        setPartnerProfile(null);
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          `${USER_API_URL}/${matchState.partnerUserId}/profile`,
-          {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          },
-        );
-        const json = await response.json();
-
-        if (!response.ok) {
-          throw new Error(json.error || "Failed to fetch partner profile.");
-        }
-
-        if (!cancelled) {
-          setPartnerProfile(json.data as PublicProfile);
-        }
-      } catch {
-        if (!cancelled) {
-          setPartnerProfile(null);
-        }
-      }
-    }
-
-    void loadPartnerProfile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [matchState?.partnerUserId, token]);
-
-  useEffect(() => {
-    let objectUrlToRevoke: string | null = null;
-    let cancelled = false;
-
-    async function loadPartnerPhoto() {
-      if (!partnerProfile?.profilePhotoUrl) {
-        setPartnerPhotoPreview(null);
-        return;
-      }
-
-      if (!partnerProfile.profilePhotoUrl.includes("/api/users/")) {
-        setPartnerPhotoPreview(partnerProfile.profilePhotoUrl);
-        return;
-      }
-
-      try {
-        const objectUrl = await createProtectedImageUrl(
-          partnerProfile.profilePhotoUrl,
-          token,
-        );
-
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-
-        objectUrlToRevoke = objectUrl;
-        setPartnerPhotoPreview(objectUrl);
-      } catch {
-        if (!cancelled) {
-          setPartnerPhotoPreview(null);
-        }
-      }
-    }
-
-    void loadPartnerPhoto();
-
-    return () => {
-      cancelled = true;
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke);
-      }
-    };
-  }, [partnerProfile?.profilePhotoUrl, token]);
 
   const canSubmit = useMemo(
     () => Boolean(selectedTopic) && !submitting && matchState?.status !== "searching",

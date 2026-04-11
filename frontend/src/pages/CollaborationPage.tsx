@@ -21,10 +21,9 @@ import {
   COLLABORATION_API_URL,
   MATCHING_API_URL,
   QUESTION_API_URL,
-  USER_API_URL,
 } from "@/config";
 import { useAuth } from "@/contexts/AuthContext";
-import { createProtectedImageUrl } from "@/lib/image";
+import { usePublicProfile } from "@/hooks/usePublicProfile";
 import type {
   ClassJudgeTestCase,
   CollaborationSessionRecord,
@@ -50,14 +49,6 @@ type ChatMessage = {
     userIds: string[];
   }>;
   timestamp?: string;
-};
-
-type PublicProfile = {
-  id: string;
-  username: string;
-  university: string;
-  bio: string;
-  profilePhotoUrl: string | null;
 };
 
 function InactivityWarning({
@@ -560,8 +551,6 @@ export default function CollaborationPage() {
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [leftPaneWidth, setLeftPaneWidth] = useState(43);
   const [isResizingPanels, setIsResizingPanels] = useState(false);
-  const [partnerProfile, setPartnerProfile] = useState<PublicProfile | null>(null);
-  const [partnerPhotoPreview, setPartnerPhotoPreview] = useState<string | null>(null);
 
   const currentQuestionIndex = useMemo(() => {
     if (!session?.questionId) return -1;
@@ -1463,87 +1452,11 @@ export default function CollaborationPage() {
 
     return session.userAId === user.id ? session.userBId : session.userAId;
   }, [session, user?.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPartnerProfile() {
-      if (!partnerUserId) {
-        setPartnerProfile(null);
-        return;
-      }
-
-      try {
-        const response = await fetch(`${USER_API_URL}/${partnerUserId}/profile`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-        const json = await response.json();
-
-        if (!response.ok) {
-          throw new Error(json.error || "Failed to load partner profile.");
-        }
-
-        if (!cancelled) {
-          setPartnerProfile(json.data as PublicProfile);
-        }
-      } catch {
-        if (!cancelled) {
-          setPartnerProfile(null);
-        }
-      }
-    }
-
-    void loadPartnerProfile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [partnerUserId, token]);
-
-  useEffect(() => {
-    let objectUrlToRevoke: string | null = null;
-    let cancelled = false;
-
-    async function loadPartnerPhoto() {
-      if (!partnerProfile?.profilePhotoUrl) {
-        setPartnerPhotoPreview(null);
-        return;
-      }
-
-      if (!partnerProfile.profilePhotoUrl.includes("/api/users/")) {
-        setPartnerPhotoPreview(partnerProfile.profilePhotoUrl);
-        return;
-      }
-
-      try {
-        const objectUrl = await createProtectedImageUrl(
-          partnerProfile.profilePhotoUrl,
-          token,
-        );
-
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-
-        objectUrlToRevoke = objectUrl;
-        setPartnerPhotoPreview(objectUrl);
-      } catch {
-        if (!cancelled) {
-          setPartnerPhotoPreview(null);
-        }
-      }
-    }
-
-    void loadPartnerPhoto();
-
-    return () => {
-      cancelled = true;
-      if (objectUrlToRevoke) {
-        URL.revokeObjectURL(objectUrlToRevoke);
-      }
-    };
-  }, [partnerProfile?.profilePhotoUrl, token]);
+  const { profile: partnerProfile, photoPreview: partnerPhotoPreview } = usePublicProfile(
+    partnerUserId,
+    token,
+    { enabled: Boolean(partnerUserId) },
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
