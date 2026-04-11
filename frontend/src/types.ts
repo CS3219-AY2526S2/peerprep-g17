@@ -178,6 +178,8 @@ export interface AttemptRecord {
   executionMode?: "python_function" | "python_class";
   firstFailingCase?: ExecutionCaseResult | null;
   submittedAt?: string | null;
+  reflectionNote?: string;
+  reflectionChecked?: boolean;
 }
 
 export interface AttemptSuggestion {

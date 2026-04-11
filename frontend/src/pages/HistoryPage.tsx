@@ -104,43 +104,69 @@ export default function HistoryPage() {
   const [revealedSolutions, setRevealedSolutions] = useState<Record<string, boolean>>({});
   const [reflectionNotes, setReflectionNotes] = useState<Record<string, string>>({});
   const [reflectionChecks, setReflectionChecks] = useState<Record<string, boolean>>({});
+  const [savingReflectionIds, setSavingReflectionIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    try {
-      const storedNotes = window.localStorage.getItem("attempt-reflection-notes");
-      const storedChecks = window.localStorage.getItem("attempt-reflection-checks");
-      if (storedNotes) {
-        setReflectionNotes(JSON.parse(storedNotes) as Record<string, string>);
-      }
-      if (storedChecks) {
-        setReflectionChecks(JSON.parse(storedChecks) as Record<string, boolean>);
-      }
-    } catch {
-      // Keep reflection support non-blocking if local storage is unavailable.
-    }
-  }, []);
+    if (!token || attempts.length === 0) return;
+    setReflectionNotes(
+      Object.fromEntries(
+        attempts.map((attempt) => [attempt._id, attempt.reflectionNote ?? ""]),
+      ),
+    );
+    setReflectionChecks(
+      Object.fromEntries(
+        attempts.map((attempt) => [attempt._id, !!attempt.reflectionChecked]),
+      ),
+    );
+  }, [attempts, token]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        "attempt-reflection-notes",
-        JSON.stringify(reflectionNotes),
-      );
-    } catch {
-      // Ignore local storage failures.
-    }
-  }, [reflectionNotes]);
+    if (!token) return;
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        "attempt-reflection-checks",
-        JSON.stringify(reflectionChecks),
-      );
-    } catch {
-      // Ignore local storage failures.
-    }
-  }, [reflectionChecks]);
+    const timeout = window.setTimeout(() => {
+      const pendingAttempts = attempts.filter((attempt) => {
+        const currentNote = reflectionNotes[attempt._id] ?? "";
+        const currentCheck = !!reflectionChecks[attempt._id];
+        return (
+          currentNote !== (attempt.reflectionNote ?? "") ||
+          currentCheck !== !!attempt.reflectionChecked
+        );
+      });
+
+      pendingAttempts.forEach(async (attempt) => {
+        setSavingReflectionIds((current) => ({ ...current, [attempt._id]: true }));
+        try {
+          const res = await fetch(
+            `${COLLABORATION_API_URL}/sessions/history/${attempt._id}/reflection`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                note: reflectionNotes[attempt._id] ?? "",
+                checked: !!reflectionChecks[attempt._id],
+              }),
+            },
+          );
+
+          const json = await res.json().catch(() => null);
+          if (res.ok && json?.data) {
+            setAttempts((current) =>
+              current.map((entry) =>
+                entry._id === attempt._id ? { ...entry, ...json.data } : entry,
+              ),
+            );
+          }
+        } finally {
+          setSavingReflectionIds((current) => ({ ...current, [attempt._id]: false }));
+        }
+      });
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [attempts, reflectionChecks, reflectionNotes, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -419,6 +445,7 @@ export default function HistoryPage() {
           solutionRevealed={!!revealedSolutions[selectedAttempt._id]}
           reflectionNote={reflectionNotes[selectedAttempt._id] ?? ""}
           reflectionChecked={!!reflectionChecks[selectedAttempt._id]}
+          isSavingReflection={!!savingReflectionIds[selectedAttempt._id]}
           onClose={() => setSelectedAttemptId(null)}
           onGenerateSuggestion={() => void generateSuggestion(selectedAttempt)}
           onRevealSolution={() => revealSolution(selectedAttempt._id)}
@@ -443,6 +470,7 @@ interface AttemptDetailsModalProps {
   solutionRevealed: boolean;
   reflectionNote: string;
   reflectionChecked: boolean;
+  isSavingReflection: boolean;
   onClose: () => void;
   onGenerateSuggestion: () => void;
   onRevealSolution: () => void;
@@ -459,6 +487,7 @@ function AttemptDetailsModal({
   solutionRevealed,
   reflectionNote,
   reflectionChecked,
+  isSavingReflection,
   onClose,
   onGenerateSuggestion,
   onRevealSolution,
@@ -555,6 +584,9 @@ function AttemptDetailsModal({
                       placeholder="Reflection notes: What did I misunderstand? What would I try next? Which test case would I add?"
                       className="mt-4 min-h-32 w-full rounded-xl border border-border/60 bg-background px-3 py-3 text-sm outline-none transition focus:border-primary"
                     />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {isSavingReflection ? "Saving reflection..." : "Reflection is saved to your attempt history."}
+                    </p>
                     <div className="mt-3 grid gap-2 text-sm text-muted-foreground">
                       <p>Prompt 1: What specific part of your approach broke down?</p>
                       <p>Prompt 2: Which data structure or pattern might fit better?</p>
