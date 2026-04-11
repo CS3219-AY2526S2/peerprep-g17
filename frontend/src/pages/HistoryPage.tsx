@@ -32,23 +32,41 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
   );
 }
 
-function getAttemptStatus(attempt: AttemptRecord): "accepted" | "submitted" {
+function getAttemptOutcome(attempt: AttemptRecord): "accepted" | "not_accepted" | "recorded" {
   if (attempt.verdict === "Accepted") return "accepted";
-  return "submitted";
+  if (attempt.verdict) return "not_accepted";
+  return "recorded";
 }
 
-function getStatusLabel(status: ReturnType<typeof getAttemptStatus>) {
-  if (status === "accepted") return "Accepted";
-  return "Submitted";
+function getVerdictLabel(attempt: AttemptRecord) {
+  return attempt.verdict ?? "Recorded";
 }
 
-function getStatusClasses(status: ReturnType<typeof getAttemptStatus>) {
+function getStatusClasses(status: ReturnType<typeof getAttemptOutcome>) {
   if (status === "accepted") {
     return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
   }
-  if (status === "submitted") {
+  if (status === "not_accepted") {
     return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
+  return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+}
+
+function getPassCountClasses(attempt: AttemptRecord) {
+  if (
+    typeof attempt.passedCount === "number" &&
+    typeof attempt.totalCount === "number" &&
+    attempt.totalCount > 0
+  ) {
+    if (attempt.passedCount === attempt.totalCount) {
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+    }
+    if (attempt.passedCount === 0) {
+      return "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+    }
+    return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+
   return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-300";
 }
 
@@ -218,8 +236,10 @@ export default function HistoryPage() {
     filteredAttempts.find((attempt) => attempt._id === selectedAttemptId) ||
     attempts.find((attempt) => attempt._id === selectedAttemptId) ||
     null;
-  const totalAccepted = attempts.filter((attempt) => getAttemptStatus(attempt) === "accepted").length;
-  const totalSubmitted = attempts.filter((attempt) => getAttemptStatus(attempt) === "submitted").length;
+  const totalAccepted = attempts.filter((attempt) => attempt.verdict === "Accepted").length;
+  const totalNotAccepted = attempts.filter(
+    (attempt) => !!attempt.verdict && attempt.verdict !== "Accepted",
+  ).length;
   const attemptsThisMonth = attempts.filter((attempt) => isWithinDateRange(attempt.attemptedAt, "month")).length;
 
   async function generateSuggestion(attempt: AttemptRecord) {
@@ -311,9 +331,9 @@ export default function HistoryPage() {
           </div>
         )}
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-border/60"><CardHeader><CardDescription>Total Attempts</CardDescription><CardTitle className="text-3xl">{attempts.length}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60"><CardHeader><CardDescription>Total Recorded Attempts</CardDescription><CardTitle className="text-3xl">{attempts.length}</CardTitle></CardHeader></Card>
           <Card className="border-border/60"><CardHeader><CardDescription>Accepted</CardDescription><CardTitle className="text-3xl">{totalAccepted}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60"><CardHeader><CardDescription>Submitted</CardDescription><CardTitle className="text-3xl">{totalSubmitted}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60"><CardHeader><CardDescription>Not Accepted</CardDescription><CardTitle className="text-3xl">{totalNotAccepted}</CardTitle></CardHeader></Card>
           <Card className="border-border/60"><CardHeader><CardDescription>Records This Month</CardDescription><CardTitle className="text-3xl">{attemptsThisMonth}</CardTitle></CardHeader></Card>
         </section>
         <section className="mt-6 rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
@@ -340,7 +360,7 @@ export default function HistoryPage() {
           <section className="mt-8 space-y-4">
             {filteredAttempts.map((attempt) => {
               const question = questions[attempt.questionId];
-              const status = getAttemptStatus(attempt);
+              const outcome = getAttemptOutcome(attempt);
               const date = new Date(attempt.attemptedAt);
               return (
                 <Card key={attempt._id} className="border-border/60">
@@ -349,9 +369,13 @@ export default function HistoryPage() {
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <DifficultyBadge difficulty={question?.difficulty ?? attempt.difficulty} />
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusClasses(status)}`}>{getStatusLabel(status)}</span>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusClasses(outcome)}`}>{getVerdictLabel(attempt)}</span>
                           <span className="text-xs text-muted-foreground">{attempt.language}</span>
-                          {typeof attempt.passedCount === "number" && typeof attempt.totalCount === "number" && <span className="text-xs text-muted-foreground">{attempt.passedCount}/{attempt.totalCount} passed</span>}
+                          {typeof attempt.passedCount === "number" && typeof attempt.totalCount === "number" && (
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getPassCountClasses(attempt)}`}>
+                              {attempt.passedCount}/{attempt.totalCount} passed
+                            </span>
+                          )}
                         </div>
                         <div>
                           <CardTitle className="text-xl">{question?.title ?? attempt.topic}</CardTitle>
@@ -441,7 +465,7 @@ function AttemptDetailsModal({
   onReflectionNoteChange,
   onReflectionCheckChange,
 }: AttemptDetailsModalProps) {
-  const status = getAttemptStatus(attempt);
+  const outcome = getAttemptOutcome(attempt);
   const attemptedAt = new Date(attempt.attemptedAt);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
@@ -452,7 +476,7 @@ function AttemptDetailsModal({
         <div className="pr-10">
           <div className="flex flex-wrap items-center gap-2">
             <DifficultyBadge difficulty={question?.difficulty ?? attempt.difficulty} />
-            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusClasses(status)}`}>{getStatusLabel(status)}</span>
+            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getStatusClasses(outcome)}`}>{getVerdictLabel(attempt)}</span>
           </div>
           <h2 className="mt-4 text-2xl font-bold tracking-tight">{question?.title ?? attempt.topic}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{attempt.topic}{question?.categories?.length ? ` • ${question.categories.join(" • ")}` : ""}</p>
@@ -460,7 +484,7 @@ function AttemptDetailsModal({
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Verdict</CardDescription><CardTitle>{attempt.verdict ?? "Not submitted"}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Test Cases</CardDescription><CardTitle>{typeof attempt.passedCount === "number" && typeof attempt.totalCount === "number" ? `${attempt.passedCount}/${attempt.totalCount}` : "N/A"}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Test Cases</CardDescription><CardTitle>{typeof attempt.passedCount === "number" && typeof attempt.totalCount === "number" ? `${attempt.passedCount}/${attempt.totalCount} passed` : "N/A"}</CardTitle></CardHeader></Card>
           <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Runtime / Memory</CardDescription><CardTitle>{attempt.runtimeMs ? `${attempt.runtimeMs} ms` : "N/A"} / {attempt.memoryKb ? `${attempt.memoryKb} KB` : "N/A"}</CardTitle></CardHeader></Card>
         </div>
         {question?.description && (
