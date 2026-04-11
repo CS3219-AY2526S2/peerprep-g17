@@ -7,6 +7,10 @@ import CollaborationSession from "../models/CollaborationSession";
 const chatRooms = new Map<string, Map<WebSocket, string>>();
 const HEARTBEAT_INTERVAL_MS = 10000;
 
+function buildMessageId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export async function handleChatConnection(
   ws: WebSocket,
   req: IncomingMessage,
@@ -89,9 +93,12 @@ export async function handleChatConnection(
         sessionSocketManager.recordActivity(sessionId);
 
         const messagePayload = {
+          messageId: buildMessageId(),
           fromUserId: userId,
           text: parsed.payload?.text,
           username: parsed.payload?.username || username,
+          type: "chat" as const,
+          reactions: [],
           timestamp: new Date().toISOString(),
         };
 
@@ -100,8 +107,11 @@ export async function handleChatConnection(
           {
             $push: {
               messages: {
+                messageId: messagePayload.messageId,
                 username: messagePayload.username,
                 text: messagePayload.text || "",
+                type: messagePayload.type,
+                reactions: [],
                 timestamp: new Date(messagePayload.timestamp),
               },
             },
@@ -120,18 +130,116 @@ export async function handleChatConnection(
       }
 
       if (parsed.type === "explicit_leave") {
+        const leavePayload = {
+          messageId: buildMessageId(),
+          fromUserId: "SYSTEM",
+          username: "System",
+          text: `${username} has ended the session.`,
+          type: "system" as const,
+          reactions: [],
+          timestamp: new Date().toISOString(),
+        };
+
+        await CollaborationSession.findOneAndUpdate(
+          { sessionId },
+          {
+            $push: {
+              messages: {
+                messageId: leavePayload.messageId,
+                username: leavePayload.username,
+                text: leavePayload.text,
+                type: leavePayload.type,
+                reactions: [],
+                timestamp: new Date(leavePayload.timestamp),
+              },
+            },
+          },
+        );
+
         const leaveMsg = JSON.stringify({
           type: "chat_message",
-          payload: {
-            fromUserId: "SYSTEM",
-            username: "System",
-            text: `${username} has ended the session.`,
-            timestamp: new Date().toISOString(),
-          },
+          payload: leavePayload,
         });
         room.forEach((_, client) => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(leaveMsg);
+          }
+        });
+      }
+
+      if (parsed.type === "chat_typing") {
+        const outgoing = JSON.stringify({
+          type: "chat_typing",
+          payload: {
+            userId,
+            username,
+            isTyping: !!parsed.payload?.isTyping,
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        room.forEach((_, client) => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(outgoing);
+          }
+        });
+      }
+
+      if (parsed.type === "chat_reaction") {
+        const messageId = String(parsed.payload?.messageId || "");
+        const emoji = String(parsed.payload?.emoji || "").trim();
+        if (!messageId || !emoji) {
+          return;
+        }
+
+        const session = await CollaborationSession.findOne({ sessionId });
+        if (!session) {
+          return;
+        }
+
+        const targetMessage = session.messages.find(
+          (message) => message.messageId === messageId,
+        );
+
+        if (!targetMessage) {
+          return;
+        }
+
+        if (!Array.isArray(targetMessage.reactions)) {
+          targetMessage.reactions = [];
+        }
+
+        const existingReaction = targetMessage.reactions.find(
+          (reaction) => reaction.emoji === emoji,
+        );
+
+        if (!existingReaction) {
+          targetMessage.reactions.push({ emoji, userIds: [userId] });
+        } else if (existingReaction.userIds.includes(userId)) {
+          existingReaction.userIds = existingReaction.userIds.filter(
+            (existingUserId) => existingUserId !== userId,
+          );
+          targetMessage.reactions = targetMessage.reactions.filter(
+            (reaction) => reaction.userIds.length > 0,
+          );
+        } else {
+          existingReaction.userIds.push(userId);
+        }
+
+        session.markModified("messages");
+        await session.save();
+
+        const outgoing = JSON.stringify({
+          type: "chat_reaction_update",
+          payload: {
+            messageId,
+            reactions: targetMessage.reactions,
+          },
+        });
+
+        room.forEach((_, client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(outgoing);
           }
         });
       }

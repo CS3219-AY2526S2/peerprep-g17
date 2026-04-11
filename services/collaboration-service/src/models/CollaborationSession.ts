@@ -23,8 +23,14 @@ export interface ICollaborationSession extends Document {
   updatedAt: Date;
   yjsState?: Buffer | null;
   messages: {
+    messageId: string;
     username: string;
     text: string;
+    type?: "chat" | "system";
+    reactions?: {
+      emoji: string;
+      userIds: string[];
+    }[];
     timestamp: Date;
   }[];
   starterCodeSeededAt?: Date | null;
@@ -86,8 +92,20 @@ const collaborationSessionSchema = new Schema<ICollaborationSession>(
     // 2. Added the messages array to the Schema
     messages: [
       {
+        messageId: { type: String, required: true, trim: true },
         username: { type: String, required: true },
         text: { type: String, required: true },
+        type: {
+          type: String,
+          enum: ["chat", "system"],
+          default: "chat",
+        },
+        reactions: [
+          {
+            emoji: { type: String, required: true },
+            userIds: [{ type: String, required: true }],
+          },
+        ],
         timestamp: { type: Date, default: Date.now },
       },
     ],
