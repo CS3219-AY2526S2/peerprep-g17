@@ -16,7 +16,6 @@ interface QuestionInfo {
 }
 
 type DateFilter = "all" | "week" | "month" | "quarter";
-type StatusFilter = "all" | "solved" | "unsolved" | "attempted";
 type SortOption = "recent" | "oldest" | "difficulty";
 
 const DIFFICULTY_ORDER: Record<string, number> = { Easy: 0, Medium: 1, Hard: 2 };
@@ -33,24 +32,22 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
   );
 }
 
-function getAttemptStatus(attempt: AttemptRecord): "solved" | "unsolved" | "attempted" {
-  if (attempt.verdict === "Accepted") return "solved";
-  if (attempt.verdict) return "unsolved";
-  return "attempted";
+function getAttemptStatus(attempt: AttemptRecord): "accepted" | "submitted" {
+  if (attempt.verdict === "Accepted") return "accepted";
+  return "submitted";
 }
 
 function getStatusLabel(status: ReturnType<typeof getAttemptStatus>) {
-  if (status === "solved") return "Solved";
-  if (status === "unsolved") return "Unsolved";
-  return "Attempted";
+  if (status === "accepted") return "Accepted";
+  return "Submitted";
 }
 
 function getStatusClasses(status: ReturnType<typeof getAttemptStatus>) {
-  if (status === "solved") {
+  if (status === "accepted") {
     return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
   }
-  if (status === "unsolved") {
-    return "border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+  if (status === "submitted") {
+    return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
   return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-300";
 }
@@ -81,7 +78,6 @@ export default function HistoryPage() {
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [topicFilter, setTopicFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, AttemptSuggestion>>({});
@@ -192,7 +188,6 @@ export default function HistoryPage() {
       const title = question?.title ?? "";
       const categories = question?.categories ?? [];
       const searchTerm = search.trim().toLowerCase();
-      const status = getAttemptStatus(attempt);
       const matchesSearch =
         !searchTerm ||
         title.toLowerCase().includes(searchTerm) ||
@@ -203,8 +198,7 @@ export default function HistoryPage() {
         difficultyFilter === "all" ||
         (question?.difficulty ?? attempt.difficulty) === difficultyFilter;
       const matchesTopic = topicFilter === "all" || attempt.topic === topicFilter;
-      const matchesStatus = statusFilter === "all" || status === statusFilter;
-      return matchesSearch && matchesDate && matchesDifficulty && matchesTopic && matchesStatus;
+      return matchesSearch && matchesDate && matchesDifficulty && matchesTopic;
     })
     .sort((left, right) => {
       if (sortBy === "oldest") {
@@ -224,8 +218,8 @@ export default function HistoryPage() {
     filteredAttempts.find((attempt) => attempt._id === selectedAttemptId) ||
     attempts.find((attempt) => attempt._id === selectedAttemptId) ||
     null;
-  const totalSolved = attempts.filter((attempt) => getAttemptStatus(attempt) === "solved").length;
-  const totalUnsolved = attempts.filter((attempt) => getAttemptStatus(attempt) === "unsolved").length;
+  const totalAccepted = attempts.filter((attempt) => getAttemptStatus(attempt) === "accepted").length;
+  const totalSubmitted = attempts.filter((attempt) => getAttemptStatus(attempt) === "submitted").length;
   const attemptsThisMonth = attempts.filter((attempt) => isWithinDateRange(attempt.attemptedAt, "month")).length;
 
   async function generateSuggestion(attempt: AttemptRecord) {
@@ -284,7 +278,6 @@ export default function HistoryPage() {
     setDateFilter("all");
     setDifficultyFilter("all");
     setTopicFilter("all");
-    setStatusFilter("all");
     setSortBy("recent");
   }
 
@@ -293,7 +286,6 @@ export default function HistoryPage() {
     dateFilter !== "all" ||
     difficultyFilter !== "all" ||
     topicFilter !== "all" ||
-    statusFilter !== "all" ||
     sortBy !== "recent";
 
   return (
@@ -320,17 +312,16 @@ export default function HistoryPage() {
         )}
         <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card className="border-border/60"><CardHeader><CardDescription>Total Attempts</CardDescription><CardTitle className="text-3xl">{attempts.length}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60"><CardHeader><CardDescription>Solved</CardDescription><CardTitle className="text-3xl">{totalSolved}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60"><CardHeader><CardDescription>Unsolved</CardDescription><CardTitle className="text-3xl">{totalUnsolved}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60"><CardHeader><CardDescription>Attempts This Month</CardDescription><CardTitle className="text-3xl">{attemptsThisMonth}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60"><CardHeader><CardDescription>Accepted</CardDescription><CardTitle className="text-3xl">{totalAccepted}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60"><CardHeader><CardDescription>Submitted</CardDescription><CardTitle className="text-3xl">{totalSubmitted}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60"><CardHeader><CardDescription>Records This Month</CardDescription><CardTitle className="text-3xl">{attemptsThisMonth}</CardTitle></CardHeader></Card>
         </section>
         <section className="mt-6 rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by title, topic, or tag" className="h-11" />
             <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value as DateFilter)} className="surface-select h-11"><option value="all">All time</option><option value="week">Past week</option><option value="month">Past month</option><option value="quarter">Past 3 months</option></select>
             <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)} className="surface-select h-11"><option value="all">All difficulties</option><option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option></select>
             <select value={topicFilter} onChange={(event) => setTopicFilter(event.target.value)} className="surface-select h-11"><option value="all">All topics</option>{topics.map((topic) => <option key={topic} value={topic}>{topic}</option>)}</select>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)} className="surface-select h-11"><option value="all">All statuses</option><option value="solved">Solved</option><option value="unsolved">Unsolved</option><option value="attempted">Attempted</option></select>
             <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)} className="surface-select h-11"><option value="recent">Most recent</option><option value="oldest">Oldest</option><option value="difficulty">Highest difficulty</option></select>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
