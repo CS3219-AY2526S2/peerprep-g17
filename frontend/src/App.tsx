@@ -47,11 +47,7 @@ function App() {
         />
         <Route
           path="/users/:id"
-          element={
-            <RequireAuth>
-              <UserProfilePage />
-            </RequireAuth>
-          }
+          element={<UserProfilePage />}
         />
         <Route
           path="/questions"

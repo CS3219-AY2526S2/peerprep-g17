@@ -29,14 +29,15 @@ export default function UserProfilePage() {
     let cancelled = false;
 
     async function fetchProfile() {
-      if (!token || !id) {
+      if (!id) {
+        setLoading(false);
         return;
       }
 
       try {
-        const res = await fetch(`${USER_API_URL}/${id}/profile`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(`${USER_API_URL}/${id}/profile`, token
+          ? { headers: { Authorization: `Bearer ${token}` } }
+          : undefined);
 
         const json = await res.json();
 
@@ -70,7 +71,7 @@ export default function UserProfilePage() {
     let cancelled = false;
 
     async function fetchPhoto() {
-      if (!token || !profile?.profilePhotoUrl) {
+      if (!profile?.profilePhotoUrl) {
         setPhotoPreview(null);
         return;
       }
@@ -141,6 +142,9 @@ export default function UserProfilePage() {
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground">No university listed.</p>
                 )}
+                <p className="mt-3 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Public profile
+                </p>
               </div>
             </div>
 
@@ -151,13 +155,18 @@ export default function UserProfilePage() {
               </p>
             </div>
 
-            {isCurrentUser && (
-              <div className="mt-8">
+            <div className="mt-8 flex flex-wrap gap-3">
+              {isCurrentUser && (
                 <Link to="/profile">
                   <Button variant="outline">Edit My Profile</Button>
                 </Link>
-              </div>
-            )}
+              )}
+              {!currentUser && (
+                <Link to="/login">
+                  <Button>Log In to Connect</Button>
+                </Link>
+              )}
+            </div>
           </section>
         ) : null}
       </main>

@@ -68,8 +68,8 @@ router.get("/audit/logs", verifyToken, verifyAdmin, async (_req, res) => {
 router.get("/", verifyToken, verifyAdmin, getAllUsers);
 
 // ── Parameterized user routes ──────────────────────
-router.get("/:id/profile", verifyToken, getUserPublicProfile);
-router.get("/:id/photo", verifyToken, getUserPhoto);
+router.get("/:id/profile", getUserPublicProfile);
+router.get("/:id/photo", getUserPhoto);
 router.get("/:id", verifyToken, getUser);
 router.patch("/:id", verifyToken, updateUser);
 

@@ -6,10 +6,10 @@
  */
 export async function createProtectedImageUrl(
   photoUrl: string,
-  token: string,
+  token?: string | null,
 ): Promise<string> {
   const response = await fetch(photoUrl, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 
   if (!response.ok) {

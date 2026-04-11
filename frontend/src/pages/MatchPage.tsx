@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,13 +12,22 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
-import { MATCHING_API_URL, MATCHING_WS_URL, QUESTION_API_URL } from "@/config";
+import { MATCHING_API_URL, MATCHING_WS_URL, QUESTION_API_URL, USER_API_URL } from "@/config";
+import { createProtectedImageUrl } from "@/lib/image";
 import type { MatchState } from "@/types";
 
 type QuestionMetaResponse = {
   meta?: {
     categories?: string[];
   };
+};
+
+type PublicProfile = {
+  id: string;
+  username: string;
+  university: string;
+  bio: string;
+  profilePhotoUrl: string | null;
 };
 
 function formatRemainingTime(ms: number): string {
@@ -42,6 +51,8 @@ export default function MatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [countdownMs, setCountdownMs] = useState<number | null>(null);
+  const [partnerProfile, setPartnerProfile] = useState<PublicProfile | null>(null);
+  const [partnerPhotoPreview, setPartnerPhotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -162,6 +173,90 @@ export default function MatchPage() {
     const intervalId = window.setInterval(tick, 1000);
     return () => window.clearInterval(intervalId);
   }, [matchState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPartnerProfile() {
+      if (!matchState?.partnerUserId) {
+        setPartnerProfile(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${USER_API_URL}/${matchState.partnerUserId}/profile`,
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          },
+        );
+        const json = await response.json();
+
+        if (!response.ok) {
+          throw new Error(json.error || "Failed to fetch partner profile.");
+        }
+
+        if (!cancelled) {
+          setPartnerProfile(json.data as PublicProfile);
+        }
+      } catch {
+        if (!cancelled) {
+          setPartnerProfile(null);
+        }
+      }
+    }
+
+    void loadPartnerProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matchState?.partnerUserId, token]);
+
+  useEffect(() => {
+    let objectUrlToRevoke: string | null = null;
+    let cancelled = false;
+
+    async function loadPartnerPhoto() {
+      if (!partnerProfile?.profilePhotoUrl) {
+        setPartnerPhotoPreview(null);
+        return;
+      }
+
+      if (!partnerProfile.profilePhotoUrl.includes("/api/users/")) {
+        setPartnerPhotoPreview(partnerProfile.profilePhotoUrl);
+        return;
+      }
+
+      try {
+        const objectUrl = await createProtectedImageUrl(
+          partnerProfile.profilePhotoUrl,
+          token,
+        );
+
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        objectUrlToRevoke = objectUrl;
+        setPartnerPhotoPreview(objectUrl);
+      } catch {
+        if (!cancelled) {
+          setPartnerPhotoPreview(null);
+        }
+      }
+    }
+
+    void loadPartnerPhoto();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+      }
+    };
+  }, [partnerProfile?.profilePhotoUrl, token]);
 
   const canSubmit = useMemo(
     () => Boolean(selectedTopic) && !submitting && matchState?.status !== "searching",
@@ -352,6 +447,44 @@ export default function MatchPage() {
                 </div>
               </div>
 
+              {partnerProfile && (
+                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/85">
+                  <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Your Match
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white text-lg font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      {partnerPhotoPreview ? (
+                        <img
+                          src={partnerPhotoPreview}
+                          alt={`${partnerProfile.username} profile`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{partnerProfile.username[0]?.toUpperCase() || "?"}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                        {partnerProfile.username}
+                      </div>
+                      <div className="truncate text-sm text-muted-foreground">
+                        {partnerProfile.university || "No university listed"}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-3 line-clamp-3 text-sm text-slate-600 dark:text-slate-300">
+                    {partnerProfile.bio || "No bio provided yet."}
+                  </p>
+                  <Link
+                    to={`/users/${partnerProfile.id}`}
+                    className="mt-3 inline-flex text-sm font-medium text-sky-700 underline-offset-4 hover:underline dark:text-sky-300"
+                  >
+                    Open public profile
+                  </Link>
+                </div>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 {matchState?.topic && (
                   <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/85">
@@ -379,6 +512,9 @@ export default function MatchPage() {
                       Partner
                     </div>
                     <div className="mt-1 text-base font-medium text-foreground break-all">
+                      {partnerProfile?.username || "Matched partner"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground break-all">
                       {matchState.partnerUserId}
                     </div>
                   </div>
