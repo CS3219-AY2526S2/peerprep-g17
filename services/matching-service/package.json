@@ -6,7 +6,7 @@
     "dev": "nodemon src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "npm run build && node --test --test-reporter=spec dist/tests/*.js",
+    "test": "npm run build && node --test --test-reporter=spec dist/tests",
     "test:coverage": "c8 --check-coverage --lines 80 --branches 80 npm test"
   },
   "keywords": [],

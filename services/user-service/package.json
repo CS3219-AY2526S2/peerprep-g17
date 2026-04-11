@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "bootstrap-admin": "ts-node src/scripts/bootstrapAdmin.ts",
-    "test": "npm run build && node --test --test-reporter=spec dist/tests/*.js",
+    "test": "npm run build && node --test --test-reporter=spec dist/tests",
     "test:coverage": "c8 --exclude dist/config/passport.js --exclude dist/index.js --exclude dist/scripts/** --exclude dist/lib/gridfs.js --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 npm test"
   },
   "keywords": [],

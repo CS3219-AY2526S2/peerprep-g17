@@ -7,7 +7,7 @@
     "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
-    "test": "npm run build && node --test --test-reporter=spec dist/tests/*.js",
+    "test": "npm run build && node --test --test-concurrency=1 --test-reporter=spec dist/tests",
     "test:coverage": "c8 --check-coverage --lines 80 --branches 80 npm test"
   },
   "keywords": [],

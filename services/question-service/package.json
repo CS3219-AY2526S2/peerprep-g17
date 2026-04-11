@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "ts-node src/scripts/seedQuestions.ts",
-    "test": "npm run build && node --test --test-reporter=spec dist/tests/*.js",
+    "test": "npm run build && node --test --test-reporter=spec dist/tests",
     "test:coverage": "c8 --exclude dist/index.js --exclude dist/scripts/** --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 npm test"
   },
   "keywords": [],

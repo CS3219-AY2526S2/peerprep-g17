@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { NextFunction, Response } from "express";
+import express, { type NextFunction, type Response } from "express";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
+import request from "supertest";
 import User, { Role } from "../models/User";
 import {
   verifyAdmin,
@@ -110,48 +111,26 @@ test("verifyToken loads the DB-fresh role and verifyAdmin/verifySuperAdmin enfor
 });
 
 test("parseProfilePhotoUpload rejects invalid file types", async () => {
-  const req = {
-    headers: {
-      "content-type": "multipart/form-data; boundary=----PeerPrepBoundary",
+  const app = express();
+  let calledHandler = false;
+
+  app.post(
+    "/upload",
+    (req, _res, next) => parseProfilePhotoUpload(req as AuthRequest, _res, next),
+    (_req, res) => {
+      calledHandler = true;
+      res.status(200).json({ ok: true });
     },
-    method: "POST",
-  } as AuthRequest & {
-    headers: Record<string, string>;
-    method: string;
-  };
+  );
 
-  const chunks = [
-    "------PeerPrepBoundary\r\n",
-    'Content-Disposition: form-data; name="photo"; filename="avatar.gif"\r\n',
-    "Content-Type: image/gif\r\n\r\n",
-    "GIF89a\r\n",
-    "------PeerPrepBoundary--\r\n",
-  ];
+  const response = await request(app)
+    .post("/upload")
+    .attach("photo", Buffer.from("GIF89a"), {
+      filename: "avatar.gif",
+      contentType: "image/gif",
+    });
 
-  const listeners = new Map<string, (chunk?: Buffer) => void>();
-  (req as any).on = (event: string, handler: (chunk?: Buffer) => void) => {
-    listeners.set(event, handler);
-    return req;
-  };
-  (req as any).pipe = undefined;
-
-  queueMicrotask(() => {
-    for (const chunk of chunks) {
-      listeners.get("data")?.(Buffer.from(chunk));
-    }
-    listeners.get("end")?.();
-  });
-
-  const res = createMockResponse();
-  let calledNext = false;
-
-  parseProfilePhotoUpload(req, res, (() => {
-    calledNext = true;
-  }) as NextFunction);
-
-  await new Promise((resolve) => setTimeout(resolve, 10));
-
-  assert.equal(calledNext, false);
-  assert.equal(res.statusCode, 400);
-  assert.match(String((res.body as { error?: string }).error), /invalid file type/i);
+  assert.equal(calledHandler, false);
+  assert.equal(response.status, 400);
+  assert.match(String((response.body as { error?: string }).error), /invalid file type/i);
 });

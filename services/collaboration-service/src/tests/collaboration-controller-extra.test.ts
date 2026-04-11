@@ -10,6 +10,8 @@ import CollaborationSession from "../models/CollaborationSession";
 import Attempt from "../models/Attempt";
 import { CollaborationService } from "../services/collaborationService";
 import { config } from "../config";
+import { resetYjsState } from "../services/yjsUtils";
+import { sessionSocketManager } from "../services/sessionSocketManager";
 
 let mongoServer: MongoMemoryServer;
 
@@ -162,6 +164,8 @@ test.before(async () => {
 
 test.after(async () => {
   global.fetch = originalFetch;
+  resetYjsState();
+  sessionSocketManager.reset();
   await mongoose.disconnect();
   await mongoServer.stop();
 });
