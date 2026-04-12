@@ -1,3 +1,10 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-04-12
+Scope: Generated and edited helper changes for optional protected or public profile image URLs.
+Author review: I found the images from Pixabay. I verified the behaviour works.
+*/
+
 /**
  * Fetches a protected image URL (one that requires an Authorization header)
  * and returns a local blob URL that can be used as an <img> src.

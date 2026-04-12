@@ -1,3 +1,9 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-04-12
+Scope: Generated initial implementation of a public-profile polling hook with focus and visibility refresh handling.
+Author review: I validated correctness and edited for style.
+*/
 import { useCallback, useEffect, useRef, useState } from "react";
 import { USER_API_URL } from "@/config";
 import { createProtectedImageUrl } from "@/lib/image";

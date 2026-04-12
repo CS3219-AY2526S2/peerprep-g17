@@ -1,3 +1,9 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-04-12
+Scope: Generated and edited collaboration page updates to show partner profile details.
+Author review: I checked page behavior manually.
+*/
 import {
   Fragment,
   useCallback,
@@ -2019,7 +2025,7 @@ export default function CollaborationPage() {
                                       <ChatMessageContent text={message.text} />
                                     </div>
                                     <div className="mt-2 flex max-w-[85%] flex-wrap items-center gap-2">
-                                      {["👍", "✅", "❓"].map((emoji) => {
+                                      {["👍"].map((emoji) => {
                                         const reaction = message.reactions?.find(
                                           (entry) => entry.emoji === emoji,
                                         );
