@@ -1,9 +1,3 @@
-/*
-AI Assistance Disclosure:
-Tool: ChatGPT, date: 2026-04-12
-Scope: Generated and edited the public user profile page and unauthenticated viewing behavior.
-Author review: I validated correctness, edited for project style and checked page behavior manually.
-*/
 import { Link, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";

@@ -274,3 +274,60 @@ test("ExecutionService sanitizes submit results to hide hidden accepted cases an
   assert.equal(failingResult.cases.length, 1);
   assert.equal(failingResult.cases[0]?.id, "hidden-1");
 });
+
+test("ExecutionService injects common Python standard-library helpers into the harness", async () => {
+  let capturedSource = "";
+
+  const runner = {
+    async executePython(source: string) {
+      capturedSource = source;
+      return {
+        stdout: [
+          "__PEERPREP_EXECUTION_RESULT_START__",
+          JSON.stringify({
+            verdict: "Accepted",
+            stdout: "",
+            stderr: "",
+            runtimeMs: 1,
+            memoryKb: 1,
+            passedCount: 1,
+            totalCount: 1,
+            cases: [
+              {
+                id: "visible-1",
+                verdict: "Accepted",
+                inputPreview: "",
+                expectedPreview: "",
+                actualPreview: "",
+                stdout: "",
+                stderr: "",
+                errorMessage: "",
+              },
+            ],
+          }),
+          "__PEERPREP_EXECUTION_RESULT_END__",
+        ].join("\n"),
+        stderr: "",
+        output: "",
+        exitCode: 0,
+        signal: null,
+      };
+    },
+  };
+
+  const service = new ExecutionService(runner);
+
+  await service.execute(
+    createFunctionQuestion(),
+    "class Solution:\n    def solve(self, nums, target):\n        seen: List[int] = []\n        queue = deque(nums)\n        return [0, 1] if list(queue) == [2, 7] else seen\n",
+    "run",
+    "user-1",
+  );
+
+  assert.match(capturedSource, /from typing import \*/);
+  assert.match(capturedSource, /from collections import \*/);
+  assert.match(capturedSource, /from functools import \*/);
+  assert.match(capturedSource, /from heapq import \*/);
+  assert.match(capturedSource, /from bisect import \*/);
+  assert.match(capturedSource, /import heapq/);
+});

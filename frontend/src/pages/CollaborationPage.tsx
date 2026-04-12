@@ -1,7 +1,7 @@
 /*
 AI Assistance Disclosure:
 Tool: ChatGPT, date: 2026-04-12
-Scope: Generated and edited collaboration page updates to show partner profile details.
+Scope: Generated and edited collaboration page updates to show partner profile detail. Also used it for creating the boilerplate frontend.
 Author review: I checked page behavior manually.
 */
 import {
@@ -44,6 +44,15 @@ import type { CodeEditorHandle } from "./CollaborationEditor";
 const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
 
 type ResultTab = "testcase" | "result" | "console" | "chat";
+type CustomExecutionPayload =
+  | {
+      args: unknown[];
+    }
+  | {
+      operations: string[];
+      arguments: unknown[][];
+    };
+
 type ChatMessage = {
   messageId?: string;
   fromUserId?: string;
@@ -106,6 +115,14 @@ function toDisplayJson(value: unknown): string {
   }
 }
 
+function toPrettyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
 function verdictStyles(verdict?: string) {
   switch (verdict) {
     case "Accepted":
@@ -121,6 +138,22 @@ function verdictStyles(verdict?: string) {
     default:
       return "border-border/60 bg-muted/20 text-foreground";
   }
+}
+
+function formatRuntime(runtimeMs: number): string {
+  if (runtimeMs < 1000) {
+    return `${runtimeMs} ms`;
+  }
+
+  return `${(runtimeMs / 1000).toFixed(2)} s`;
+}
+
+function formatMemory(memoryKb: number): string {
+  if (memoryKb < 1024) {
+    return `${memoryKb} KB`;
+  }
+
+  return `${(memoryKb / 1024).toFixed(2)} MB`;
 }
 
 function workspaceTabStyles(tab: ResultTab, activeTab: ResultTab) {
@@ -535,7 +568,11 @@ export default function CollaborationPage() {
     null,
   );
   const [executionError, setExecutionError] = useState<string | null>(null);
+  const [customTestError, setCustomTestError] = useState<string | null>(null);
   const [runningMode, setRunningMode] = useState<"run" | "submit" | null>(null);
+  const [customFunctionArgsText, setCustomFunctionArgsText] = useState("[]");
+  const [customClassOperationsText, setCustomClassOperationsText] = useState("[]");
+  const [customClassArgumentsText, setCustomClassArgumentsText] = useState("[]");
   const [resultTab, setResultTab] = useState<ResultTab>("result");
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explaining, setExplaining] = useState(false);
@@ -602,6 +639,7 @@ export default function CollaborationPage() {
   const isRedirecting = useRef(false);
   const executionStartedAtRef = useRef<string | null>(null);
   const splitPaneRef = useRef<HTMLDivElement | null>(null);
+  const lastInitializedQuestionIdRef = useRef<string | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingIndicatorsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1356,6 +1394,13 @@ export default function CollaborationPage() {
   }
 
   async function execute(mode: "run" | "submit") {
+    await executeWithOptions(mode);
+  }
+
+  async function executeWithOptions(
+    mode: "run" | "submit",
+    customTestCase?: CustomExecutionPayload,
+  ) {
     const code = editorRef.current?.getCode();
     if (!code?.trim() || !token || !sessionId) {
       setExecutionError("No code to execute.");
@@ -1376,7 +1421,7 @@ export default function CollaborationPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ code, customTestCase }),
         },
       );
 
@@ -1393,6 +1438,77 @@ export default function CollaborationPage() {
       );
     } finally {
       setRunningMode(null);
+    }
+  }
+
+  function parseCustomFunctionArgs(): CustomExecutionPayload {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(customFunctionArgsText);
+    } catch {
+      throw new Error("Custom arguments must be valid JSON.");
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("Custom arguments must be a JSON array.");
+    }
+
+    return { args: parsed };
+  }
+
+  function parseCustomClassPayload(): CustomExecutionPayload {
+    let parsedOperations: unknown;
+    let parsedArguments: unknown;
+
+    try {
+      parsedOperations = JSON.parse(customClassOperationsText);
+    } catch {
+      throw new Error("Operations must be valid JSON.");
+    }
+
+    try {
+      parsedArguments = JSON.parse(customClassArgumentsText);
+    } catch {
+      throw new Error("Arguments must be valid JSON.");
+    }
+
+    if (!Array.isArray(parsedOperations) || !parsedOperations.every((value) => typeof value === "string")) {
+      throw new Error("Operations must be a JSON array of strings.");
+    }
+
+    if (!Array.isArray(parsedArguments) || !parsedArguments.every((value) => Array.isArray(value))) {
+      throw new Error("Arguments must be a JSON array of arrays.");
+    }
+
+    if (parsedOperations.length !== parsedArguments.length) {
+      throw new Error("Operations and arguments must have the same number of entries.");
+    }
+
+    return {
+      operations: parsedOperations,
+      arguments: parsedArguments as unknown[][],
+    };
+  }
+
+  async function runCustomTest() {
+    if (!question) {
+      return;
+    }
+
+    try {
+      setCustomTestError(null);
+      const payload =
+        question.executionMode === "python_function"
+          ? parseCustomFunctionArgs()
+          : parseCustomClassPayload();
+
+      await executeWithOptions("run", payload);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Custom testcase is invalid.";
+      setCustomTestError(message);
+      setExecutionError(message);
+      setResultTab("testcase");
     }
   }
 
@@ -1463,6 +1579,35 @@ export default function CollaborationPage() {
     token,
     { enabled: Boolean(partnerUserId) },
   );
+
+  useEffect(() => {
+    if (!question || lastInitializedQuestionIdRef.current === question.id) {
+      return;
+    }
+
+    lastInitializedQuestionIdRef.current = question.id;
+    setCustomTestError(null);
+
+    if (question.executionMode === "python_function") {
+      const firstCase = question.visibleTestCases[0];
+      setCustomFunctionArgsText(
+        firstCase && isFunctionCase(firstCase)
+          ? toPrettyJson(firstCase.args)
+          : "[]",
+      );
+      return;
+    }
+
+    const firstCase = question.visibleTestCases[0];
+    if (firstCase && !isFunctionCase(firstCase)) {
+      setCustomClassOperationsText(toPrettyJson(firstCase.operations));
+      setCustomClassArgumentsText(toPrettyJson(firstCase.arguments));
+      return;
+    }
+
+    setCustomClassOperationsText("[]");
+    setCustomClassArgumentsText("[]");
+  }, [question]);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
@@ -1628,6 +1773,84 @@ export default function CollaborationPage() {
                             title={`Sample ${index + 1}`}
                           />
                         ))}
+                      </div>
+
+                      <div className="space-y-4 rounded-2xl border border-dashed border-sky-200/80 bg-sky-50/50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              Custom Test
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Run your own input without changing the shared sample testcases. These inputs stay on this page while you work, but are not saved as shared session history.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={runCustomTest}
+                            disabled={runningMode !== null}
+                          >
+                            {runningMode === "run" ? "Running..." : "Run Custom Test"}
+                          </Button>
+                        </div>
+
+                        {question.executionMode === "python_function" ? (
+                          <div className="space-y-2">
+                            <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                              Arguments JSON Array
+                            </label>
+                            <textarea
+                              rows={8}
+                              value={customFunctionArgsText}
+                              onChange={(event) => {
+                                setCustomFunctionArgsText(event.target.value);
+                                setCustomTestError(null);
+                              }}
+                              className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950"
+                              placeholder='[["hello"], 3]'
+                            />
+                          </div>
+                        ) : (
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                Operations JSON Array
+                              </label>
+                              <textarea
+                                rows={8}
+                                value={customClassOperationsText}
+                                onChange={(event) => {
+                                  setCustomClassOperationsText(event.target.value);
+                                  setCustomTestError(null);
+                                }}
+                                className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950"
+                                placeholder='["LRUCache", "put", "get"]'
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                Arguments JSON Array
+                              </label>
+                              <textarea
+                                rows={8}
+                                value={customClassArgumentsText}
+                                onChange={(event) => {
+                                  setCustomClassArgumentsText(event.target.value);
+                                  setCustomTestError(null);
+                                }}
+                                className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950"
+                                placeholder='[[2], [1, 1], [1]]'
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {customTestError && (
+                          <div className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+                            {customTestError}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1845,12 +2068,16 @@ export default function CollaborationPage() {
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-4 text-xs">
-                                <span>
+                                <span className="rounded-full border border-current/20 px-2.5 py-1">
                                   Passed {executionResult.passedCount}/
                                   {executionResult.totalCount}
                                 </span>
-                                <span>Runtime {executionResult.runtimeMs} ms</span>
-                                <span>Memory {executionResult.memoryKb} KB</span>
+                                <span className="rounded-full border border-current/20 px-2.5 py-1">
+                                  Runtime {formatRuntime(executionResult.runtimeMs)}
+                                </span>
+                                <span className="rounded-full border border-current/20 px-2.5 py-1">
+                                  Memory {formatMemory(executionResult.memoryKb)}
+                                </span>
                               </div>
                             </div>
 
@@ -1923,6 +2150,19 @@ export default function CollaborationPage() {
 
                     {resultTab === "console" && (
                       <div className="space-y-4">
+                        {executionResult && (
+                          <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-xs text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/55 dark:text-slate-200">
+                            <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
+                              Verdict {executionResult.verdict}
+                            </span>
+                            <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
+                              Runtime {formatRuntime(executionResult.runtimeMs)}
+                            </span>
+                            <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
+                              Memory {formatMemory(executionResult.memoryKb)}
+                            </span>
+                          </div>
+                        )}
                         <div>
                           <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                             Stdout

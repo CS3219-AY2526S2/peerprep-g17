@@ -1,12 +1,3 @@
-/*
-AI Assistance Disclosure:
-Tool: ChatGPT, date: 2026-04-12
-Scope: Generated and edited seed metadata for previously unsupported questions and removed SQL-only seed entries.
-Author review: I validated the questions and checked the metadata manually.
-*/
-/**
- * Shared seed data - used by both the CLI script and the /seed API endpoint.
- */
 const BASE_SEED_QUESTIONS = [
   {
     title: "Reverse a String",
