@@ -1,134 +1,149 @@
 # AI Usage Log
-file /ai/usage-log.md
 
-## Date/Time
-10-4-2026 17:34
+This file records AI-assisted work used in the project.
 
-## Tool
+## Entry 1
+
+### Date/Time
+2026-04-10 17:34
+
+### Tool
 ChatGPT
 
-## Prompt/Command
-Currently, the history page is a bit bare and not really reflective. Is there a way to you to enhance the frontend so as to make it more interactive?
+### Prompt/Command
+Currently, the history page is a bit bare and not really reflective. Is there a way for you to enhance the frontend so as to make it more interactive?
 
-## Output Summary
-- Generated boilerplate code for the HistoryPage.tsx enhanced version
-- Integrated OpenAI into the history page so that users can reflect on what they learned.
+### Output Summary
+- Generated boilerplate code for an enhanced `HistoryPage.tsx`
+- Suggested ways to integrate reflection features into the history page
 
-## Action Taken
+### Action Taken
 - [ ] Accepted as-is
 - [x] Modified
 - [ ] Rejected
 
-## Author Notes
-I edited the frontend of the HistoryPage.tsx slightly by removing the submitted/not-submitted category as it was not necessary. 
+### Author Notes
+I edited the `HistoryPage.tsx` frontend slightly by removing the submitted/not-submitted category because it was not necessary.
+
 ---
 
-## Date/Time
-11-4-2026 15:17
+## Entry 2
 
-## Tool
+### Date/Time
+2026-04-11 15:17
+
+### Tool
 ChatGPT
 
-## Prompt/Command
+### Prompt/Command
 Currently, the text chat is workable and works for both online/offline. However, I was hoping for you to help me with allowing users to write Python code snippets, add emojis and allows users to copy the Python code for easier access?
 
-## Output Summary
-It provided me with the boilerplate code for the enhacement features of the text chat.
+### Output Summary
+- Provided boilerplate code for enhanced text chat features
+- Suggested support for Python snippets, emoji usage, and code-copy functionality
 
-## Action Taken
+### Action Taken
 - [ ] Accepted as-is
 - [x] Modified
 - [ ] Rejected
 
-## Author Notes
-AI assistance was used to extend an already-existing text communication channel rather than introduce a brand-new communication medium. I also edited the background of the text chats slightly so that they are more synchronized with the dark theme. I verified the output and that it works.
+### Author Notes
+AI assistance was used to extend an already existing text communication channel rather than introduce a brand-new communication medium. I also edited the background of the text chats so that they were more synchronized with the dark theme. I verified the output and that it works.
 
 ---
 
-## Date/Time
-11-4-2026 16:14
+## Entry 3
 
-## Tool
+### Date/Time
+2026-04-11 16:14
+
+### Tool
 ChatGPT
 
-## Prompt/Command
+### Prompt/Command
 Can you help to fix the collaboration-service test case that is currently failing for CI? It has been happening quite frequently. Thanks!
 
-## Output Summary
-ChatGPT helped me to fix the test case. 
+### Output Summary
+- Helped identify and fix the failing collaboration-service CI test case
 
-## Action Taken
+### Action Taken
 - [x] Accepted as-is
 - [ ] Modified
 - [ ] Rejected
 
-## Author Notes
-The final CI was able to run again and the test case was no longer lagging.
+### Author Notes
+The final CI was able to run again and the test case was no longer failing repeatedly.
 
 ---
-## Date/Time
-11-04-2026 17:15
 
-## Tool
+## Entry 4
+
+### Date/Time
+2026-04-11 17:15
+
+### Tool
 ChatGPT
 
-## Prompt/Command
-User prompts from this thread included:
+### Prompt/Command
+Is it possible for you to add a boilerplate that allows users to have a public profile and have it link to the collaboration service? Thank you so much! Also, if possible, can you add these Pixabay images as potential preuploaded images that users can use?
 
-Is it possible for you to add a boilerplate that allows users to have a public profile and have it link to the collaboration service? Thank you so much! Also, if possible, can you add these pixabay (added images) images as potential preuploaded images that users can use?
+### Output Summary
+- Generated boilerplate code for public profile support
+- Suggested linking public profiles into the collaboration flow
+- Helped with support for selectable preuploaded profile images
 
-## Output Summary
-It gave me the boilerplate code. 
-
-## Action Taken
+### Action Taken
 - [ ] Accepted as-is
 - [x] Modified
 - [ ] Rejected
 
-## Author Notes
-I also added the Pixabay images (all images have been checked for copyright) that allows users to use them as the profile picture
+### Author Notes
+I also added the Pixabay images, and the images were checked for copyright suitability before use as profile picture options.
 
 ---
 
-## Date/Time
-12-04-2026 10:23
+## Entry 5
 
-## Tool
+### Date/Time
+2026-04-12 10:23
+
+### Tool
 ChatGPT
 
-## Prompt/Command
+### Prompt/Command
 Can you add more questions and the metadata so that they are runnable?
 
-## Output Summary
-Added additional questions to the existing 20 questions so that there is more variety for users.
+### Output Summary
+- Added more runnable questions and corresponding metadata so there is more variety for users
 
-## Action Taken
+### Action Taken
 - [x] Accepted as-is
 - [ ] Modified
 - [ ] Rejected
 
-## Author Notes
-Most of these questions were the most popular questions on LeetCode. I verified the output by testing it out.
+### Author Notes
+Most of these questions were based on popular LeetCode-style questions. I verified the output by testing it.
 
 ---
 
-## Date/Time
+## Entry 6
+
+### Date/Time
 2026-04-12 14:30
 
-## Tool
+### Tool
 ChatGPT
 
-## Prompt/Command
+### Prompt/Command
 The CI for the collaboration seems to be having a race condition. Is there a way for you to fix it?
 
-## Output Summary
-The AI fixed the race condition and I tested it against Github's CI which worked. 
+### Output Summary
+- Helped identify and fix the race condition affecting collaboration-service CI
 
-## Action Taken
+### Action Taken
 - [x] Accepted as-is
 - [ ] Modified
 - [ ] Rejected
 
-## Author Notes
-I pushed the edit onto Github and verified it works with Github Actions. It also seems to work for future runs of the collaboration service CI. 
-
+### Author Notes
+I pushed the edit to GitHub and verified that it worked with GitHub Actions. It also appears to work for future runs of the collaboration-service CI.
