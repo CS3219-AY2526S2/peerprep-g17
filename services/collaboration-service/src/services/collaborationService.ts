@@ -131,22 +131,6 @@ export class CollaborationService {
     mode: ExecutionResultMode,
     body: ExecutionRequestBody,
   ): Promise<ExecutionResult> {
-    const session = await this.getSessionForUser(sessionId, userId);
-    if (!session) {
-      throw new NotFoundError("Session not found.");
-    }
-
-    const code = String(body.code || "");
-    if (!code.trim()) {
-      throw new ValidationError("No code provided.");
-    }
-
-    if (
-      Buffer.byteLength(code, "utf8") > config.executionSourceSizeLimitBytes
-    ) {
-      throw new ValidationError("Submitted code exceeds the maximum size limit.");
-    }
-
     if (this.sessionExecutionLocks.has(sessionId)) {
       throw new ConflictError(
         "An execution is already running for this collaboration session.",
@@ -154,17 +138,34 @@ export class CollaborationService {
     }
 
     this.sessionExecutionLocks.add(sessionId);
-    const startedAt = new Date().toISOString();
-    sessionSocketManager.broadcastToSession(sessionId, {
-      type: "execution_started",
-      payload: {
-        mode,
-        initiatedByUserId: userId,
-        initiatedAt: startedAt,
-      },
-    });
 
     try {
+      const session = await this.getSessionForUser(sessionId, userId);
+      if (!session) {
+        throw new NotFoundError("Session not found.");
+      }
+
+      const code = String(body.code || "");
+      if (!code.trim()) {
+        throw new ValidationError("No code provided.");
+      }
+
+      if (
+        Buffer.byteLength(code, "utf8") > config.executionSourceSizeLimitBytes
+      ) {
+        throw new ValidationError("Submitted code exceeds the maximum size limit.");
+      }
+
+      const startedAt = new Date().toISOString();
+      sessionSocketManager.broadcastToSession(sessionId, {
+        type: "execution_started",
+        payload: {
+          mode,
+          initiatedByUserId: userId,
+          initiatedAt: startedAt,
+        },
+      });
+
       const question = await this.questionServiceClient.getQuestionJudge(
         session.questionId,
       );
