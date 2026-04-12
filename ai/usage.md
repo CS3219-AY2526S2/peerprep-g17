@@ -2,9 +2,7 @@
 
 This file records AI-assisted work used in the project.
 
-## Entry 1
-
-### Date/Time
+## Date/Time
 2026-04-10 17:34
 
 ### Tool
@@ -27,9 +25,7 @@ I edited the `HistoryPage.tsx` frontend slightly by removing the submitted/not-s
 
 ---
 
-## Entry 2
-
-### Date/Time
+## Date/Time
 2026-04-11 15:17
 
 ### Tool
@@ -52,9 +48,7 @@ AI assistance was used to extend an already existing text communication channel 
 
 ---
 
-## Entry 3
-
-### Date/Time
+## Date/Time
 2026-04-11 16:14
 
 ### Tool
@@ -76,9 +70,7 @@ The final CI was able to run again and the test case was no longer failing repea
 
 ---
 
-## Entry 4
-
-### Date/Time
+## Date/Time
 2026-04-11 17:15
 
 ### Tool
@@ -102,9 +94,7 @@ I also added the Pixabay images, and the images were checked for copyright suita
 
 ---
 
-## Entry 5
-
-### Date/Time
+## Date/Time
 2026-04-12 10:23
 
 ### Tool
@@ -126,9 +116,7 @@ Most of these questions were based on popular LeetCode-style questions. I verifi
 
 ---
 
-## Entry 6
-
-### Date/Time
+## Date/Time
 2026-04-12 14:30
 
 ### Tool
