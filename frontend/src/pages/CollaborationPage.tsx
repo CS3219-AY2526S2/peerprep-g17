@@ -156,6 +156,46 @@ function formatMemory(memoryKb: number): string {
   return `${(memoryKb / 1024).toFixed(2)} MB`;
 }
 
+function isCustomRunResult(result: ExecutionResult | null): boolean {
+  return Boolean(
+    result &&
+      result.mode === "run" &&
+      result.cases.some((testCase) => testCase.id === "custom-run"),
+  );
+}
+
+function executionHeading(result: ExecutionResult): string {
+  if (isCustomRunResult(result)) {
+    return "Custom Output";
+  }
+
+  return result.mode === "submit" ? "Submission Verdict" : "Run Result";
+}
+
+function executionDisplayVerdict(result: ExecutionResult): string {
+  if (isCustomRunResult(result)) {
+    return result.verdict === "Accepted" ? "Output Ready" : result.verdict;
+  }
+
+  return result.verdict;
+}
+
+function executionSummaryText(result: ExecutionResult): string | null {
+  if (isCustomRunResult(result) && result.verdict === "Accepted") {
+    return "Custom input executed. Inspect the output and details below.";
+  }
+
+  return null;
+}
+
+function executionContainerStyles(result: ExecutionResult): string {
+  if (isCustomRunResult(result) && result.verdict === "Accepted") {
+    return "border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200";
+  }
+
+  return verdictStyles(result.verdict);
+}
+
 function workspaceTabStyles(tab: ResultTab, activeTab: ResultTab) {
   if (tab !== activeTab) {
     return "border-slate-200 bg-white/90 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800";
@@ -1566,6 +1606,18 @@ export default function CollaborationPage() {
     if (!executionResult) return "";
     return executionResult.initiatedByUserId === user?.id ? "You" : "Your partner";
   }, [executionResult, user?.id]);
+  const executionDisplayTitle = useMemo(
+    () => (executionResult ? executionHeading(executionResult) : ""),
+    [executionResult],
+  );
+  const executionDisplayStatus = useMemo(
+    () => (executionResult ? executionDisplayVerdict(executionResult) : ""),
+    [executionResult],
+  );
+  const executionSummary = useMemo(
+    () => (executionResult ? executionSummaryText(executionResult) : null),
+    [executionResult],
+  );
 
   const partnerUserId = useMemo(() => {
     if (!session || !user?.id) {
@@ -2041,20 +2093,23 @@ export default function CollaborationPage() {
                         {executionResult && (
                           <>
                             <div
-                              className={`rounded-xl border px-4 py-3 shadow-sm ${verdictStyles(
-                                executionResult.verdict,
+                              className={`rounded-xl border px-4 py-3 shadow-sm ${executionContainerStyles(
+                                executionResult,
                               )}`}
                             >
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                   <div className="text-xs uppercase tracking-wider opacity-80">
-                                    {executionResult.mode === "submit"
-                                      ? "Submission Verdict"
-                                      : "Run Result"}
+                                    {executionDisplayTitle}
                                   </div>
                                   <div className="text-lg font-semibold">
-                                    {executionResult.verdict}
+                                    {executionDisplayStatus}
                                   </div>
+                                  {executionSummary && (
+                                    <div className="mt-1 text-xs opacity-85">
+                                      {executionSummary}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="text-right text-xs opacity-90">
                                   <div>
@@ -2068,10 +2123,12 @@ export default function CollaborationPage() {
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-4 text-xs">
-                                <span className="rounded-full border border-current/20 px-2.5 py-1">
-                                  Passed {executionResult.passedCount}/
-                                  {executionResult.totalCount}
-                                </span>
+                                {!isCustomRunResult(executionResult) && (
+                                  <span className="rounded-full border border-current/20 px-2.5 py-1">
+                                    Passed {executionResult.passedCount}/
+                                    {executionResult.totalCount}
+                                  </span>
+                                )}
                                 <span className="rounded-full border border-current/20 px-2.5 py-1">
                                   Runtime {formatRuntime(executionResult.runtimeMs)}
                                 </span>
@@ -2090,13 +2147,19 @@ export default function CollaborationPage() {
                                   >
                                     <div className="mb-2 flex items-center justify-between gap-2">
                                       <div className="font-medium">{testCase.id}</div>
-                                      <span
-                                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${verdictStyles(
-                                          testCase.verdict,
-                                        )}`}
-                                      >
-                                        {testCase.verdict}
-                                      </span>
+                                      {isCustomRunResult(executionResult) ? (
+                                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold border border-slate-300/80 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                          Output
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${verdictStyles(
+                                            testCase.verdict,
+                                          )}`}
+                                        >
+                                          {testCase.verdict}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="grid gap-3 md:grid-cols-3">
                                       <div>
@@ -2153,7 +2216,7 @@ export default function CollaborationPage() {
                         {executionResult && (
                           <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-xs text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/55 dark:text-slate-200">
                             <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
-                              Verdict {executionResult.verdict}
+                              Status {executionDisplayStatus}
                             </span>
                             <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
                               Runtime {formatRuntime(executionResult.runtimeMs)}

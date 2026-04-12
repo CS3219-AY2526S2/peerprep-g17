@@ -150,7 +150,7 @@ ChatGPT
 
 ### Prompt/Command
 
-Generate the implementation logic and React state management for a profile picture selection modal using a set of pre-defined image URLs
+Generate the implementation logic and React state management for a profile picture selection modal using a set of pre-defined image URLs from pixabay
 
 ### Output Summary
 
@@ -182,7 +182,7 @@ Review this specific Jest test file for the collaboration service. It is failing
 
 ### Output Summary
 
-Identified the race condition and provided a fix using proper async handling.
+Identified the race condition in the test case and provided a fix using proper async handling.
 
 ### Action Taken
 
