@@ -388,6 +388,37 @@ export class CollaborationService {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
   }
 
+  async getAttemptedQuestionIdsForUsers(userIds: string[]): Promise<string[]> {
+    const uniqueUserIds = [...new Set(userIds.map((userId) => userId.trim()).filter(Boolean))];
+    if (uniqueUserIds.length === 0) {
+      return [];
+    }
+
+    const [attempts, sessions] = await Promise.all([
+      Attempt.find(
+        { userId: { $in: uniqueUserIds } },
+        { questionId: 1, _id: 0 },
+      ).lean(),
+      CollaborationSession.find(
+        {
+          $or: [
+            { userAId: { $in: uniqueUserIds } },
+            { userBId: { $in: uniqueUserIds } },
+          ],
+        },
+        { questionId: 1, _id: 0 },
+      ).lean(),
+    ]);
+
+    return [
+      ...new Set(
+        [...attempts, ...sessions]
+          .map((record) => String(record.questionId))
+          .filter(Boolean),
+      ),
+    ];
+  }
+
   async updateAttemptReflection(
     userId: string,
     attemptId: string,

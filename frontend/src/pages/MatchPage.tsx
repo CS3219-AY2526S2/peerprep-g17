@@ -22,6 +22,8 @@ type QuestionMetaResponse = {
   };
 };
 
+const MATCH_STATE_REFRESH_INTERVAL_MS = 5000;
+
 function formatRemainingTime(ms: number): string {
   const safeMs = Math.max(0, ms);
   const totalSeconds = Math.ceil(safeMs / 1000);
@@ -47,6 +49,44 @@ export default function MatchPage() {
     matchState?.partnerUserId,
     token,
     { enabled: Boolean(matchState?.partnerUserId) },
+  );
+
+  const syncMatchState = useMemo(
+    () =>
+      async function syncMatchStateFromServer() {
+        if (!token) {
+          return;
+        }
+
+        const response = await fetch(`${MATCHING_API_URL}/requests/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const json = await response.json();
+        const sessionData = json.data as MatchState | null;
+
+        if (!sessionData) {
+          return;
+        }
+
+        const deadSessionId = sessionStorage.getItem("dead_session");
+
+        if (sessionData.status === "matched" && sessionData.sessionId) {
+          if (sessionData.sessionId === deadSessionId) {
+            setMatchState(null);
+          } else {
+            navigate(`/collaboration/${sessionData.sessionId}`);
+          }
+          return;
+        }
+
+        setMatchState(sessionData);
+      },
+    [navigate, token],
   );
 
   useEffect(() => {
@@ -81,21 +121,21 @@ export default function MatchPage() {
           setSelectedTopic((current) => current || categories[0] || "");
         }
         if (stateRes.ok) {
-  const stateJson = await stateRes.json();
-  const sessionData = stateJson.data;
+          const stateJson = await stateRes.json();
+          const sessionData = stateJson.data as MatchState;
 
-  const deadSessionId = sessionStorage.getItem("dead_session");
+          const deadSessionId = sessionStorage.getItem("dead_session");
 
-  if (sessionData.status === "matched" && sessionData.sessionId) {
-    if (sessionData.sessionId === deadSessionId) {
-      setMatchState({ ...sessionData, status: "idle" });
-    } else {
-      navigate(`/collaboration/${sessionData.sessionId}`);
-    }
-  } else {
-    setMatchState(sessionData);
-  }
-}
+          if (sessionData.status === "matched" && sessionData.sessionId) {
+            if (sessionData.sessionId === deadSessionId) {
+              setMatchState(null);
+            } else {
+              navigate(`/collaboration/${sessionData.sessionId}`);
+            }
+          } else {
+            setMatchState(sessionData);
+          }
+        }
       } catch {
         if (!cancelled) {
           setError("Unable to load match page data.");
@@ -168,6 +208,31 @@ export default function MatchPage() {
     const intervalId = window.setInterval(tick, 1000);
     return () => window.clearInterval(intervalId);
   }, [matchState]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncMatchState();
+    }, MATCH_STATE_REFRESH_INTERVAL_MS);
+
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        void syncMatchState();
+      }
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [syncMatchState, token]);
 
   const canSubmit = useMemo(
     () => Boolean(selectedTopic) && !submitting && matchState?.status !== "searching",

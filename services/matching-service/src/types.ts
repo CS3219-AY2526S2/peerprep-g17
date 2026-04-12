@@ -42,6 +42,10 @@ export interface MatchHandoffPayload {
   language: "Python";
 }
 
+export interface AttemptedQuestionIdsResponse {
+  questionIds: string[];
+}
+
 export interface RequestRecord {
   id: string;
   userId: string;

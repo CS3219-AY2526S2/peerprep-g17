@@ -693,14 +693,21 @@ export class MatchService {
       difficulty: requester.difficulty,
       questionId: "",
       status: "pending_handoff",
-    });
+      });
 
-    try {
-      const selectedQuestion = await this.questionCatalogService.selectQuestion(
-        authHeader,
-        requester.topic,
-        requester.difficulty,
-      );
+      try {
+        const attemptedQuestionIds = new Set(
+          await this.collaborationClient.getAttemptedQuestionIds([
+            requester.userId,
+            candidate.userId,
+          ]),
+        );
+        const selectedQuestion = await this.questionCatalogService.selectQuestion(
+          authHeader,
+          requester.topic,
+          requester.difficulty,
+          attemptedQuestionIds,
+        );
 
       if (!selectedQuestion) {
         throw new Error("No suitable question found for matched topic.");

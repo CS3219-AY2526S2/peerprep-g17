@@ -75,7 +75,10 @@ export class QuestionCatalogService {
     authHeader: string,
     topic: string,
     difficulty: Difficulty,
+    attemptedQuestionIds: Set<string> = new Set(),
   ): Promise<SelectedQuestion | null> {
+    let attemptedFallback: SelectedQuestion | null = null;
+
     for (const currentDifficulty of getFallbackDifficultyOrder(difficulty)) {
       const url = new URL(`${config.questionServiceUrl}/api/questions`);
       url.searchParams.set("difficulty", currentDifficulty);
@@ -91,14 +94,30 @@ export class QuestionCatalogService {
       }
 
       const json = (await response.json()) as QuestionServiceResponse;
-      const first = json.data?.[0];
-      if (first) {
+      const questions = json.data || [];
+      const unattempted = questions.find(
+        (question) => !attemptedQuestionIds.has(question.id),
+      );
+
+      if (unattempted) {
         return {
-          id: first.id,
+          id: unattempted.id,
           difficulty: currentDifficulty,
-          title: first.title,
+          title: unattempted.title,
         };
       }
+
+      if (!attemptedFallback && questions[0]) {
+        attemptedFallback = {
+          id: questions[0].id,
+          difficulty: currentDifficulty,
+          title: questions[0].title,
+        };
+      }
+    }
+
+    if (attemptedFallback) {
+      return attemptedFallback;
     }
 
     return null;
