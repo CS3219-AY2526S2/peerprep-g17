@@ -54,6 +54,165 @@ async function formatSessionResponseWithSharedCode(session: any) {
 export class CollaborationController {
   constructor(private readonly collaborationService: CollaborationService) {}
 
+  assistQuestion = async (req: AuthRequest, res: Response): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    const {
+      questionTitle,
+      questionDescription,
+      difficulty,
+      topics,
+      language,
+      userPrompt,
+      code,
+      mode,
+      verbosity,
+      style,
+    } = (req.body ?? {}) as {
+      questionTitle?: string;
+      questionDescription?: string;
+      difficulty?: string;
+      topics?: string[];
+      language?: string;
+      userPrompt?: string;
+      code?: string;
+      mode?:
+        | "rephrase"
+        | "beginner_explanation"
+        | "test_case_generation"
+        | "optimization_hint"
+        | "brainstorm";
+      verbosity?: "quick" | "detailed";
+      style?: "concise_coach" | "teacher" | "beginner_friendly" | "interviewer";
+    };
+
+    if (!questionTitle?.trim()) {
+      res.status(400).json({ error: "Question title is required." });
+      return;
+    }
+
+    const allowedModes = new Set([
+      "rephrase",
+      "beginner_explanation",
+      "test_case_generation",
+      "optimization_hint",
+      "brainstorm",
+    ]);
+
+    if (!mode || !allowedModes.has(mode)) {
+      res.status(400).json({ error: "A valid AI assistance mode is required." });
+      return;
+    }
+
+    const responseVerbosity = verbosity === "detailed" ? "detailed" : "quick";
+    const responseStyle =
+      style === "teacher" ||
+      style === "beginner_friendly" ||
+      style === "interviewer"
+        ? style
+        : "concise_coach";
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+
+    if (!apiKey) {
+      res.status(503).json({ error: "AI question helper is not configured." });
+      return;
+    }
+
+    const modeInstructions: Record<string, string> = {
+      rephrase:
+        "Rephrase the coding problem in simpler, more direct language. Preserve constraints and goal, but make it easier to understand quickly.",
+      beginner_explanation:
+        "Explain the problem like the student is a beginner. Clarify the goal, inputs, outputs, and one small example. Do not provide a full implementation unless explicitly requested.",
+      test_case_generation:
+        "Generate a compact set of useful test cases, including normal cases and edge cases. Prefer bullet points. When feasible, include expected outputs and explain why each case matters.",
+      optimization_hint:
+        "Give optimization-oriented hints and point out patterns or data structures that may help. Do not provide a full solution unless the user explicitly asks.",
+      brainstorm:
+        "Answer the student's question conversationally and clearly. Focus on helping them understand the problem or next step. Avoid giving a full solution unless explicitly requested.",
+    };
+    const styleInstructions: Record<string, string> = {
+      concise_coach:
+        "Use a concise coaching tone. Be direct, practical, and low-friction.",
+      teacher:
+        "Use a patient teacher tone. Explain in a guided, step-by-step way without sounding stiff.",
+      beginner_friendly:
+        "Use beginner-friendly language. Define terms briefly, avoid jargon where possible, and make the response feel approachable.",
+      interviewer:
+        "Use a light interview-coach tone. Nudge the student toward the key idea with hints and guiding questions before giving conclusions.",
+    };
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.4,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a collaborative coding tutor inside PeerPrep. Respond in concise markdown with short sections and bullets when helpful. Keep explanations supportive and practical. Unless the user explicitly asks for a full solution, do not provide complete code. " +
+                (responseVerbosity === "quick"
+                  ? "Default to quick-help format: at most 4 short bullets or 2 very short sections, under roughly 120 words, and prioritize immediate clarity over detail. "
+                  : "Use a clearer but still skimmable format: short sections, at most 6 bullets total, and keep the answer under roughly 220 words unless necessary. ") +
+                styleInstructions[responseStyle] +
+                " " +
+                modeInstructions[mode],
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                questionTitle,
+                questionDescription: questionDescription ?? "",
+                difficulty: difficulty ?? "",
+                topics: topics ?? [],
+                language: language ?? "Python",
+                code: code?.trim() ? code : null,
+                mode,
+                verbosity: responseVerbosity,
+                style: responseStyle,
+                userPrompt: userPrompt?.trim() || null,
+              }),
+            },
+          ],
+        }),
+      });
+
+      const result = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        res.status(502).json({
+          error: result.error?.message || "OpenAI question helper request failed.",
+        });
+        return;
+      }
+
+      const answer = result.choices?.[0]?.message?.content?.trim();
+      if (!answer) {
+        res.status(502).json({ error: "OpenAI did not return a question helper response." });
+        return;
+      }
+
+      res.status(200).json({ data: { response: answer } });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate question help.";
+      res.status(502).json({ error: message });
+    }
+  };
+
   getAttemptedQuestionIdsForUsers = async (
     req: Request,
     res: Response,
@@ -362,7 +521,11 @@ export class CollaborationController {
       return;
     }
 
-    const { code } = req.body as { code?: string };
+    const { code, verbosity, style } = req.body as {
+      code?: string;
+      verbosity?: "quick" | "detailed";
+      style?: "concise_coach" | "teacher" | "beginner_friendly" | "interviewer";
+    };
 
     if (!code?.trim()) {
       res.status(400).json({ error: "No code provided." });
@@ -371,6 +534,23 @@ export class CollaborationController {
 
     const apiKey = process.env.OPENAI_API_KEY;
     const model = process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+    const responseVerbosity = verbosity === "detailed" ? "detailed" : "quick";
+    const responseStyle =
+      style === "teacher" ||
+      style === "beginner_friendly" ||
+      style === "interviewer"
+        ? style
+        : "concise_coach";
+    const explanationStyleInstructions: Record<string, string> = {
+      concise_coach:
+        "Use a concise coaching tone. Prioritize the key idea and one or two important observations.",
+      teacher:
+        "Use a teacher-like tone. Explain the code in a guided sequence, like you are teaching it live.",
+      beginner_friendly:
+        "Use beginner-friendly language. Briefly explain unfamiliar ideas and keep the wording approachable.",
+      interviewer:
+        "Use an interview-coach tone. Highlight what the code is doing and what a candidate should notice.",
+    };
 
     if (!apiKey) {
       res.status(503).json({ error: "AI explanation service is not configured." });
@@ -391,11 +571,16 @@ export class CollaborationController {
             {
               role: "system",
               content:
-                "You explain code for students in clear markdown. Use short sections, bullet points when helpful, and wrap code identifiers in backticks. Keep the explanation concise but useful.",
+                "You explain code for students in clear markdown. Use short sections, bullet points when helpful, and wrap code identifiers in backticks. " +
+                (responseVerbosity === "quick"
+                  ? "Default to quick-help format: at most 4 short bullets or 2 tiny sections, under roughly 120 words, and focus on what the code is doing plus one key thing to notice."
+                  : "Use a skimmable format with short sections, at most 6 bullets total, and keep the answer under roughly 220 words unless needed.") +
+                " " +
+                explanationStyleInstructions[responseStyle],
             },
             {
               role: "user",
-              content: `Explain this code:\n\n\`\`\`\n${code}\n\`\`\``,
+              content: `Explain this code in ${responseVerbosity} mode with ${responseStyle} style:\n\n\`\`\`\n${code}\n\`\`\``,
             },
           ],
         }),

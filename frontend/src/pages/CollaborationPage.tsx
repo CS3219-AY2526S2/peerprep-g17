@@ -52,6 +52,18 @@ type CustomExecutionPayload =
       operations: string[];
       arguments: unknown[][];
     };
+type QuestionHelpMode =
+  | "rephrase"
+  | "beginner_explanation"
+  | "test_case_generation"
+  | "optimization_hint"
+  | "brainstorm";
+type AiVerbosity = "quick" | "detailed";
+type AiStyle =
+  | "concise_coach"
+  | "teacher"
+  | "beginner_friendly"
+  | "interviewer";
 
 type ChatMessage = {
   messageId?: string;
@@ -470,7 +482,7 @@ function ExplanationContent({ content }: { content: string }) {
       elements.push(
         <h4
           key={`heading-${elements.length}`}
-          className="text-sm font-semibold text-slate-900 dark:text-sky-100"
+          className="text-sm font-semibold tracking-tight text-slate-900 dark:text-sky-100"
         >
           {headingMatch[2]}
         </h4>,
@@ -491,7 +503,7 @@ function ExplanationContent({ content }: { content: string }) {
       }
 
       elements.push(
-        <ul key={`ul-${elements.length}`} className="list-disc space-y-2 pl-5 text-foreground/80">
+        <ul key={`ul-${elements.length}`} className="list-disc space-y-2.5 pl-5 text-[14px] leading-6 text-foreground/85">
           {items.map((item, itemIndex) => (
             <li key={`ul-item-${itemIndex}`}>{renderInlineText(item)}</li>
           ))}
@@ -512,7 +524,7 @@ function ExplanationContent({ content }: { content: string }) {
       }
 
       elements.push(
-        <ol key={`ol-${elements.length}`} className="list-decimal space-y-2 pl-5 text-foreground/80">
+        <ol key={`ol-${elements.length}`} className="list-decimal space-y-2.5 pl-5 text-[14px] leading-6 text-foreground/85">
           {items.map((item, itemIndex) => (
             <li key={`ol-item-${itemIndex}`}>{renderInlineText(item)}</li>
           ))}
@@ -536,7 +548,7 @@ function ExplanationContent({ content }: { content: string }) {
     }
 
     elements.push(
-      <p key={`p-${elements.length}`} className="leading-7 text-foreground/80">
+      <p key={`p-${elements.length}`} className="text-[14px] leading-7 text-foreground/85">
         {paragraphLines.map((paragraphLine, paragraphIndex) => (
           <Fragment key={`paragraph-${paragraphIndex}`}>
             {paragraphIndex > 0 && <br />}
@@ -548,6 +560,55 @@ function ExplanationContent({ content }: { content: string }) {
   }
 
   return <div className="space-y-4">{elements}</div>;
+}
+
+function AiResponsePanel({
+  title,
+  tone,
+  content,
+  onClose,
+}: {
+  title: string;
+  tone: "sky" | "violet";
+  content: string;
+  onClose: () => void;
+}) {
+  const toneClasses =
+    tone === "sky"
+      ? {
+          border: "border-sky-200/80 dark:border-sky-900/60",
+          bg: "bg-white/95 dark:bg-slate-900/85",
+          label: "text-sky-700 dark:text-sky-300",
+          divider: "border-sky-200/80 dark:border-sky-900/60",
+        }
+      : {
+          border: "border-violet-200/80 dark:border-violet-900/60",
+          bg: "bg-white/95 dark:bg-slate-900/85",
+          label: "text-violet-700 dark:text-violet-300",
+          divider: "border-violet-200/80 dark:border-violet-900/60",
+        };
+
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl border ${toneClasses.border} ${toneClasses.bg} shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] dark:shadow-none`}
+    >
+      <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${toneClasses.divider}`}>
+        <span className={`text-[11px] font-bold uppercase tracking-[0.16em] ${toneClasses.label}`}>
+          {title}
+        </span>
+        <button
+          type="button"
+          className="text-sm text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+          onClick={onClose}
+        >
+          Close
+        </button>
+      </div>
+      <div className="max-h-[320px] overflow-y-auto px-4 py-4">
+        <ExplanationContent content={content} />
+      </div>
+    </div>
+  );
 }
 
 function ChatMessageContent({ text }: { text: string }) {
@@ -665,6 +726,13 @@ export default function CollaborationPage() {
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
+  const [questionHelp, setQuestionHelp] = useState<string | null>(null);
+  const [questionHelpLoading, setQuestionHelpLoading] = useState(false);
+  const [questionHelpError, setQuestionHelpError] = useState<string | null>(null);
+  const [questionHelpPrompt, setQuestionHelpPrompt] = useState("");
+  const [questionHelpMode, setQuestionHelpMode] = useState<QuestionHelpMode>("rephrase");
+  const [aiVerbosity, setAiVerbosity] = useState<AiVerbosity>("quick");
+  const [aiStyle, setAiStyle] = useState<AiStyle>("concise_coach");
   const [completing, setCompleting] = useState(false);
   const [switchingQuestion, setSwitchingQuestion] = useState(false);
   const [confirmMode, setConfirmMode] = useState<"leave" | "submit" | null>(null);
@@ -710,6 +778,12 @@ export default function CollaborationPage() {
       setExecutionError(null);
       setExplainError(null);
       setExplanation(null);
+      setQuestionHelp(null);
+      setQuestionHelpError(null);
+      setQuestionHelpPrompt("");
+      setQuestionHelpMode("rephrase");
+      setAiVerbosity("quick");
+      setAiStyle("concise_coach");
       setResultTab("testcase");
     },
     [],
@@ -1463,6 +1537,8 @@ export default function CollaborationPage() {
         },
         body: JSON.stringify({
           code,
+          verbosity: aiVerbosity,
+          style: aiStyle,
         }),
       });
 
@@ -1478,6 +1554,57 @@ export default function CollaborationPage() {
       setExplainError(err.message || "Explanation failed.");
     } finally {
       setExplaining(false);
+    }
+  }
+
+  async function requestQuestionHelp(mode: QuestionHelpMode = questionHelpMode) {
+    if (!question || !token) {
+      return;
+    }
+
+    if (mode === "brainstorm" && !questionHelpPrompt.trim()) {
+      setQuestionHelpError("Ask a question for the AI helper first.");
+      return;
+    }
+
+    try {
+      setQuestionHelpLoading(true);
+      setQuestionHelpError(null);
+      setQuestionHelp(null);
+
+      const response = await fetch(`${COLLABORATION_API_URL}/sessions/assistant/question`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          questionTitle: question.title,
+          questionDescription: question.description,
+          difficulty: question.difficulty,
+          topics: question.categories,
+          language: session?.language || "Python",
+          code: editorRef.current?.getCode() || "",
+          mode,
+          verbosity: aiVerbosity,
+          style: aiStyle,
+          userPrompt: questionHelpPrompt,
+        }),
+      });
+
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        setQuestionHelpError(json?.error || "AI helper request failed.");
+        return;
+      }
+
+      setQuestionHelp(json?.data?.response || "");
+    } catch (err) {
+      setQuestionHelpError(
+        err instanceof Error ? err.message : "AI helper request failed.",
+      );
+    } finally {
+      setQuestionHelpLoading(false);
     }
   }
 
@@ -1965,6 +2092,191 @@ export default function CollaborationPage() {
                           <div className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
                             {customTestError}
                           </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4 rounded-2xl border border-violet-200/80 bg-violet-50/60 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              AI Question Helper
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Use AI to rephrase the problem, explain it more clearly, brainstorm next steps, or suggest useful test cases without leaving the collaboration page.
+                            </p>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Bounded help, not full solutions by default
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                            AI Mode
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={aiVerbosity === "quick" ? "default" : "outline"}
+                            onClick={() => setAiVerbosity("quick")}
+                            disabled={questionHelpLoading || explaining}
+                          >
+                            Quick Help
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={aiVerbosity === "detailed" ? "default" : "outline"}
+                            onClick={() => setAiVerbosity("detailed")}
+                            disabled={questionHelpLoading || explaining}
+                          >
+                            More Detail
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                            Teaching Style
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={aiStyle === "concise_coach" ? "default" : "outline"}
+                            onClick={() => setAiStyle("concise_coach")}
+                            disabled={questionHelpLoading || explaining}
+                          >
+                            Concise Coach
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={aiStyle === "teacher" ? "default" : "outline"}
+                            onClick={() => setAiStyle("teacher")}
+                            disabled={questionHelpLoading || explaining}
+                          >
+                            Teacher
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={aiStyle === "beginner_friendly" ? "default" : "outline"}
+                            onClick={() => setAiStyle("beginner_friendly")}
+                            disabled={questionHelpLoading || explaining}
+                          >
+                            Beginner Friendly
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={aiStyle === "interviewer" ? "default" : "outline"}
+                            onClick={() => setAiStyle("interviewer")}
+                            disabled={questionHelpLoading || explaining}
+                          >
+                            Interview Coach
+                          </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={questionHelpMode === "rephrase" ? "default" : "outline"}
+                            onClick={() => {
+                              setQuestionHelpMode("rephrase");
+                              void requestQuestionHelp("rephrase");
+                            }}
+                            disabled={questionHelpLoading}
+                          >
+                            Rephrase
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={questionHelpMode === "beginner_explanation" ? "default" : "outline"}
+                            onClick={() => {
+                              setQuestionHelpMode("beginner_explanation");
+                              void requestQuestionHelp("beginner_explanation");
+                            }}
+                            disabled={questionHelpLoading}
+                          >
+                            Explain Simply
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={questionHelpMode === "test_case_generation" ? "default" : "outline"}
+                            onClick={() => {
+                              setQuestionHelpMode("test_case_generation");
+                              void requestQuestionHelp("test_case_generation");
+                            }}
+                            disabled={questionHelpLoading}
+                          >
+                            Generate Test Cases
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={questionHelpMode === "optimization_hint" ? "default" : "outline"}
+                            onClick={() => {
+                              setQuestionHelpMode("optimization_hint");
+                              void requestQuestionHelp("optimization_hint");
+                            }}
+                            disabled={questionHelpLoading}
+                          >
+                            Optimization Hint
+                          </Button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                            Ask AI About This Question
+                          </label>
+                          <div className="flex flex-col gap-3 sm:flex-row">
+                            <textarea
+                              rows={3}
+                              value={questionHelpPrompt}
+                              onChange={(event) => setQuestionHelpPrompt(event.target.value)}
+                              className="min-h-[88px] flex-1 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-950"
+                              placeholder="What is this question really asking? Can you explain the constraints? What edge cases should we think about?"
+                            />
+                            <Button
+                              type="button"
+                              className="sm:self-start"
+                              onClick={() => {
+                                setQuestionHelpMode("brainstorm");
+                                void requestQuestionHelp("brainstorm");
+                              }}
+                              disabled={questionHelpLoading}
+                            >
+                              {questionHelpLoading && questionHelpMode === "brainstorm"
+                                ? "Asking..."
+                                : "Ask AI"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {questionHelpError && (
+                          <div className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+                            {questionHelpError}
+                          </div>
+                        )}
+
+                        {questionHelpLoading && !questionHelp && (
+                          <div className="rounded-xl border border-violet-200/80 bg-white/80 px-4 py-3 text-sm text-violet-700 dark:border-violet-900/60 dark:bg-slate-900/70 dark:text-violet-300">
+                            AI helper is thinking...
+                          </div>
+                        )}
+
+                        {questionHelp && (
+                          <AiResponsePanel
+                            title="AI Question Helper"
+                            tone="violet"
+                            content={questionHelp}
+                            onClose={() => {
+                              setQuestionHelp(null);
+                              setQuestionHelpError(null);
+                            }}
+                          />
                         )}
                       </div>
                     </div>
@@ -2492,30 +2804,28 @@ export default function CollaborationPage() {
                   </div>
 
                   {(explanation || explainError || explaining) && (
-                    <div className="max-h-[320px] overflow-y-auto rounded-2xl border border-slate-200/80 bg-white/95 p-4 text-sm shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-900/85 dark:shadow-none">
-                      <div className="mb-3 flex justify-between border-b border-sky-200/80 pb-2 dark:border-sky-900/60">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                          AI Explanation
-                        </span>
-                        <button
-                          className="text-sm text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
-                          onClick={() => {
-                            setExplanation(null);
-                            setExplainError(null);
-                          }}
-                        >
-                          Close
-                        </button>
-                      </div>
+                    <div className="space-y-3">
                       {explaining && (
-                        <div className="animate-pulse text-sm text-sky-700 dark:text-sky-300">
-                          Analyzing...
+                        <div className="rounded-xl border border-sky-200/80 bg-white/80 px-4 py-3 text-sm text-sky-700 dark:border-sky-900/60 dark:bg-slate-900/70 dark:text-sky-300">
+                          AI is summarizing the code...
                         </div>
                       )}
                       {explainError && (
-                        <p className="text-xs text-rose-400">{explainError}</p>
+                        <p className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+                          {explainError}
+                        </p>
                       )}
-                      {explanation && <ExplanationContent content={explanation} />}
+                      {explanation && (
+                        <AiResponsePanel
+                          title="AI Explanation"
+                          tone="sky"
+                          content={explanation}
+                          onClose={() => {
+                            setExplanation(null);
+                            setExplainError(null);
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                   </div>
