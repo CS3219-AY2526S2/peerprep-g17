@@ -15,6 +15,8 @@ const awarenesses = new Map<string, awarenessProtocol.Awareness>();
 const connections = new Map<string, Set<WebSocket>>();
 const clientIds = new Map<WebSocket, Set<number>>();
 const docsLoading = new Map<string, Promise<Y.Doc>>();
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const roomCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 async function persistDoc(sessionId: string, doc: Y.Doc): Promise<void> {
   try {
@@ -56,14 +58,16 @@ export async function getOrCreateDoc(sessionId: string): Promise<Y.Doc> {
     awarenesses.set(sessionId, new awarenessProtocol.Awareness(doc));
     connections.set(sessionId, new Set());
 
-    let persistTimer: ReturnType<typeof setTimeout> | null = null;
     doc.on("update", () => {
-      if (persistTimer) {
-        clearTimeout(persistTimer);
+      const existingPersistTimer = persistTimers.get(sessionId);
+      if (existingPersistTimer) {
+        clearTimeout(existingPersistTimer);
       }
-      persistTimer = setTimeout(() => {
+      const persistTimer = setTimeout(() => {
         void persistDoc(sessionId, doc);
       }, 10);
+      persistTimer.unref?.();
+      persistTimers.set(sessionId, persistTimer);
     });
 
     docsLoading.delete(sessionId);
@@ -109,6 +113,11 @@ export async function setupYjsConnection(
   const doc = await getOrCreateDoc(sessionId);
   const awareness = awarenesses.get(sessionId)!;
   const room = connections.get(sessionId)!;
+  const pendingRoomCleanup = roomCleanupTimers.get(sessionId);
+  if (pendingRoomCleanup) {
+    clearTimeout(pendingRoomCleanup);
+    roomCleanupTimers.delete(sessionId);
+  }
 
   room.add(ws);
 
@@ -227,7 +236,7 @@ export async function setupYjsConnection(
 
     if (room.size === 0) {
       console.log(`[Yjs] Room empty for ${sessionId}, starting 3s grace period`);
-      setTimeout(() => {
+      const cleanupTimer = setTimeout(() => {
         const currentRoom = connections.get(sessionId);
         if (currentRoom && currentRoom.size > 0) {
           console.log(
@@ -240,6 +249,8 @@ export async function setupYjsConnection(
             docs.delete(sessionId);
             awarenesses.delete(sessionId);
             connections.delete(sessionId);
+            persistTimers.delete(sessionId);
+            roomCleanupTimers.delete(sessionId);
             console.log(`[Yjs] Session ${sessionId} persisted and cleaned up`);
           })
           .catch((err) => {
@@ -247,8 +258,12 @@ export async function setupYjsConnection(
             docs.delete(sessionId);
             awarenesses.delete(sessionId);
             connections.delete(sessionId);
+            persistTimers.delete(sessionId);
+            roomCleanupTimers.delete(sessionId);
           });
       }, 3000);
+      cleanupTimer.unref?.();
+      roomCleanupTimers.set(sessionId, cleanupTimer);
     }
   });
 }
@@ -298,4 +313,36 @@ export async function replaceSessionCode(
 export async function getSessionCode(sessionId: string): Promise<string> {
   const doc = await getOrCreateDoc(sessionId);
   return doc.getText("codemirror").toString();
+}
+
+export function resetYjsState(): void {
+  for (const timer of persistTimers.values()) {
+    clearTimeout(timer);
+  }
+  persistTimers.clear();
+
+  for (const timer of roomCleanupTimers.values()) {
+    clearTimeout(timer);
+  }
+  roomCleanupTimers.clear();
+
+  for (const room of connections.values()) {
+    for (const ws of room) {
+      try {
+        ws.close();
+      } catch {
+        // Ignore cleanup failures during tests.
+      }
+    }
+  }
+
+  connections.clear();
+  clientIds.clear();
+  docsLoading.clear();
+  awarenesses.clear();
+
+  for (const doc of docs.values()) {
+    doc.destroy();
+  }
+  docs.clear();
 }

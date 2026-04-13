@@ -1,12 +1,56 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
+import { createProtectedImageUrl } from "@/lib/image";
 
 
 export default function Navbar() {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, token, user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrlToRevoke: string | null = null;
+    let cancelled = false;
+
+    async function loadProfilePhoto() {
+      if (!token || !user?.profilePhotoUrl) {
+        setPhotoPreview(null);
+        return;
+      }
+
+      if (!user.profilePhotoUrl.includes("/api/users/")) {
+        setPhotoPreview(user.profilePhotoUrl);
+        return;
+      }
+
+      try {
+        const objectUrl = await createProtectedImageUrl(user.profilePhotoUrl, token);
+        if (cancelled) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        objectUrlToRevoke = objectUrl;
+        setPhotoPreview(objectUrl);
+      } catch {
+        if (!cancelled) {
+          setPhotoPreview(null);
+        }
+      }
+    }
+
+    void loadProfilePhoto();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) {
+        URL.revokeObjectURL(objectUrlToRevoke);
+      }
+    };
+  }, [token, user?.profilePhotoUrl]);
 
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -44,7 +88,23 @@ export default function Navbar() {
           </Button>
           {isAuthenticated ? (
             <>
-              <span className="text-sm text-muted-foreground">{user?.username}</span>
+              <Link
+                to="/profile"
+                className="flex items-center gap-2 rounded-full border border-border/60 bg-background/75 px-2 py-1 transition-colors hover:border-sky-300 dark:hover:border-violet-700"
+              >
+                <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-xs font-semibold text-muted-foreground">
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt={`${user?.username || "User"} profile`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>{user?.username?.[0]?.toUpperCase() || "?"}</span>
+                  )}
+                </div>
+                <span className="text-sm text-muted-foreground">{user?.username}</span>
+              </Link>
               <Link to="/profile">
                 <Button variant="ghost" size="sm">Profile</Button>
               </Link>

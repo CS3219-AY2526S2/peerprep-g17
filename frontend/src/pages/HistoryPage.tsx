@@ -74,10 +74,20 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
-      <main className="mx-auto max-w-4xl px-6 pt-24 pb-12">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight">Attempt History</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+
+      <main className="relative mx-auto max-w-5xl px-6 pb-12 pt-24">
+        <div className="pointer-events-none absolute inset-x-6 top-10 -z-10 h-[20rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-slate-100/80 blur-3xl dark:from-slate-950 dark:via-slate-950 dark:to-slate-900" />
+
+        <div className="mb-8 rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-[0_24px_80px_-36px_rgba(15,23,42,0.22)] dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-none">
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1 text-xs text-sky-700 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-600 dark:bg-sky-300" />
+            History
+          </div>
+
+          <h1 className="mt-5 text-4xl font-bold tracking-tight text-slate-950 dark:text-white">
+            Attempt History
+          </h1>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
             A record of all questions you've attempted in collaboration sessions.
           </p>
         </div>

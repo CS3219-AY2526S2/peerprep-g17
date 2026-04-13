@@ -75,6 +75,11 @@ export default function UserProfilePage() {
         return;
       }
 
+      if (!profile.profilePhotoUrl.includes("/api/users/")) {
+        setPhotoPreview(profile.profilePhotoUrl);
+        return;
+      }
+
       try {
         const objectUrl = await createProtectedImageUrl(profile.profilePhotoUrl, token);
 

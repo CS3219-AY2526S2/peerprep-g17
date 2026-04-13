@@ -6,7 +6,8 @@ import * as Y from "yjs";
 import CollaborationSession from "../models/CollaborationSession";
 import Attempt from "../models/Attempt";
 import { CollaborationService } from "../services/collaborationService";
-import { docs } from "../services/yjsUtils";
+import { docs, resetYjsState } from "../services/yjsUtils";
+import { sessionSocketManager } from "../services/sessionSocketManager";
 
 class FakeMatchingServiceClient {
   public completedSessionIds: string[] = [];
@@ -28,13 +29,15 @@ test.before(async () => {
 });
 
 test.after(async () => {
+  resetYjsState();
+  sessionSocketManager.reset();
   await mongoose.disconnect();
   await mongoServer.stop();
 });
 
 test.beforeEach(async () => {
   await mongoose.connection.db?.dropDatabase();
-  docs.clear();
+  resetYjsState();
   matchingServiceClient = new FakeMatchingServiceClient();
   collaborationService = new CollaborationService(
     matchingServiceClient as unknown as never,

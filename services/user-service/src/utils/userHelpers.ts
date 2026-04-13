@@ -98,9 +98,11 @@ export function getUserId(user: IUser): string {
 function buildProfilePhotoUrl(
   userId: string,
   hasPhoto: boolean,
+  presetUrl: string | null | undefined,
 ): string | null {
+  if (presetUrl) return presetUrl;
   if (!hasPhoto) return null;
-  return `${config.baseUrl}/api/users/${userId}/photo`;
+  return `/api/users/${userId}/photo`;
 }
 
 export function toSelfProfile(user: IUser): SelfProfile {
@@ -113,7 +115,11 @@ export function toSelfProfile(user: IUser): SelfProfile {
     role: user.role,
     university: user.university || "",
     bio: user.bio || "",
-    profilePhotoUrl: buildProfilePhotoUrl(id, !!user.profilePhotoFileId),
+    profilePhotoUrl: buildProfilePhotoUrl(
+      id,
+      !!user.profilePhotoFileId,
+      user.profilePhotoPresetUrl,
+    ),
   };
 }
 
@@ -125,7 +131,11 @@ export function toPublicProfile(user: IUser): PublicProfile {
     username: user.username,
     university: user.university || "",
     bio: user.bio || "",
-    profilePhotoUrl: buildProfilePhotoUrl(id, !!user.profilePhotoFileId),
+    profilePhotoUrl: buildProfilePhotoUrl(
+      id,
+      !!user.profilePhotoFileId,
+      user.profilePhotoPresetUrl,
+    ),
   };
 }
 
@@ -201,8 +211,9 @@ export function validateProfileFields(payload: {
   username?: unknown;
   university?: unknown;
   bio?: unknown;
+  profilePhotoUrl?: unknown;
 }): string | null {
-  const { username, university, bio } = payload;
+  const { username, university, bio, profilePhotoUrl } = payload;
 
   if (username !== undefined) {
     if (typeof username !== "string" || !username.trim()) {
@@ -228,6 +239,21 @@ export function validateProfileFields(payload: {
     }
   }
 
+  if (profilePhotoUrl !== undefined && profilePhotoUrl !== null) {
+    if (typeof profilePhotoUrl !== "string") {
+      return "Profile photo URL must be a string.";
+    }
+
+    try {
+      const parsed = new URL(profilePhotoUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return "Profile photo URL must use http or https.";
+      }
+    } catch {
+      return "Profile photo URL must be a valid URL.";
+    }
+  }
+
   return null;
 }
 
@@ -237,12 +263,17 @@ export function validateProfileFields(payload: {
  */
 export async function applyProfileUpdates(
   user: IUser,
-  payload: { username?: unknown; university?: unknown; bio?: unknown },
+  payload: {
+    username?: unknown;
+    university?: unknown;
+    bio?: unknown;
+    profilePhotoUrl?: unknown;
+  },
 ): Promise<string | null> {
   const validationError = validateProfileFields(payload);
   if (validationError) return validationError;
 
-  const { username, university, bio } = payload;
+  const { username, university, bio, profilePhotoUrl } = payload;
 
   if (typeof username === "string") {
     const trimmed = username.trim();
@@ -258,6 +289,8 @@ export async function applyProfileUpdates(
 
   if (typeof university === "string") user.university = university;
   if (typeof bio === "string") user.bio = bio;
+  if (profilePhotoUrl === null) user.profilePhotoPresetUrl = null;
+  if (typeof profilePhotoUrl === "string") user.profilePhotoPresetUrl = profilePhotoUrl;
 
   return null;
 }

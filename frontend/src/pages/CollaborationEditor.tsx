@@ -7,6 +7,7 @@ import { python } from "@codemirror/lang-python";
 import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import type { Awareness } from "y-protocols/awareness";
+import { useTheme } from "@/components/ThemeProvider";
 
 interface EditorProps {
   sessionId: string;
@@ -41,6 +42,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     },
     ref,
   ) => {
+    const { theme } = useTheme();
     const editorRef = useRef<HTMLDivElement>(null);
     const ytextRef = useRef<Y.Text | null>(null);
     const viewRef = useRef<EditorView | null>(null);
@@ -55,6 +57,47 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     useEffect(() => {
       initialCodeRef.current = initialCode;
     }, [initialCode]);
+
+    const lightEditorTheme = EditorView.theme({
+      "&": {
+        height: "clamp(420px, 62vh, 760px)",
+        backgroundColor: "#ffffff",
+      },
+      ".cm-scroller": {
+        overflow: "auto",
+        fontSize: "15px",
+        lineHeight: "1.6",
+      },
+      ".cm-gutters": {
+        backgroundColor: "#f8fafc",
+        color: "#64748b",
+        borderRight: "1px solid #e2e8f0",
+      },
+      ".cm-content": {
+        caretColor: "#0f172a",
+      },
+      ".cm-activeLine": {
+        backgroundColor: "#f8fafc",
+      },
+      ".cm-activeLineGutter": {
+        backgroundColor: "#f8fafc",
+      },
+      ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection":
+        {
+          backgroundColor: "#dbeafe",
+        },
+    });
+
+    const darkEditorTheme = EditorView.theme({
+      "&": {
+        height: "clamp(420px, 62vh, 760px)",
+      },
+      ".cm-scroller": {
+        overflow: "auto",
+        fontSize: "15px",
+        lineHeight: "1.6",
+      },
+    });
 
     useImperativeHandle(ref, () => ({
       disconnect() {
@@ -221,10 +264,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         extensions: [
           basicSetup,
           python(),
-          oneDark,
+          ...(theme === "dark" ? [oneDark, darkEditorTheme] : [lightEditorTheme]),
           yCollab(ytext, filteredAwareness),
           activityExtension,
-          EditorView.theme({ "&": { height: "450px" } }),
         ],
       });
 
@@ -249,14 +291,17 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       sharedCode,
       sharedYjsState,
       token,
+      theme,
       username,
     ]);
 
     return (
-      <div
-        ref={editorRef}
-        className="overflow-hidden rounded-md border bg-background shadow-inner"
-      />
+      <div className="resize-y overflow-auto rounded-[1.1rem] border border-indigo-200/80 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div
+          ref={editorRef}
+          className="min-h-[420px] overflow-hidden rounded-xl border border-indigo-200/80 bg-white shadow-inner dark:border-slate-800 dark:bg-slate-950"
+        />
+      </div>
     );
   },
 );
