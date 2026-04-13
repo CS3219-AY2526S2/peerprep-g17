@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -10,10 +10,13 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // ADD THIS BLOCK BELOW
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.ts",
+  },
   server: {
-    host: true, // Listen on all local IPs (0.0.0.0)
+    host: true,
     port: 5173,
-    allowedHosts: true, // Tell Vite to stop blocking Nginx/Gateway requests
+    allowedHosts: true,
   },
 });

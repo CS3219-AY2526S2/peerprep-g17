@@ -149,6 +149,28 @@ test("matches exact difficulty FIFO and creates an active session", async () => 
   assert.equal(matchedEvent?.event.status, "matched");
 });
 
+test("returns matched session state from getUserState after a successful match", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  const result = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(result.matched, true);
+
+  const stateA = await matchService.getUserState("user-a");
+  const stateB = await matchService.getUserState("user-b");
+
+  assert.equal(stateA?.status, "matched");
+  assert.equal(stateB?.status, "matched");
+  assert.equal(stateA?.sessionId, result.state.sessionId);
+  assert.equal(stateB?.sessionId, result.state.sessionId);
+});
+
 test("rejects duplicate active requests for the same user", async () => {
   await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
@@ -217,6 +239,31 @@ test("falls back to the closest available question difficulty", async () => {
 
   assert.equal(resultB.matched, true);
   assert.equal(collaborationClient.payloads[0]?.questionId, "q-arrays-medium");
+});
+
+test("matches adjacent difficulties after the first relaxation window", async () => {
+  const resultA = await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  assert.equal(resultA.matched, false);
+
+  const requestIdA = await redis.get("match:user-request:user-a");
+  assert.ok(requestIdA);
+  await redis.hset(
+    `match:request:${requestIdA}`,
+    "createdAt",
+    String(Date.now() - 31000),
+  );
+
+  const resultB = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Medium",
+  });
+
+  assert.equal(resultB.matched, true);
+  assert.equal(resultB.state.status, "matched");
+  assert.equal(collaborationClient.payloads.at(-1)?.questionId, "q-arrays-medium");
 });
 
 test("does not match the immediate previous partner when they are at the FIFO head", async () => {
@@ -484,6 +531,25 @@ test("marks expired queued requests as timed out", async () => {
   const state = await matchService.getUserState("user-a");
   assert.equal(state, null);
   assert.equal(eventBus.events.at(-1)?.event.status, "timed_out");
+});
+
+test("ignores timeout records for requests that are no longer searching", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  const result = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+  assert.equal(result.matched, true);
+
+  const processed = await matchService.processDueTimeouts(Date.now());
+  assert.equal(processed, 0);
+
+  const session = await Session.findOne({ sessionId: result.state.sessionId });
+  assert.ok(session);
+  assert.equal(session.status, "active");
 });
 
 test("session completion releases the user for a new request", async () => {

@@ -263,8 +263,8 @@ export default function QuestionPage() {
         {/* ── Header ──────────────────────────────── */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Questions</h1>
-            <p className="mt-2 text-muted-foreground">
+            <h1 className="text-4xl font-bold tracking-tight">Questions</h1>
+            <p className="mt-2 text-base text-muted-foreground">
               {isAdmin
                 ? "Create, view, and manage the question repository."
                 : "Browse and explore the question repository."}
@@ -360,19 +360,13 @@ export default function QuestionPage() {
               placeholder="Search by title…"
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
-              className="w-64"
+              className="h-10 w-72 text-base"
             />
-            <style>{`
-              #filter-difficulty option, #filter-category option {
-                background-color: #3e3e3e;
-                color: #d4d4d4;
-              }
-            `} </style>
             <select
               id="filter-difficulty"
               value={filterDifficulty}
               onChange={(e) => setFilterDifficulty(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none"
+              className="surface-select h-10 min-w-44 text-base"
             >
                <option value="">All Difficulties</option>
                   {DIFFICULTIES.map((d) => (
@@ -383,7 +377,7 @@ export default function QuestionPage() {
               id="filter-category"
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="h-8 rounded-lg border border-input bg-[#3e3e3e] text-[#d4d4d4] px-3 text-sm outline-none"
+              className="surface-select h-10 min-w-48 text-base"
             >
               <option value="">All Categories</option>
               {CATEGORIES.map((c) => (
@@ -427,25 +421,25 @@ export default function QuestionPage() {
           </div>
         ) : (
           <div className="mt-6 overflow-hidden rounded-xl border border-border/50">
-            <table className="w-full text-sm">
+            <table className="w-full text-[1.05rem]">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
                   <th 
-                    className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground"
+                    className="w-[30%] px-4 py-4 text-left text-base font-medium text-muted-foreground"
                     onClick={() => handleTheSort("title")}
                   >
                     Title {sortField === "title" ? (sortDirectory == "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="w-[10%] px-4 py-3 text-left font-medium text-muted-foreground"
+                  <th className="w-[10%] px-4 py-4 text-left text-base font-medium text-muted-foreground"
                     onClick={() => handleTheSort("difficulty")}
                   >
                     Difficulty {sortField === "difficulty" ? (sortDirectory === "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="w-[30%] px-4 py-3 text-left font-medium text-muted-foreground">
+                  <th className="w-[30%] px-4 py-4 text-left text-base font-medium text-muted-foreground">
                     Categories
                   </th>
                   {isAdmin && (
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                    <th className="px-4 py-4 text-right text-base font-medium text-muted-foreground">
                       Actions
                     </th>
                   )}
@@ -458,10 +452,10 @@ export default function QuestionPage() {
                     className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
                     onClick={() => setSelectedQuestion(q)}
                   >
-                    <td className="px-4 py-3 font-medium">{q.title}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-4 text-[1.08rem] font-medium text-foreground">{q.title}</td>
+                    <td className="px-4 py-4">
                       <span
-                        className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${
+                        className={`inline-block rounded-md border px-3 py-1.5 text-base font-medium ${
                           DIFFICULTY_STYLES[q.difficulty] ||
                           "bg-muted text-muted-foreground"
                         }`}
@@ -469,12 +463,12 @@ export default function QuestionPage() {
                         {q.difficulty}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="px-4 py-4">
+                      <div className="flex flex-wrap gap-2">
                         {(q.categories ?? []).map((cat) => (
                           <span
                             key={cat}
-                            className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                            className="rounded-full border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-base font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
                           >
                             {cat}
                           </span>
@@ -482,7 +476,7 @@ export default function QuestionPage() {
                       </div>
                     </td>
                     {isAdmin && (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-4 text-right">
                         <div
                           className="flex items-center justify-end gap-2"
                           onClick={(e) => e.stopPropagation()}

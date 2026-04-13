@@ -13,6 +13,7 @@ type MatchServiceStub = {
   ) => Promise<{ matched: boolean; state: MatchStateResponse }>;
   getUserState: (userId: string) => Promise<MatchStateResponse | null>;
   cancelRequest: (userId: string) => Promise<boolean>;
+  removeActiveSession: (userId: string) => Promise<void>;
   completeSession: (
     sessionId: string,
   ) => Promise<{ sessionId: string; status: string; completedAt?: Date } | null>;
@@ -44,6 +45,9 @@ function createMatchServiceStub(): MatchServiceStub {
     async cancelRequest() {
       return true;
     },
+    async removeActiveSession() {
+      return;
+    },
     async completeSession(sessionId) {
       return {
         sessionId,
@@ -69,6 +73,47 @@ test("GET /health returns ok", async () => {
 
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, { data: { ok: true } });
+});
+
+test("GET /api/matches/requests/me returns 401 when the token is invalid", async () => {
+  const app = createApp(
+    new MatchController(createMatchServiceStub() as unknown as never),
+  );
+
+  global.fetch = (async () =>
+    ({
+      ok: false,
+      async json() {
+        return {};
+      },
+    }) as Response) as typeof fetch;
+
+  const res = await request(app)
+    .get("/api/matches/requests/me")
+    .set("Authorization", "Bearer invalid-token");
+
+  assert.equal(res.status, 401);
+  assert.equal(res.body.error, "Invalid or expired token.");
+});
+
+test("GET /api/matches/requests/me returns 502 when auth verification cannot reach user service", async () => {
+  const app = createApp(
+    new MatchController(createMatchServiceStub() as unknown as never),
+  );
+
+  global.fetch = (async () => {
+    throw new Error("network down");
+  }) as typeof fetch;
+
+  const res = await request(app)
+    .get("/api/matches/requests/me")
+    .set("Authorization", "Bearer valid-token");
+
+  assert.equal(res.status, 502);
+  assert.equal(
+    res.body.error,
+    "Unable to reach User Service for authentication.",
+  );
 });
 
 test("POST /api/matches/requests requires auth", async () => {
@@ -146,6 +191,62 @@ test("POST /api/matches/requests maps duplicate-request errors to 409", async ()
   assert.equal(res.status, 409);
 });
 
+test("POST /api/matches/requests returns 400 for invalid difficulty", async () => {
+  const app = createApp(
+    new MatchController(createMatchServiceStub() as unknown as never),
+  );
+
+  global.fetch = (async () =>
+    ({
+      ok: true,
+      async json() {
+        return { data: { id: "user-1" } };
+      },
+    }) as Response) as typeof fetch;
+
+  const res = await request(app)
+    .post("/api/matches/requests")
+    .set("Authorization", "Bearer valid-token")
+    .send({ topic: "Arrays", difficulty: "Impossible" });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error, "Invalid difficulty.");
+});
+
+test("POST /api/matches/requests returns 200 when the user is matched immediately", async () => {
+  const stub = createMatchServiceStub();
+  stub.createRequest = async (_userId, _authHeader, input) => ({
+    matched: true,
+    state: {
+      status: "matched",
+      requestId: "request-1",
+      sessionId: "session-1",
+      partnerUserId: "user-2",
+      topic: input.topic,
+      difficulty: input.difficulty,
+      questionId: "question-1",
+    },
+  });
+
+  const app = createApp(new MatchController(stub as unknown as never));
+  global.fetch = (async () =>
+    ({
+      ok: true,
+      async json() {
+        return { data: { id: "user-1" } };
+      },
+    }) as Response) as typeof fetch;
+
+  const res = await request(app)
+    .post("/api/matches/requests")
+    .set("Authorization", "Bearer valid-token")
+    .send({ topic: "Arrays", difficulty: "Easy" });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.status, "matched");
+  assert.equal(res.body.data.sessionId, "session-1");
+});
+
 test("GET /api/matches/requests/me returns 404 when the user has no active state", async () => {
   const stub = createMatchServiceStub();
   stub.getUserState = async () => null;
@@ -191,6 +292,51 @@ test("DELETE /api/matches/requests/me cancels the active request", async () => {
   assert.equal(cancelledUserId, "user-1");
 });
 
+test("DELETE /api/matches/requests/me returns 404 when nothing is queued", async () => {
+  const stub = createMatchServiceStub();
+  stub.cancelRequest = async () => false;
+
+  const app = createApp(new MatchController(stub as unknown as never));
+  global.fetch = (async () =>
+    ({
+      ok: true,
+      async json() {
+        return { data: { id: "user-1" } };
+      },
+    }) as Response) as typeof fetch;
+
+  const res = await request(app)
+    .delete("/api/matches/requests/me")
+    .set("Authorization", "Bearer valid-token");
+
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /api/matches/requests/me/session clears active session state", async () => {
+  let clearedUserId = "";
+  const stub = createMatchServiceStub();
+  stub.removeActiveSession = async (userId) => {
+    clearedUserId = userId;
+  };
+
+  const app = createApp(new MatchController(stub as unknown as never));
+  global.fetch = (async () =>
+    ({
+      ok: true,
+      async json() {
+        return { data: { id: "user-1" } };
+      },
+    }) as Response) as typeof fetch;
+
+  const res = await request(app)
+    .delete("/api/matches/requests/me/session")
+    .set("Authorization", "Bearer valid-token");
+
+  assert.equal(res.status, 200);
+  assert.equal(clearedUserId, "user-1");
+  assert.equal(res.body.data.message, "Match state cleared.");
+});
+
 test("PATCH /api/matches/sessions/:sessionId/complete requires the internal service token", async () => {
   const app = createApp(
     new MatchController(createMatchServiceStub() as unknown as never),
@@ -224,4 +370,18 @@ test("PATCH /api/matches/sessions/:sessionId/complete marks the session complete
   assert.equal(res.status, 200);
   assert.equal(completedSessionId, "session-1");
   assert.equal(res.body.data.status, "completed");
+});
+
+test("PATCH /api/matches/sessions/:sessionId/complete returns 404 for an unknown session", async () => {
+  const stub = createMatchServiceStub();
+  stub.completeSession = async () => null;
+
+  const app = createApp(new MatchController(stub as unknown as never));
+
+  const res = await request(app)
+    .patch("/api/matches/sessions/missing-session/complete")
+    .set("x-internal-service-token", "dev-internal-service-token");
+
+  assert.equal(res.status, 404);
+  assert.equal(res.body.error, "Session not found.");
 });
