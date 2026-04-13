@@ -269,7 +269,13 @@ test("POST /api/sessions/:sessionId/submit creates a submit attempt", async () =
   assert.equal(response.body.data.mode, "submit");
 
   const attempts = await Attempt.find({ sessionId: "session-submit", mode: "submit" });
-  assert.equal(attempts.length, 1);
+  assert.equal(attempts.length, 2);
+  assert.deepEqual(
+    attempts
+      .map((attempt) => attempt.userId)
+      .sort(),
+    ["user-a", "user-b"],
+  );
 });
 
 test("POST /api/sessions/handoff rejects missing fields", async () => {
