@@ -15,6 +15,7 @@ export function createCollaborationRoutes(
   );
   router.post("/execute", verifyToken, controller.executeCode);
   router.post("/explain", verifyToken, controller.explainCode);
+  router.post("/assistant/question", verifyToken, controller.assistQuestion);
   router.post("/history/suggestion", verifyToken, controller.suggestAttemptImprovement);
   router.patch("/history/:attemptId/reflection", verifyToken, controller.updateAttemptReflection);
   router.get("/history", verifyToken, controller.getAttemptHistory);

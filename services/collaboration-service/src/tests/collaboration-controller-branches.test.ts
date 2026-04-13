@@ -95,6 +95,83 @@ test("explainCode covers missing api key, upstream empty explanation, and thrown
   global.fetch = originalFetch;
 });
 
+test("assistQuestion covers missing api key, invalid mode, upstream empty response, and thrown errors", async () => {
+  const originalFetch = global.fetch;
+  const originalKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+
+  const controller = new CollaborationController({} as never);
+
+  const missingKeyRes = createMockResponse();
+  await controller.assistQuestion(
+    {
+      userId: "user-1",
+      body: {
+        questionTitle: "Two Sum",
+        mode: "rephrase",
+      },
+    } as AuthRequest,
+    missingKeyRes as never,
+  );
+  assert.equal(missingKeyRes.statusCode, 503);
+
+  const invalidModeRes = createMockResponse();
+  await controller.assistQuestion(
+    {
+      userId: "user-1",
+      body: {
+        questionTitle: "Two Sum",
+        mode: "unknown",
+      },
+    } as AuthRequest,
+    invalidModeRes as never,
+  );
+  assert.equal(invalidModeRes.statusCode, 400);
+
+  process.env.OPENAI_API_KEY = "test-key";
+  global.fetch = (async () =>
+    ({
+      ok: true,
+      async json() {
+        return { choices: [{ message: { content: "   " } }] };
+      },
+    }) as Response) as typeof fetch;
+
+  const emptyRes = createMockResponse();
+  await controller.assistQuestion(
+    {
+      userId: "user-1",
+      body: {
+        questionTitle: "Two Sum",
+        mode: "brainstorm",
+      },
+    } as AuthRequest,
+    emptyRes as never,
+  );
+  assert.equal(emptyRes.statusCode, 502);
+
+  global.fetch = (async () => {
+    throw new Error("openai offline");
+  }) as typeof fetch;
+
+  const thrownRes = createMockResponse();
+  await controller.assistQuestion(
+    {
+      userId: "user-1",
+      body: {
+        questionTitle: "Two Sum",
+        mode: "test_case_generation",
+      },
+    } as AuthRequest,
+    thrownRes as never,
+  );
+  assert.equal(thrownRes.statusCode, 502);
+  assert.match(String((thrownRes.body as { error?: string }).error), /openai offline/i);
+
+  process.env.OPENAI_API_KEY = originalKey;
+  global.fetch = originalFetch;
+});
+
 test("session execution endpoints map not found, validation, and conflict errors", async () => {
   const service = {
     async executeSessionCode(_sessionId: string, _userId: string, mode: "run" | "submit") {
