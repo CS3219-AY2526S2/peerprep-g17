@@ -10,6 +10,7 @@ export function createCollaborationRoutes(
   router.post("/handoff", verifyInternalServiceToken, controller.handoffSession);
   router.post("/execute", verifyToken, controller.executeCode);
   router.post("/explain", verifyToken, controller.explainCode);
+  router.post("/history/suggestion", verifyToken, controller.suggestAttemptImprovement);
   router.get("/history", verifyToken, controller.getAttemptHistory);
   router.post("/:sessionId/run", verifyToken, controller.runSessionCode);
   router.post("/:sessionId/submit", verifyToken, controller.submitSessionCode);

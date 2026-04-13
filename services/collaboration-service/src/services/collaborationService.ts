@@ -26,8 +26,6 @@ class NotFoundError extends Error {}
 class ConflictError extends Error {}
 class ValidationError extends Error {}
 
-const sessionExecutionLocks = new Set<string>();
-
 function findFirstFailingCase(result: ExecutionResult) {
   return result.cases.find((testCase) => testCase.verdict !== "Accepted") || null;
 }
@@ -54,6 +52,8 @@ function broadcastSessionCompletion(
 }
 
 export class CollaborationService {
+  private readonly sessionExecutionLocks = new Set<string>();
+
   constructor(
     private readonly matchingServiceClient: MatchingServiceClient,
     private readonly questionServiceClient: QuestionServiceClient = new QuestionServiceClient(),
@@ -151,13 +151,13 @@ export class CollaborationService {
       throw new ValidationError("Submitted code exceeds the maximum size limit.");
     }
 
-    if (sessionExecutionLocks.has(sessionId)) {
+    if (this.sessionExecutionLocks.has(sessionId)) {
       throw new ConflictError(
         "An execution is already running for this collaboration session.",
       );
     }
 
-    sessionExecutionLocks.add(sessionId);
+    this.sessionExecutionLocks.add(sessionId);
     const startedAt = new Date().toISOString();
     sessionSocketManager.broadcastToSession(sessionId, {
       type: "execution_started",
@@ -219,7 +219,7 @@ export class CollaborationService {
 
       return result;
     } finally {
-      sessionExecutionLocks.delete(sessionId);
+      this.sessionExecutionLocks.delete(sessionId);
     }
   }
 
@@ -290,10 +290,36 @@ export class CollaborationService {
       ? submittedCode
       : await this.resolveSessionCode(sessionId, session);
 
+    const latestSubmittedAttempt = await Attempt.findOne({
+      userId,
+      sessionId,
+      mode: "submit",
+    }).sort({ submittedAt: -1, attemptedAt: -1 });
+
     const lastSubmit =
       session.lastExecutionResult?.mode === "submit"
         ? session.lastExecutionResult
-        : null;
+        : latestSubmittedAttempt?.executionMode && latestSubmittedAttempt.verdict
+          ? {
+              mode: "submit" as const,
+              executionMode: latestSubmittedAttempt.executionMode,
+              verdict: latestSubmittedAttempt.verdict,
+              status: "finished" as const,
+              stdout: "",
+              stderr: "",
+              runtimeMs: latestSubmittedAttempt.runtimeMs ?? 0,
+              memoryKb: latestSubmittedAttempt.memoryKb ?? 0,
+              passedCount: latestSubmittedAttempt.passedCount ?? 0,
+              totalCount: latestSubmittedAttempt.totalCount ?? 0,
+              cases: latestSubmittedAttempt.firstFailingCase
+                ? [latestSubmittedAttempt.firstFailingCase]
+                : [],
+              initiatedByUserId: userId,
+              initiatedAt:
+                latestSubmittedAttempt.submittedAt?.toISOString() ??
+                latestSubmittedAttempt.attemptedAt.toISOString(),
+            }
+          : null;
 
     const participantIds = getParticipantIds(session);
     await Promise.all(

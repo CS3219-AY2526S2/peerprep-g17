@@ -179,3 +179,11 @@ export interface AttemptRecord {
   firstFailingCase?: ExecutionCaseResult | null;
   submittedAt?: string | null;
 }
+
+export interface AttemptSuggestion {
+  hint: string;
+  improvementAreas: string;
+  approach: string;
+  solution: string;
+  takeaway: string;
+}
