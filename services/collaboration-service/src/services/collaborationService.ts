@@ -32,6 +32,10 @@ function findFirstFailingCase(result: ExecutionResult) {
   return result.cases.find((testCase) => testCase.verdict !== "Accepted") || null;
 }
 
+function getParticipantIds(session: ICollaborationSession): string[] {
+  return Array.from(new Set([session.userAId, session.userBId]));
+}
+
 function broadcastSessionCompletion(
   sessionId: string,
   completedByUserId: string,
@@ -184,25 +188,28 @@ export class CollaborationService {
       await session.save();
 
       if (mode === "submit") {
-        await Attempt.create({
-          userId,
-          sessionId,
-          questionId: session.questionId,
-          topic: session.topic,
-          difficulty: session.difficulty,
-          language: session.language,
-          code,
-          attemptedAt: new Date(),
-          mode: "submit",
-          verdict: result.verdict,
-          passedCount: result.passedCount,
-          totalCount: result.totalCount,
-          runtimeMs: result.runtimeMs,
-          memoryKb: result.memoryKb,
-          executionMode: result.executionMode,
-          firstFailingCase: findFirstFailingCase(result),
-          submittedAt: new Date(result.initiatedAt),
-        });
+        const participantIds = getParticipantIds(session);
+        await Attempt.insertMany(
+          participantIds.map((participantId) => ({
+            userId: participantId,
+            sessionId,
+            questionId: session.questionId,
+            topic: session.topic,
+            difficulty: session.difficulty,
+            language: session.language,
+            code,
+            attemptedAt: new Date(),
+            mode: "submit" as const,
+            verdict: result.verdict,
+            passedCount: result.passedCount,
+            totalCount: result.totalCount,
+            runtimeMs: result.runtimeMs,
+            memoryKb: result.memoryKb,
+            executionMode: result.executionMode,
+            firstFailingCase: findFirstFailingCase(result),
+            submittedAt: new Date(result.initiatedAt),
+          })),
+        );
       }
 
       sessionSocketManager.broadcastToSession(sessionId, {
@@ -288,32 +295,39 @@ export class CollaborationService {
         ? session.lastExecutionResult
         : null;
 
-    await Attempt.findOneAndUpdate(
-      { userId, sessionId, mode: "session_complete" },
-      {
-        userId,
-        sessionId,
-        questionId: session.questionId,
-        topic: session.topic,
-        difficulty: session.difficulty,
-        language: session.language,
-        code,
-        attemptedAt: new Date(),
-        mode: "session_complete",
-        verdict: lastSubmit?.verdict,
-        passedCount: lastSubmit?.passedCount,
-        totalCount: lastSubmit?.totalCount,
-        runtimeMs: lastSubmit?.runtimeMs,
-        memoryKb: lastSubmit?.memoryKb,
-        executionMode: lastSubmit?.executionMode,
-        firstFailingCase: lastSubmit ? findFirstFailingCase(lastSubmit) : null,
-        submittedAt: session.lastSubmittedAt || null,
-      },
-      {
-        upsert: true,
-        returnDocument: "after",
-        setDefaultsOnInsert: true,
-      },
+    const participantIds = getParticipantIds(session);
+    await Promise.all(
+      participantIds.map((participantId) =>
+        Attempt.findOneAndUpdate(
+          { userId: participantId, sessionId, mode: "session_complete" },
+          {
+            userId: participantId,
+            sessionId,
+            questionId: session.questionId,
+            topic: session.topic,
+            difficulty: session.difficulty,
+            language: session.language,
+            code,
+            attemptedAt: new Date(),
+            mode: "session_complete",
+            verdict: lastSubmit?.verdict,
+            passedCount: lastSubmit?.passedCount,
+            totalCount: lastSubmit?.totalCount,
+            runtimeMs: lastSubmit?.runtimeMs,
+            memoryKb: lastSubmit?.memoryKb,
+            executionMode: lastSubmit?.executionMode,
+            firstFailingCase: lastSubmit
+              ? findFirstFailingCase(lastSubmit)
+              : null,
+            submittedAt: session.lastSubmittedAt || null,
+          },
+          {
+            upsert: true,
+            returnDocument: "after",
+            setDefaultsOnInsert: true,
+          },
+        ),
+      ),
     );
 
     if (session.status === "completed") {
