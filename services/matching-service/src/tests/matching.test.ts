@@ -23,6 +23,7 @@ class FakeQuestionCatalogService {
     _authHeader: string,
     topic: string,
     difficulty: Difficulty,
+    attemptedQuestionIds: Set<string> = new Set(),
   ): Promise<SelectedQuestion | null> {
     const questions = this.questions[topic] || [];
     const order: Difficulty[] =
@@ -31,6 +32,17 @@ class FakeQuestionCatalogService {
         : difficulty === "Medium"
           ? ["Medium", "Easy", "Hard"]
           : ["Hard", "Medium", "Easy"];
+
+    for (const currentDifficulty of order) {
+      const question = questions.find(
+        (entry) =>
+          entry.difficulty === currentDifficulty &&
+          !attemptedQuestionIds.has(entry.id),
+      );
+      if (question) {
+        return question;
+      }
+    }
 
     for (const currentDifficulty of order) {
       const question = questions.find((entry) => entry.difficulty === currentDifficulty);
@@ -46,12 +58,17 @@ class FakeQuestionCatalogService {
 class FakeCollaborationClient {
   public shouldFail = false;
   public payloads: MatchHandoffPayload[] = [];
+  public attemptedQuestionIds = new Map<string, string[]>();
 
   async handoffMatch(payload: MatchHandoffPayload): Promise<void> {
     this.payloads.push(payload);
     if (this.shouldFail) {
       throw new Error("handoff failed");
     }
+  }
+
+  async getAttemptedQuestionIds(userIds: string[]): Promise<string[]> {
+    return [...new Set(userIds.flatMap((userId) => this.attemptedQuestionIds.get(userId) || []))];
   }
 }
 
@@ -169,6 +186,48 @@ test("returns matched session state from getUserState after a successful match",
   assert.equal(stateB?.status, "matched");
   assert.equal(stateA?.sessionId, result.state.sessionId);
   assert.equal(stateB?.sessionId, result.state.sessionId);
+});
+
+test("prefers an unattempted question before falling back to attempted ones", async () => {
+  collaborationClient.attemptedQuestionIds.set("user-a", ["q-arrays-easy"]);
+  collaborationClient.attemptedQuestionIds.set("user-b", []);
+
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  const result = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(result.matched, true);
+  assert.equal(collaborationClient.payloads.at(-1)?.questionId, "q-arrays-medium");
+});
+
+test("falls back to attempted questions when no unattempted question exists", async () => {
+  collaborationClient.attemptedQuestionIds.set("user-a", [
+    "q-arrays-easy",
+    "q-arrays-medium",
+  ]);
+  collaborationClient.attemptedQuestionIds.set("user-b", [
+    "q-arrays-easy",
+    "q-arrays-medium",
+  ]);
+
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  const result = await matchService.createRequest("user-b", "Bearer token-b", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  assert.equal(result.matched, true);
+  assert.equal(collaborationClient.payloads.at(-1)?.questionId, "q-arrays-easy");
 });
 
 test("rejects duplicate active requests for the same user", async () => {

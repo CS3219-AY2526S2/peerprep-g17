@@ -67,6 +67,10 @@ test("CollaborationService executeSessionCode rejects oversize code and concurre
   });
 
   let releaseExecution!: () => void;
+  let notifyExecutionStarted!: () => void;
+  const executionStarted = new Promise<void>((resolve) => {
+    notifyExecutionStarted = resolve;
+  });
 
   const service = new CollaborationService(
     { async completeSession() { return; } } as never,
@@ -92,6 +96,7 @@ test("CollaborationService executeSessionCode rejects oversize code and concurre
     } as never,
     {
       async execute() {
+        notifyExecutionStarted();
         return new Promise((resolve) => {
           releaseExecution = () =>
             resolve({
@@ -131,6 +136,8 @@ test("CollaborationService executeSessionCode rejects oversize code and concurre
     },
   );
 
+  await executionStarted;
+
   await assert.rejects(
     () =>
       service.executeSessionCode("session-lock-test", "user-a", "run", {
@@ -139,6 +146,7 @@ test("CollaborationService executeSessionCode rejects oversize code and concurre
     ConflictError,
   );
 
+  assert.equal(typeof releaseExecution, "function");
   releaseExecution();
   await firstExecution;
 });

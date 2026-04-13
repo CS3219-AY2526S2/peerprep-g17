@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const presetProfilePhotos = [
   {
@@ -351,6 +351,17 @@ export default function ProfilePage() {
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                     {user.university}
                   </span>
+                )}
+                {user?.id && (
+                  <Link to={`/users/${user.id}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                    >
+                      View Public Profile
+                    </Button>
+                  </Link>
                 )}
               </div>
             </div>

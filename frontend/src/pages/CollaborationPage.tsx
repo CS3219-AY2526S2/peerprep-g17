@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ import {
   QUESTION_API_URL,
 } from "@/config";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePublicProfile } from "@/hooks/usePublicProfile";
 import type {
   ClassJudgeTestCase,
   CollaborationSessionRecord,
@@ -1444,6 +1445,19 @@ export default function CollaborationPage() {
     return executionResult.initiatedByUserId === user?.id ? "You" : "Your partner";
   }, [executionResult, user?.id]);
 
+  const partnerUserId = useMemo(() => {
+    if (!session || !user?.id) {
+      return null;
+    }
+
+    return session.userAId === user.id ? session.userBId : session.userAId;
+  }, [session, user?.id]);
+  const { profile: partnerProfile, photoPreview: partnerPhotoPreview } = usePublicProfile(
+    partnerUserId,
+    token,
+    { enabled: Boolean(partnerUserId) },
+  );
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       <Navbar />
@@ -1626,6 +1640,46 @@ export default function CollaborationPage() {
                   </div>
 
                   <div className="space-y-6">
+                  {partnerProfile && (
+                    <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white text-lg font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                            {partnerPhotoPreview ? (
+                              <img
+                                src={partnerPhotoPreview}
+                                alt={`${partnerProfile.username} profile`}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span>{partnerProfile.username[0]?.toUpperCase() || "?"}</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                              Your Partner
+                            </p>
+                            <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                              {partnerProfile.username}
+                            </p>
+                            <p className="truncate text-sm text-muted-foreground">
+                              {partnerProfile.university || "No university listed"}
+                            </p>
+                          </div>
+                        </div>
+                        <Link
+                          to={`/users/${partnerProfile.id}`}
+                          className="inline-flex text-sm font-medium text-sky-700 underline-offset-4 hover:underline dark:text-sky-300"
+                        >
+                          View public profile
+                        </Link>
+                      </div>
+                      <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                        {partnerProfile.bio || "No bio provided yet."}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-4 rounded-2xl border border-indigo-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <h3 className="text-base font-semibold">Shared Editor</h3>

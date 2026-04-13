@@ -135,22 +135,6 @@ export class CollaborationService {
     mode: ExecutionResultMode,
     body: ExecutionRequestBody,
   ): Promise<ExecutionResult> {
-    const session = await this.getSessionForUser(sessionId, userId);
-    if (!session) {
-      throw new NotFoundError("Session not found.");
-    }
-
-    const code = String(body.code || "");
-    if (!code.trim()) {
-      throw new ValidationError("No code provided.");
-    }
-
-    if (
-      Buffer.byteLength(code, "utf8") > config.executionSourceSizeLimitBytes
-    ) {
-      throw new ValidationError("Submitted code exceeds the maximum size limit.");
-    }
-
     if (this.sessionExecutionLocks.has(sessionId)) {
       throw new ConflictError(
         "An execution is already running for this collaboration session.",
@@ -158,17 +142,34 @@ export class CollaborationService {
     }
 
     this.sessionExecutionLocks.add(sessionId);
-    const startedAt = new Date().toISOString();
-    sessionSocketManager.broadcastToSession(sessionId, {
-      type: "execution_started",
-      payload: {
-        mode,
-        initiatedByUserId: userId,
-        initiatedAt: startedAt,
-      },
-    });
 
     try {
+      const session = await this.getSessionForUser(sessionId, userId);
+      if (!session) {
+        throw new NotFoundError("Session not found.");
+      }
+
+      const code = String(body.code || "");
+      if (!code.trim()) {
+        throw new ValidationError("No code provided.");
+      }
+
+      if (
+        Buffer.byteLength(code, "utf8") > config.executionSourceSizeLimitBytes
+      ) {
+        throw new ValidationError("Submitted code exceeds the maximum size limit.");
+      }
+
+      const startedAt = new Date().toISOString();
+      sessionSocketManager.broadcastToSession(sessionId, {
+        type: "execution_started",
+        payload: {
+          mode,
+          initiatedByUserId: userId,
+          initiatedAt: startedAt,
+        },
+      });
+
       const question = await this.questionServiceClient.getQuestionJudge(
         session.questionId,
       );
@@ -400,6 +401,37 @@ export class CollaborationService {
 
   async getAttemptHistory(userId: string): Promise<IAttempt[]> {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
+  }
+
+  async getAttemptedQuestionIdsForUsers(userIds: string[]): Promise<string[]> {
+    const uniqueUserIds = [...new Set(userIds.map((userId) => userId.trim()).filter(Boolean))];
+    if (uniqueUserIds.length === 0) {
+      return [];
+    }
+
+    const [attempts, sessions] = await Promise.all([
+      Attempt.find(
+        { userId: { $in: uniqueUserIds } },
+        { questionId: 1, _id: 0 },
+      ).lean(),
+      CollaborationSession.find(
+        {
+          $or: [
+            { userAId: { $in: uniqueUserIds } },
+            { userBId: { $in: uniqueUserIds } },
+          ],
+        },
+        { questionId: 1, _id: 0 },
+      ).lean(),
+    ]);
+
+    return [
+      ...new Set(
+        [...attempts, ...sessions]
+          .map((record) => String(record.questionId))
+          .filter(Boolean),
+      ),
+    ];
   }
 
   async updateAttemptReflection(

@@ -89,7 +89,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               <Link
-                to="/profile"
+                to={user ? `/users/${user.id}` : "/profile"}
                 className="flex items-center gap-2 rounded-full border border-border/60 bg-background/75 px-2 py-1 transition-colors hover:border-sky-300 dark:hover:border-violet-700"
               >
                 <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border/70 bg-muted text-xs font-semibold text-muted-foreground">

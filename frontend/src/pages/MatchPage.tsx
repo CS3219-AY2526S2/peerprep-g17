@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { MATCHING_API_URL, MATCHING_WS_URL, QUESTION_API_URL } from "@/config";
+import { usePublicProfile } from "@/hooks/usePublicProfile";
 import type { MatchState } from "@/types";
 
 type QuestionMetaResponse = {
@@ -20,6 +21,8 @@ type QuestionMetaResponse = {
     categories?: string[];
   };
 };
+
+const MATCH_STATE_REFRESH_INTERVAL_MS = 5000;
 
 function formatRemainingTime(ms: number): string {
   const safeMs = Math.max(0, ms);
@@ -42,6 +45,49 @@ export default function MatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [countdownMs, setCountdownMs] = useState<number | null>(null);
+  const { profile: partnerProfile, photoPreview: partnerPhotoPreview } = usePublicProfile(
+    matchState?.partnerUserId,
+    token,
+    { enabled: Boolean(matchState?.partnerUserId) },
+  );
+
+  const syncMatchState = useMemo(
+    () =>
+      async function syncMatchStateFromServer() {
+        if (!token) {
+          return;
+        }
+
+        const response = await fetch(`${MATCHING_API_URL}/requests/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const json = await response.json();
+        const sessionData = json.data as MatchState | null;
+
+        if (!sessionData) {
+          return;
+        }
+
+        const deadSessionId = sessionStorage.getItem("dead_session");
+
+        if (sessionData.status === "matched" && sessionData.sessionId) {
+          if (sessionData.sessionId === deadSessionId) {
+            setMatchState(null);
+          } else {
+            navigate(`/collaboration/${sessionData.sessionId}`);
+          }
+          return;
+        }
+
+        setMatchState(sessionData);
+      },
+    [navigate, token],
+  );
 
   useEffect(() => {
     if (!token) {
@@ -75,21 +121,21 @@ export default function MatchPage() {
           setSelectedTopic((current) => current || categories[0] || "");
         }
         if (stateRes.ok) {
-  const stateJson = await stateRes.json();
-  const sessionData = stateJson.data;
+          const stateJson = await stateRes.json();
+          const sessionData = stateJson.data as MatchState;
 
-  const deadSessionId = sessionStorage.getItem("dead_session");
+          const deadSessionId = sessionStorage.getItem("dead_session");
 
-  if (sessionData.status === "matched" && sessionData.sessionId) {
-    if (sessionData.sessionId === deadSessionId) {
-      setMatchState({ ...sessionData, status: "idle" });
-    } else {
-      navigate(`/collaboration/${sessionData.sessionId}`);
-    }
-  } else {
-    setMatchState(sessionData);
-  }
-}
+          if (sessionData.status === "matched" && sessionData.sessionId) {
+            if (sessionData.sessionId === deadSessionId) {
+              setMatchState(null);
+            } else {
+              navigate(`/collaboration/${sessionData.sessionId}`);
+            }
+          } else {
+            setMatchState(sessionData);
+          }
+        }
       } catch {
         if (!cancelled) {
           setError("Unable to load match page data.");
@@ -162,6 +208,31 @@ export default function MatchPage() {
     const intervalId = window.setInterval(tick, 1000);
     return () => window.clearInterval(intervalId);
   }, [matchState]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncMatchState();
+    }, MATCH_STATE_REFRESH_INTERVAL_MS);
+
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        void syncMatchState();
+      }
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [syncMatchState, token]);
 
   const canSubmit = useMemo(
     () => Boolean(selectedTopic) && !submitting && matchState?.status !== "searching",
@@ -352,6 +423,44 @@ export default function MatchPage() {
                 </div>
               </div>
 
+              {partnerProfile && (
+                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/85">
+                  <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    Your Match
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white text-lg font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      {partnerPhotoPreview ? (
+                        <img
+                          src={partnerPhotoPreview}
+                          alt={`${partnerProfile.username} profile`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span>{partnerProfile.username[0]?.toUpperCase() || "?"}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                        {partnerProfile.username}
+                      </div>
+                      <div className="truncate text-sm text-muted-foreground">
+                        {partnerProfile.university || "No university listed"}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-3 line-clamp-3 text-sm text-slate-600 dark:text-slate-300">
+                    {partnerProfile.bio || "No bio provided yet."}
+                  </p>
+                  <Link
+                    to={`/users/${partnerProfile.id}`}
+                    className="mt-3 inline-flex text-sm font-medium text-sky-700 underline-offset-4 hover:underline dark:text-sky-300"
+                  >
+                    Open public profile
+                  </Link>
+                </div>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 {matchState?.topic && (
                   <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/85">
@@ -379,6 +488,9 @@ export default function MatchPage() {
                       Partner
                     </div>
                     <div className="mt-1 text-base font-medium text-foreground break-all">
+                      {partnerProfile?.username || "Matched partner"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground break-all">
                       {matchState.partnerUserId}
                     </div>
                   </div>

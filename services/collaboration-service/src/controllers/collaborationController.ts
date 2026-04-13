@@ -54,6 +54,29 @@ async function formatSessionResponseWithSharedCode(session: any) {
 export class CollaborationController {
   constructor(private readonly collaborationService: CollaborationService) {}
 
+  getAttemptedQuestionIdsForUsers = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    const userIds = Array.isArray(req.body?.userIds)
+      ? req.body.userIds.filter((value: unknown): value is string => typeof value === "string")
+      : [];
+
+    if (userIds.length === 0) {
+      res.status(400).json({ error: "At least one user id is required." });
+      return;
+    }
+
+    try {
+      const questionIds = await this.collaborationService.getAttemptedQuestionIdsForUsers(
+        userIds,
+      );
+      res.status(200).json({ data: { questionIds } });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch attempted question ids." });
+    }
+  };
+
   updateAttemptReflection = async (
     req: AuthRequest,
     res: Response,

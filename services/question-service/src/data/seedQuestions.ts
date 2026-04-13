@@ -78,15 +78,6 @@ const BASE_SEED_QUESTIONS = [
     link: "https://leetcode.com/problems/implement-stack-using-queues/",
   },
   {
-    title: "Combine Two Tables",
-    difficulty: "Easy",
-    categories: ["Databases"],
-    description:
-      "Given tables Person and Address, write a solution to report the first name, last name, city, and state of each person in the Person table. If the address of a personId is not present in the Address table, report null instead.",
-    examples: [],
-    link: "https://leetcode.com/problems/combine-two-tables/",
-  },
-  {
     title: "Repeated DNA Sequences",
     difficulty: "Medium",
     categories: ["Algorithms", "Bit Manipulation", "Hash Table"],
@@ -232,15 +223,6 @@ const BASE_SEED_QUESTIONS = [
       { input: "nums = [0,1]", output: "true" },
     ],
     link: "https://leetcode.com/problems/chalkboard-xor-game/",
-  },
-  {
-    title: "Trips and Users",
-    difficulty: "Hard",
-    categories: ["Databases"],
-    description:
-      'Write a solution to find the cancellation rate of requests with unbanned users (both client and driver must not be banned) each day between "2013-10-01" and "2013-10-03". Round the cancellation rate to two decimal points.',
-    examples: [],
-    link: "https://leetcode.com/problems/trips-and-users/",
   },
   {
     title: "Combination Sum",
@@ -1157,6 +1139,54 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
       memoryLimitMb: 256,
     },
   },
+  "Subsets": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "subsets",
+        "nums",
+        [
+          "result = [[]]",
+          "for num in nums:",
+          "    result += [subset + [num] for subset in result]",
+          "return result",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "subsets-visible-1",
+        args: [[1, 2, 3]],
+        expected: [
+          [],
+          [1],
+          [2],
+          [1, 2],
+          [3],
+          [1, 3],
+          [2, 3],
+          [1, 2, 3],
+        ],
+      },
+      {
+        id: "subsets-visible-2",
+        args: [[0]],
+        expected: [[], [0]],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "subsets-hidden-1",
+        args: [[1, 2]],
+        expected: [[], [1], [2], [1, 2]],
+      },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "subsets",
+      ...DEFAULT_LIMITS,
+    },
+  },
   "Validate Binary Search Tree": {
     executionMode: "python_function",
     starterCode: {
@@ -1192,6 +1222,361 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
       methodName: "isValidBST",
       ...DEFAULT_LIMITS,
     },
+  },
+  "Serialize and Deserialize a Binary Tree": {
+    executionMode: "python_class",
+    starterCode: {
+      python: classTemplate("Codec", [
+        "def serialize(self, root):",
+        "    return ','.join('null' if value is None else str(value) for value in root)",
+        "",
+        "def deserialize(self, data):",
+        "    return [None if token == 'null' else int(token) for token in data.split(',')] if data else []",
+      ]),
+    },
+    visibleTestCases: [
+      {
+        id: "codec-visible-1",
+        operations: ["Codec", "serialize", "deserialize"],
+        arguments: [[], [[1, 2, 3, null, null, 4, 5]], ["1,2,3,null,null,4,5"]],
+        expected: [null, "1,2,3,null,null,4,5", [1, 2, 3, null, null, 4, 5]],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "codec-hidden-1",
+        operations: ["Codec", "serialize", "deserialize"],
+        arguments: [[], [[1]], ["1"]],
+        expected: [null, "1", [1]],
+      },
+    ],
+    judgeConfig: { className: "Codec", comparisonMode: "exact_json", timeLimitMs: 4000, memoryLimitMb: 256 },
+  },
+  "Combination Sum": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate("combinationSum", "candidates, target", ["return []"].join("\n")),
+    },
+    visibleTestCases: [
+      { id: "combsum-visible-1", args: [[2,3,6,7], 7], expected: [[2,2,3],[7]] },
+      { id: "combsum-visible-2", args: [[2,3,5], 8], expected: [[2,2,2,2],[2,3,3],[3,5]] },
+    ],
+    hiddenTestCases: [{ id: "combsum-hidden-1", args: [[2], 1], expected: [] }],
+    judgeConfig: { className: "Solution", methodName: "combinationSum", ...DEFAULT_LIMITS },
+  },
+  "Permutations": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("permute", "nums", ["return []"].join("\n")) },
+    visibleTestCases: [
+      { id: "perm-visible-1", args: [[1,2,3]], expected: [[1,2,3],[1,3,2],[2,1,3],[2,3,1],[3,1,2],[3,2,1]] },
+      { id: "perm-visible-2", args: [[0,1]], expected: [[0,1],[1,0]] },
+    ],
+    hiddenTestCases: [{ id: "perm-hidden-1", args: [[1]], expected: [[1]] }],
+    judgeConfig: { className: "Solution", methodName: "permute", ...DEFAULT_LIMITS },
+  },
+  "Word Search": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("exist", "board, word", ["return False"].join("\n")) },
+    visibleTestCases: [
+      { id: "wordsearch-visible-1", args: [[[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]][0],[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]][1],[["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]][2]], "ABCCED"], expected: true },
+      { id: "wordsearch-visible-2", args: [[[["A","B"],["C","D"]][0],[["A","B"],["C","D"]][1]], "ABCD"], expected: false },
+    ],
+    hiddenTestCases: [{ id: "wordsearch-hidden-1", args: [[[["A"]][0]], "A"], expected: true }],
+    judgeConfig: { className: "Solution", methodName: "exist", ...DEFAULT_LIMITS },
+  },
+  "Median of Two Sorted Arrays": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("findMedianSortedArrays", "nums1, nums2", ["merged = sorted(nums1 + nums2)", "mid = len(merged) // 2", "return merged[mid] if len(merged) % 2 else (merged[mid - 1] + merged[mid]) / 2"].join("\n")) },
+    visibleTestCases: [
+      { id: "median-visible-1", args: [[1,3], [2]], expected: 2 },
+      { id: "median-visible-2", args: [[1,2], [3,4]], expected: 2.5 },
+    ],
+    hiddenTestCases: [{ id: "median-hidden-1", args: [[0,0], [0,0]], expected: 0 }],
+    judgeConfig: { className: "Solution", methodName: "findMedianSortedArrays", comparisonMode: "float_tolerance", timeLimitMs: 4000, memoryLimitMb: 256 },
+  },
+  "Search in Rotated Sorted Array": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("search", "nums, target", ["return nums.index(target) if target in nums else -1"].join("\n")) },
+    visibleTestCases: [
+      { id: "rotsearch-visible-1", args: [[4,5,6,7,0,1,2], 0], expected: 4 },
+      { id: "rotsearch-visible-2", args: [[4,5,6,7,0,1,2], 3], expected: -1 },
+    ],
+    hiddenTestCases: [{ id: "rotsearch-hidden-1", args: [[1], 0], expected: -1 }],
+    judgeConfig: { className: "Solution", methodName: "search", ...DEFAULT_LIMITS },
+  },
+  "Find First and Last Position of Element in Sorted Array": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("searchRange", "nums, target", ["if target not in nums:", "    return [-1, -1]", "return [nums.index(target), len(nums) - 1 - nums[::-1].index(target)]"].join("\n")) },
+    visibleTestCases: [
+      { id: "range-visible-1", args: [[5,7,7,8,8,10], 8], expected: [3,4] },
+      { id: "range-visible-2", args: [[5,7,7,8,8,10], 6], expected: [-1,-1] },
+    ],
+    hiddenTestCases: [{ id: "range-hidden-1", args: [[], 0], expected: [-1,-1] }],
+    judgeConfig: { className: "Solution", methodName: "searchRange", ...DEFAULT_LIMITS },
+  },
+  "Search Insert Position": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("searchInsert", "nums, target", ["for i, num in enumerate(nums):", "    if num >= target:", "        return i", "return len(nums)"].join("\n")) },
+    visibleTestCases: [
+      { id: "insert-visible-1", args: [[1,3,5,6], 5], expected: 2 },
+      { id: "insert-visible-2", args: [[1,3,5,6], 2], expected: 1 },
+    ],
+    hiddenTestCases: [{ id: "insert-hidden-1", args: [[1,3,5,6], 7], expected: 4 }],
+    judgeConfig: { className: "Solution", methodName: "searchInsert", ...DEFAULT_LIMITS },
+  },
+  "Binary Tree Inorder Traversal": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("inorderTraversal", "values", ["return sorted(value for value in values if value is not None)"].join("\n")) },
+    visibleTestCases: [
+      { id: "inorder-visible-1", args: [[1, null, 2, 3]], expected: [1,3,2] },
+      { id: "inorder-visible-2", args: [[]], expected: [] },
+    ],
+    hiddenTestCases: [{ id: "inorder-hidden-1", args: [[1]], expected: [1] }],
+    judgeConfig: { className: "Solution", methodName: "inorderTraversal", ...DEFAULT_LIMITS },
+  },
+  "Symmetric Tree": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("isSymmetric", "values", ["return values == values[::-1]"].join("\n")) },
+    visibleTestCases: [
+      { id: "sym-visible-1", args: [[1,2,2,3,4,4,3]], expected: true },
+      { id: "sym-visible-2", args: [[1,2,2,null,3,null,3]], expected: false },
+    ],
+    hiddenTestCases: [{ id: "sym-hidden-1", args: [[1]], expected: true }],
+    judgeConfig: { className: "Solution", methodName: "isSymmetric", ...DEFAULT_LIMITS },
+  },
+  "Binary Tree Level Order Traversal": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("levelOrder", "values", ["return []"].join("\n")) },
+    visibleTestCases: [
+      { id: "levelorder-visible-1", args: [[3,9,20,null,null,15,7]], expected: [[3],[9,20],[15,7]] },
+      { id: "levelorder-visible-2", args: [[1]], expected: [[1]] },
+    ],
+    hiddenTestCases: [{ id: "levelorder-hidden-1", args: [[]], expected: [] }],
+    judgeConfig: { className: "Solution", methodName: "levelOrder", ...DEFAULT_LIMITS },
+  },
+  "Maximum Depth of Binary Tree": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("maxDepth", "values", ["if not values:", "    return 0", "return len([value for value in values if value is not None])"].join("\n")) },
+    visibleTestCases: [
+      { id: "maxdepth-visible-1", args: [[3,9,20,null,null,15,7]], expected: 3 },
+      { id: "maxdepth-visible-2", args: [[1,null,2]], expected: 2 },
+    ],
+    hiddenTestCases: [{ id: "maxdepth-hidden-1", args: [[]], expected: 0 }],
+    judgeConfig: { className: "Solution", methodName: "maxDepth", ...DEFAULT_LIMITS },
+  },
+  "Convert Sorted Array to Binary Search Tree": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("sortedArrayToBST", "nums", ["return nums"].join("\n")) },
+    visibleTestCases: [
+      { id: "sortedbst-visible-1", args: [[-10,-3,0,5,9]], expected: [-10,-3,0,5,9] },
+      { id: "sortedbst-visible-2", args: [[1,3]], expected: [1,3] },
+    ],
+    hiddenTestCases: [{ id: "sortedbst-hidden-1", args: [[]], expected: [] }],
+    judgeConfig: { className: "Solution", methodName: "sortedArrayToBST", ...DEFAULT_LIMITS },
+  },
+  "Flatten Binary Tree to Linked List": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("flatten", "values", ["return [value for value in values if value is not None]"].join("\n")) },
+    visibleTestCases: [
+      { id: "flatten-visible-1", args: [[1,2,5,3,4,null,6]], expected: [1,2,3,4,5,6] },
+      { id: "flatten-visible-2", args: [[]], expected: [] },
+    ],
+    hiddenTestCases: [{ id: "flatten-hidden-1", args: [[0]], expected: [0] }],
+    judgeConfig: { className: "Solution", methodName: "flatten", ...DEFAULT_LIMITS },
+  },
+  "Binary Tree Right Side View": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("rightSideView", "values", ["return []"].join("\n")) },
+    visibleTestCases: [
+      { id: "rightview-visible-1", args: [[1,2,3,null,5,null,4]], expected: [1,3,4] },
+      { id: "rightview-visible-2", args: [[1,null,3]], expected: [1,3] },
+    ],
+    hiddenTestCases: [{ id: "rightview-hidden-1", args: [[]], expected: [] }],
+    judgeConfig: { className: "Solution", methodName: "rightSideView", ...DEFAULT_LIMITS },
+  },
+  "Invert Binary Tree": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("invertTree", "values", ["return values"].join("\n")) },
+    visibleTestCases: [
+      { id: "invert-visible-1", args: [[4,2,7,1,3,6,9]], expected: [4,7,2,9,6,3,1] },
+      { id: "invert-visible-2", args: [[2,1,3]], expected: [2,3,1] },
+    ],
+    hiddenTestCases: [{ id: "invert-hidden-1", args: [[]], expected: [] }],
+    judgeConfig: { className: "Solution", methodName: "invertTree", ...DEFAULT_LIMITS },
+  },
+  "Kth Smallest Element in a BST": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("kthSmallest", "values, k", ["return sorted(value for value in values if value is not None)[k - 1]"].join("\n")) },
+    visibleTestCases: [
+      { id: "kth-visible-1", args: [[3,1,4,null,2], 1], expected: 1 },
+      { id: "kth-visible-2", args: [[5,3,6,2,4,null,null,1], 3], expected: 3 },
+    ],
+    hiddenTestCases: [{ id: "kth-hidden-1", args: [[1], 1], expected: 1 }],
+    judgeConfig: { className: "Solution", methodName: "kthSmallest", ...DEFAULT_LIMITS },
+  },
+  "Lowest Common Ancestor of a Binary Tree": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("lowestCommonAncestor", "values, p, q", ["return p if p == q else values[0]"].join("\n")) },
+    visibleTestCases: [
+      { id: "lca-visible-1", args: [[3,5,1,6,2,0,8,null,null,7,4], 5, 1], expected: 3 },
+      { id: "lca-visible-2", args: [[3,5,1,6,2,0,8,null,null,7,4], 5, 4], expected: 5 },
+    ],
+    hiddenTestCases: [{ id: "lca-hidden-1", args: [[1,2], 1, 2], expected: 1 }],
+    judgeConfig: { className: "Solution", methodName: "lowestCommonAncestor", ...DEFAULT_LIMITS },
+  },
+  "Diameter of Binary Tree": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("diameterOfBinaryTree", "values", ["return 0"].join("\n")) },
+    visibleTestCases: [
+      { id: "diameter-visible-1", args: [[1,2,3,4,5]], expected: 3 },
+      { id: "diameter-visible-2", args: [[1,2]], expected: 1 },
+    ],
+    hiddenTestCases: [{ id: "diameter-hidden-1", args: [[1]], expected: 0 }],
+    judgeConfig: { className: "Solution", methodName: "diameterOfBinaryTree", ...DEFAULT_LIMITS },
+  },
+  "Climbing Stairs": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("climbStairs", "n", ["if n <= 2:", "    return n", "a, b = 1, 2", "for _ in range(3, n + 1):", "    a, b = b, a + b", "return b"].join("\n")) },
+    visibleTestCases: [
+      { id: "stairs-visible-1", args: [2], expected: 2 },
+      { id: "stairs-visible-2", args: [3], expected: 3 },
+    ],
+    hiddenTestCases: [{ id: "stairs-hidden-1", args: [5], expected: 8 }],
+    judgeConfig: { className: "Solution", methodName: "climbStairs", ...DEFAULT_LIMITS },
+  },
+  "Word Break": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("wordBreak", "s, wordDict", ["return False"].join("\n")) },
+    visibleTestCases: [
+      { id: "wordbreak-visible-1", args: ["leetcode", ["leet","code"]], expected: true },
+      { id: "wordbreak-visible-2", args: ["catsandog", ["cats","dog","sand","and","cat"]], expected: false },
+    ],
+    hiddenTestCases: [{ id: "wordbreak-hidden-1", args: ["applepenapple", ["apple","pen"]], expected: true }],
+    judgeConfig: { className: "Solution", methodName: "wordBreak", ...DEFAULT_LIMITS },
+  },
+  "Number of Islands": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("numIslands", "grid", ["return 0"].join("\n")) },
+    visibleTestCases: [
+      { id: "islands-visible-1", args: [[["1","1","1","1","0"],["1","1","0","1","0"],["1","1","0","0","0"],["0","0","0","0","0"]]], expected: 1 },
+      { id: "islands-visible-2", args: [[["1","1","0","0","0"],["1","1","0","0","0"],["0","0","1","0","0"],["0","0","0","1","1"]]], expected: 3 },
+    ],
+    hiddenTestCases: [{ id: "islands-hidden-1", args: [[["0"]]], expected: 0 }],
+    judgeConfig: { className: "Solution", methodName: "numIslands", ...DEFAULT_LIMITS },
+  },
+  "Jump Game": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("canJump", "nums", ["reach = 0", "for index, jump in enumerate(nums):", "    if index > reach:", "        return False", "    reach = max(reach, index + jump)", "return True"].join("\n")) },
+    visibleTestCases: [
+      { id: "jump-visible-1", args: [[2,3,1,1,4]], expected: true },
+      { id: "jump-visible-2", args: [[3,2,1,0,4]], expected: false },
+    ],
+    hiddenTestCases: [{ id: "jump-hidden-1", args: [[0]], expected: true }],
+    judgeConfig: { className: "Solution", methodName: "canJump", ...DEFAULT_LIMITS },
+  },
+  "Best Time to Buy and Sell Stock": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("maxProfit", "prices", ["best = 0", "min_price = float('inf')", "for price in prices:", "    min_price = min(min_price, price)", "    best = max(best, price - min_price)", "return best"].join("\n")) },
+    visibleTestCases: [
+      { id: "stock-visible-1", args: [[7,1,5,3,6,4]], expected: 5 },
+      { id: "stock-visible-2", args: [[7,6,4,3,1]], expected: 0 },
+    ],
+    hiddenTestCases: [{ id: "stock-hidden-1", args: [[1,2]], expected: 1 }],
+    judgeConfig: { className: "Solution", methodName: "maxProfit", ...DEFAULT_LIMITS },
+  },
+  "Group Anagrams": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("groupAnagrams", "strs", ["return []"].join("\n")) },
+    visibleTestCases: [
+      { id: "anagrams-visible-1", args: [["eat","tea","tan","ate","nat","bat"]], expected: [["ate","eat","tea"],["bat"],["nat","tan"]] },
+      { id: "anagrams-visible-2", args: [[""]], expected: [[""]] },
+    ],
+    hiddenTestCases: [{ id: "anagrams-hidden-1", args: [["a"]], expected: [["a"]] }],
+    judgeConfig: { className: "Solution", methodName: "groupAnagrams", ...DEFAULT_LIMITS },
+  },
+  "Top K Frequent Elements": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("topKFrequent", "nums, k", ["from collections import Counter", "return [item for item, _ in Counter(nums).most_common(k)]"].join("\n")) },
+    visibleTestCases: [
+      { id: "topk-visible-1", args: [[1,1,1,2,2,3], 2], expected: [1,2] },
+      { id: "topk-visible-2", args: [[1], 1], expected: [1] },
+    ],
+    hiddenTestCases: [{ id: "topk-hidden-1", args: [[4,4,4,6,6,7], 1], expected: [4] }],
+    judgeConfig: { className: "Solution", methodName: "topKFrequent", ...DEFAULT_LIMITS },
+  },
+  "Add Two Numbers": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("addTwoNumbers", "l1, l2", ["carry = 0", "result = []", "i = 0", "while i < len(l1) or i < len(l2) or carry:", "    a = l1[i] if i < len(l1) else 0", "    b = l2[i] if i < len(l2) else 0", "    total = a + b + carry", "    result.append(total % 10)", "    carry = total // 10", "    i += 1", "return result"].join("\n")) },
+    visibleTestCases: [
+      { id: "addnums-visible-1", args: [[2,4,3], [5,6,4]], expected: [7,0,8] },
+      { id: "addnums-visible-2", args: [[0], [0]], expected: [0] },
+    ],
+    hiddenTestCases: [{ id: "addnums-hidden-1", args: [[9,9], [1]], expected: [0,0,1] }],
+    judgeConfig: { className: "Solution", methodName: "addTwoNumbers", ...DEFAULT_LIMITS },
+  },
+  "Merge Two Sorted Lists": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("mergeTwoLists", "list1, list2", ["result = []", "i = j = 0", "while i < len(list1) and j < len(list2):", "    if list1[i] <= list2[j]:", "        result.append(list1[i]); i += 1", "    else:", "        result.append(list2[j]); j += 1", "result.extend(list1[i:])", "result.extend(list2[j:])", "return result"].join("\n")) },
+    visibleTestCases: [
+      { id: "merge-visible-1", args: [[1,2,4], [1,3,4]], expected: [1,1,2,3,4,4] },
+      { id: "merge-visible-2", args: [[], []], expected: [] },
+    ],
+    hiddenTestCases: [{ id: "merge-hidden-1", args: [[], [0]], expected: [0] }],
+    judgeConfig: { className: "Solution", methodName: "mergeTwoLists", ...DEFAULT_LIMITS },
+  },
+  "Min Stack": {
+    executionMode: "python_class",
+    starterCode: {
+      python: classTemplate("MinStack", [
+        "def __init__(self):",
+        "    self.stack = []",
+        "    self.min_stack = []",
+        "",
+        "def push(self, val):",
+        "    self.stack.append(val)",
+        "    if not self.min_stack or val <= self.min_stack[-1]:",
+        "        self.min_stack.append(val)",
+        "",
+        "def pop(self):",
+        "    value = self.stack.pop()",
+        "    if value == self.min_stack[-1]:",
+        "        self.min_stack.pop()",
+        "    return value",
+        "",
+        "def top(self):",
+        "    return self.stack[-1]",
+        "",
+        "def getMin(self):",
+        "    return self.min_stack[-1]",
+      ]),
+    },
+    visibleTestCases: [
+      {
+        id: "minstack-visible-1",
+        operations: ["MinStack","push","push","push","getMin","pop","top","getMin"],
+        arguments: [[],[-2],[0],[-3],[],[],[],[]],
+        expected: [null,null,null,null,-3,-3,0,-2],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "minstack-hidden-1",
+        operations: ["MinStack","push","getMin"],
+        arguments: [[],[5],[]],
+        expected: [null,null,5],
+      },
+    ],
+    judgeConfig: { className: "MinStack", comparisonMode: "exact_json", timeLimitMs: 4000, memoryLimitMb: 256 },
+  },
+  "Container With Most Water": {
+    executionMode: "python_function",
+    starterCode: { python: functionTemplate("maxArea", "height", ["left, right = 0, len(height) - 1", "best = 0", "while left < right:", "    best = max(best, min(height[left], height[right]) * (right - left))", "    if height[left] < height[right]:", "        left += 1", "    else:", "        right -= 1", "return best"].join("\n")) },
+    visibleTestCases: [
+      { id: "container-visible-1", args: [[1,8,6,2,5,4,8,3,7]], expected: 49 },
+      { id: "container-visible-2", args: [[1,1]], expected: 1 },
+    ],
+    hiddenTestCases: [{ id: "container-hidden-1", args: [[4,3,2,1,4]], expected: 16 }],
+    judgeConfig: { className: "Solution", methodName: "maxArea", ...DEFAULT_LIMITS },
   },
   "Sliding Window Maximum": {
     executionMode: "python_function",
@@ -1276,45 +1661,6 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
     judgeConfig: {
       className: "Solution",
       methodName: "solveNQueens",
-      ...DEFAULT_LIMITS,
-    },
-  },
-  "Serialize and Deserialize a Binary Tree": {
-    executionMode: "python_function",
-    starterCode: {
-      python: functionTemplate(
-        "roundTrip",
-        "root",
-        [
-          "result = list(root)",
-          "while result and result[-1] is None:",
-          "    result.pop()",
-          "return result",
-        ].join("\n"),
-      ),
-    },
-    visibleTestCases: [
-      {
-        id: "codec-visible-1",
-        args: [[1, 2, 3, null, null, 4, 5]],
-        expected: [1, 2, 3, null, null, 4, 5],
-      },
-    ],
-    hiddenTestCases: [
-      {
-        id: "codec-hidden-1",
-        args: [[1, null, 2, 3]],
-        expected: [1, null, 2, 3],
-      },
-      {
-        id: "codec-hidden-2",
-        args: [[]],
-        expected: [],
-      },
-    ],
-    judgeConfig: {
-      className: "Solution",
-      methodName: "roundTrip",
       ...DEFAULT_LIMITS,
     },
   },
