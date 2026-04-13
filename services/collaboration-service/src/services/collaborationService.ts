@@ -402,6 +402,28 @@ export class CollaborationService {
     return Attempt.find({ userId }).sort({ attemptedAt: -1 }).limit(50);
   }
 
+  async updateAttemptReflection(
+    userId: string,
+    attemptId: string,
+    reflection: { note?: string; checked?: boolean },
+  ): Promise<IAttempt | null> {
+    const update: { reflectionNote?: string; reflectionChecked?: boolean } = {};
+
+    if (typeof reflection.note === "string") {
+      update.reflectionNote = reflection.note.trim();
+    }
+
+    if (typeof reflection.checked === "boolean") {
+      update.reflectionChecked = reflection.checked;
+    }
+
+    return Attempt.findOneAndUpdate(
+      { _id: attemptId, userId },
+      update,
+      { returnDocument: "after" },
+    );
+  }
+
   private async resolveSessionCode(
     sessionId: string,
     session: ICollaborationSession,

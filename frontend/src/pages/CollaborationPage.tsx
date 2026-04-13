@@ -37,6 +37,18 @@ import type { CodeEditorHandle } from "./CollaborationEditor";
 const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
 
 type ResultTab = "testcase" | "result" | "console" | "chat";
+type ChatMessage = {
+  messageId?: string;
+  fromUserId?: string;
+  username: string;
+  text: string;
+  type?: "chat" | "system";
+  reactions?: Array<{
+    emoji: string;
+    userIds: string[];
+  }>;
+  timestamp?: string;
+};
 
 function InactivityWarning({
   secondsLeft,
@@ -411,6 +423,87 @@ function ExplanationContent({ content }: { content: string }) {
   return <div className="space-y-4">{elements}</div>;
 }
 
+function ChatMessageContent({ text }: { text: string }) {
+  const normalized = text.replace(/\r\n/g, "\n");
+  const parts = normalized.split(/(```[\s\S]*?```)/g);
+
+  return (
+    <div className="space-y-3">
+      {parts.map((part, index) => {
+        if (part.startsWith("```") && part.endsWith("```")) {
+          const body = part.slice(3, -3);
+          const firstNewline = body.indexOf("\n");
+          const language =
+            firstNewline === -1 ? body.trim() : body.slice(0, firstNewline).trim();
+          const code =
+            firstNewline === -1 ? "" : body.slice(firstNewline + 1).replace(/\n$/, "");
+
+          return (
+            <CodeSnippetBlock
+              key={`chat-code-${index}`}
+              language={language || "code"}
+              code={code}
+            />
+          );
+        }
+
+        if (!part.trim()) {
+          return null;
+        }
+
+        return (
+          <p
+            key={`chat-text-${index}`}
+            className="whitespace-pre-wrap break-words leading-relaxed"
+          >
+            {renderInlineText(part)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function CodeSnippetBlock({
+  language,
+  code,
+}: {
+  language: string;
+  code: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-300/80 bg-slate-950 text-slate-100 dark:border-slate-700">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-700/80 bg-slate-900 px-3 py-1">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+          {language}
+        </span>
+        <button
+          type="button"
+          onClick={copyCode}
+          className="rounded-md border border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-200 transition hover:bg-slate-800"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-3 text-xs leading-6">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 export default function CollaborationPage() {
   const CHAT_RECONNECT_DELAY_MS = 2000;
   const CHAT_MAX_RECONNECT_ATTEMPTS = 10;
@@ -423,8 +516,10 @@ export default function CollaborationPage() {
   const [questionCatalog, setQuestionCatalog] = useState<QuestionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [terminated, setTerminated] = useState(false);
   const [sessionUnavailable, setSessionUnavailable] = useState(false);
   const [warningActive, setWarningActive] = useState(false);
@@ -500,6 +595,18 @@ export default function CollaborationPage() {
   const isRedirecting = useRef(false);
   const executionStartedAtRef = useRef<string | null>(null);
   const splitPaneRef = useRef<HTMLDivElement | null>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingIndicatorsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const quickReplies = useMemo(
+    () => [
+      "Try the edge case with an empty input.",
+      "I think the bug is in the visited check.",
+      "Can you explain your approach first?",
+      "Let's submit after one more run.",
+    ],
+    [],
+  );
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -769,9 +876,58 @@ export default function CollaborationPage() {
             ? cancelCountdown()
             : startCountdown(data.payload.countdownSeconds);
         } else if (data.type === "chat_message") {
-          setMessages((prev) => [...prev, data.payload]);
+          setMessages((prev) => [...prev, data.payload as ChatMessage]);
+          if (
+            data.payload?.fromUserId &&
+            data.payload.fromUserId !== user?.id &&
+            resultTab !== "chat"
+          ) {
+            setUnreadChatCount((current) => current + 1);
+          }
         } else if (data.type === "chat_history") {
-          setMessages(data.payload);
+          setMessages((data.payload ?? []) as ChatMessage[]);
+        } else if (data.type === "chat_reaction_update") {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.messageId === data.payload?.messageId
+                ? {
+                    ...message,
+                    reactions: Array.isArray(data.payload?.reactions)
+                      ? data.payload.reactions
+                      : [],
+                  }
+                : message,
+            ),
+          );
+        } else if (data.type === "chat_typing") {
+          if (data.payload?.userId && data.payload.userId !== user?.id) {
+            const typingUserId = String(data.payload.userId);
+            const typingUsername = String(data.payload.username || "Partner");
+
+            if (typingIndicatorsRef.current[typingUserId]) {
+              clearTimeout(typingIndicatorsRef.current[typingUserId]);
+            }
+
+            if (data.payload?.isTyping) {
+              setTypingUsers((current) => ({
+                ...current,
+                [typingUserId]: typingUsername,
+              }));
+              typingIndicatorsRef.current[typingUserId] = setTimeout(() => {
+                setTypingUsers((current) => {
+                  const next = { ...current };
+                  delete next[typingUserId];
+                  return next;
+                });
+              }, 1800);
+            } else {
+              setTypingUsers((current) => {
+                const next = { ...current };
+                delete next[typingUserId];
+                return next;
+              });
+            }
+          }
         } else if (data.type === "peer_status_snapshot") {
           const onlineUserIds: string[] = data.payload?.onlineUserIds ?? [];
           setPeerOnline(
@@ -857,6 +1013,7 @@ export default function CollaborationPage() {
     startCountdown,
     syncQuestionChange,
     token,
+    resultTab,
     user?.id,
     user?.username,
   ]);
@@ -1059,6 +1216,21 @@ export default function CollaborationPage() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (resultTab === "chat") {
+      setUnreadChatCount(0);
+    }
+  }, [resultTab]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      Object.values(typingIndicatorsRef.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
   const sendMessage = () => {
     if (
       socketRef.current?.readyState === WebSocket.OPEN &&
@@ -1072,8 +1244,71 @@ export default function CollaborationPage() {
         }),
       );
       setChatInput("");
+      sendTypingSignal(false);
       sendActivity();
     }
+  };
+
+  const insertCodeSnippetTemplate = () => {
+    const snippet = "```python\n# Share a code idea here\n```";
+    setChatInput((current) => (current.trim() ? `${current}\n${snippet}` : snippet));
+    window.setTimeout(() => chatInputRef.current?.focus(), 0);
+  };
+
+  const sendTypingSignal = useCallback((isTyping: boolean) => {
+    if (socketRef.current?.readyState !== WebSocket.OPEN || terminatedRef.current) {
+      return;
+    }
+
+    socketRef.current.send(
+      JSON.stringify({
+        type: "chat_typing",
+        payload: { isTyping },
+      }),
+    );
+  }, []);
+
+  const sendQuickReply = (text: string) => {
+    if (
+      socketRef.current?.readyState === WebSocket.OPEN &&
+      !terminated &&
+      chatStatus === "connected"
+    ) {
+      socketRef.current.send(
+        JSON.stringify({
+          type: "chat_message",
+          payload: { text, username: user?.username },
+        }),
+      );
+      sendTypingSignal(false);
+      sendActivity();
+    }
+  };
+
+  const toggleReaction = (messageId: string, emoji: string) => {
+    if (socketRef.current?.readyState !== WebSocket.OPEN || terminated) {
+      return;
+    }
+
+    socketRef.current.send(
+      JSON.stringify({
+        type: "chat_reaction",
+        payload: { messageId, emoji },
+      }),
+    );
+  };
+
+  const handleChatInputChange = (value: string) => {
+    setChatInput(value);
+    sendTypingSignal(value.trim().length > 0);
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingSignal(false);
+    }, 1200);
   };
 
   async function explainCode() {
@@ -1485,7 +1720,14 @@ export default function CollaborationPage() {
                         className={`min-w-24 text-sm ${workspaceTabStyles("chat", resultTab)}`}
                         onClick={() => setResultTab("chat")}
                       >
-                        Chat
+                        <span className="inline-flex items-center gap-2">
+                          Chat
+                          {unreadChatCount > 0 && (
+                            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-emerald-900 dark:bg-emerald-100 dark:text-emerald-950">
+                              {unreadChatCount}
+                            </span>
+                          )}
+                        </span>
                       </Button>
                       </div>
                       )}
@@ -1657,8 +1899,10 @@ export default function CollaborationPage() {
                               <span
                                 className={`h-2.5 w-2.5 rounded-full ${
                                   chatStatus === "connected" && peerOnline
-                                    ? "bg-green-500"
-                                    : "bg-zinc-500"
+                                    ? "bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,0.8)]"
+                                    : chatStatus === "connected"
+                                      ? "bg-rose-400 shadow-[0_0_10px_rgba(251,113,133,0.55)]"
+                                      : "bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.45)]"
                                 }`}
                               />
                               <span className="font-medium text-foreground">
@@ -1685,25 +1929,71 @@ export default function CollaborationPage() {
                           {messages?.length ? (
                             messages.map((message, index) => (
                               <div
-                                key={index}
+                                key={message.messageId || index}
                                 className={`flex flex-col ${
-                                  message.username === user?.username
-                                    ? "items-end"
-                                    : "items-start"
+                                  message.type === "system"
+                                    ? "items-center"
+                                    : message.username === user?.username
+                                      ? "items-end"
+                                      : "items-start"
                                 }`}
                               >
-                                <span className="mb-1 text-xs font-semibold text-muted-foreground">
-                                  {message.username}
-                                </span>
-                                  <div
-                                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
-                                      message.username === user?.username
-                                        ? "border border-sky-200/80 bg-sky-100 text-sky-950 dark:border-sky-800 dark:bg-sky-900/45 dark:text-sky-50"
-                                        : "border border-emerald-200/80 bg-emerald-100 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-900/35 dark:text-emerald-50"
-                                    }`}
-                                  >
+                                {message.type === "system" ? (
+                                  <div className="max-w-[90%] rounded-full border border-violet-200/80 bg-violet-50 px-4 py-2 text-center text-sm text-violet-900 shadow-sm dark:border-violet-800 dark:bg-violet-900/35 dark:text-violet-100">
                                     {message.text}
                                   </div>
+                                ) : (
+                                  <>
+                                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                                      <span>{message.username}</span>
+                                      {message.timestamp && (
+                                        <span className="font-normal">
+                                          {new Date(message.timestamp).toLocaleTimeString([], {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div
+                                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-base leading-relaxed shadow-sm ${
+                                        message.username === user?.username
+                                          ? "border border-sky-200/80 bg-sky-100 text-sky-950 dark:border-sky-300/80 dark:bg-sky-300 dark:text-slate-950"
+                                          : "border border-emerald-200/80 bg-emerald-100 text-emerald-950 dark:border-emerald-300/80 dark:bg-emerald-300 dark:text-slate-950"
+                                      }`}
+                                    >
+                                      <ChatMessageContent text={message.text} />
+                                    </div>
+                                    <div className="mt-2 flex max-w-[85%] flex-wrap items-center gap-2">
+                                      {["👍", "✅", "❓"].map((emoji) => {
+                                        const reaction = message.reactions?.find(
+                                          (entry) => entry.emoji === emoji,
+                                        );
+                                        const reacted = !!reaction?.userIds?.includes(user?.id || "");
+                                        const count = reaction?.userIds?.length ?? 0;
+
+                                        return (
+                                          <button
+                                            key={`${message.messageId}-${emoji}`}
+                                            type="button"
+                                            className={`rounded-full border px-2.5 py-1 text-xs transition ${
+                                              reacted
+                                                ? "border-sky-300 bg-sky-100 text-sky-900 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-100"
+                                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                                            }`}
+                                            onClick={() =>
+                                              message.messageId &&
+                                              toggleReaction(message.messageId, emoji)
+                                            }
+                                          >
+                                            {emoji}
+                                            {count > 0 ? ` ${count}` : ""}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             ))
                           ) : (
@@ -1722,22 +2012,59 @@ export default function CollaborationPage() {
                                 : "Chat is reconnecting. Messages can be sent again once the connection is restored."}
                             </p>
                           )}
-                          <input
+                          <div className="mb-3 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={insertCodeSnippetTemplate}
+                              disabled={terminated || chatStatus !== "connected"}
+                            >
+                              Insert Python Snippet
+                            </Button>
+                            {quickReplies.map((reply) => (
+                              <button
+                                key={reply}
+                                type="button"
+                                className="rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                                onClick={() => sendQuickReply(reply)}
+                                disabled={terminated || chatStatus !== "connected"}
+                              >
+                                {reply}
+                              </button>
+                            ))}
+                          </div>
+                          {Object.keys(typingUsers).length > 0 && (
+                            <p className="mb-3 text-sm text-muted-foreground">
+                              {Object.values(typingUsers).join(", ")} typing...
+                            </p>
+                          )}
+                          <textarea
+                            ref={chatInputRef}
                             disabled={terminated || chatStatus !== "connected"}
-                            className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-base dark:border-slate-800 dark:bg-slate-950"
+                            rows={3}
+                            className="w-full resize-y rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-base dark:border-slate-800 dark:bg-slate-950"
                             placeholder={
                               terminated
                                 ? "Session ended"
                                 : chatStatus === "offline"
                                   ? "Offline..."
                                   : chatStatus === "connected"
-                                    ? "Type a message..."
+                                    ? "Type a message or paste a ```python``` snippet..."
                                     : "Reconnecting..."
                             }
                             value={chatInput}
-                            onChange={(event) => setChatInput(event.target.value)}
-                            onKeyDown={(event) => event.key === "Enter" && sendMessage()}
+                            onChange={(event) => handleChatInputChange(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" && !event.shiftKey) {
+                                event.preventDefault();
+                                sendMessage();
+                              }
+                            }}
                           />
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Press Enter to send. Press Shift+Enter for a new line.
+                          </p>
                         </div>
                       </div>
                     )}

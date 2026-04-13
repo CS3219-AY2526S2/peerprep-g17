@@ -54,6 +54,38 @@ async function formatSessionResponseWithSharedCode(session: any) {
 export class CollaborationController {
   constructor(private readonly collaborationService: CollaborationService) {}
 
+  updateAttemptReflection = async (
+    req: AuthRequest,
+    res: Response,
+  ): Promise<void> => {
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+
+    const { note, checked } = (req.body ?? {}) as {
+      note?: string;
+      checked?: boolean;
+    };
+
+    try {
+      const updatedAttempt = await this.collaborationService.updateAttemptReflection(
+        req.userId,
+        String(req.params.attemptId),
+        { note, checked },
+      );
+
+      if (!updatedAttempt) {
+        res.status(404).json({ error: "Attempt not found." });
+        return;
+      }
+
+      res.status(200).json({ data: updatedAttempt });
+    } catch {
+      res.status(500).json({ error: "Failed to save reflection note." });
+    }
+  };
+
   suggestAttemptImprovement = async (
     req: AuthRequest,
     res: Response,

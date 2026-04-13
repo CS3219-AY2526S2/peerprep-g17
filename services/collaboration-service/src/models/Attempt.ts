@@ -23,6 +23,8 @@ export interface IAttempt extends Document {
   executionMode?: ExecutionMode;
   firstFailingCase?: ExecutionCaseResult | null;
   submittedAt?: Date | null;
+  reflectionNote?: string;
+  reflectionChecked?: boolean;
 }
 
 const attemptSchema = new Schema<IAttempt>(
@@ -44,6 +46,8 @@ const attemptSchema = new Schema<IAttempt>(
     executionMode: { type: String, enum: ["python_function", "python_class"] },
     firstFailingCase: { type: Schema.Types.Mixed, default: null },
     submittedAt: { type: Date, default: null },
+    reflectionNote: { type: String, trim: true, default: "" },
+    reflectionChecked: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
