@@ -632,6 +632,96 @@ function classTemplate(className: string, methods: string[]): string {
 }
 
 const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
+  "Reverse a String": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "reverseString",
+        "s",
+        [
+          "left = 0",
+          "right = len(s) - 1",
+          "while left < right:",
+          "    s[left], s[right] = s[right], s[left]",
+          "    left += 1",
+          "    right -= 1",
+          "return s",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "reverse-visible-1",
+        args: [["h", "e", "l", "l", "o"]],
+        expected: ["o", "l", "l", "e", "h"],
+      },
+      {
+        id: "reverse-visible-2",
+        args: [["H", "a", "n", "n", "a", "h"]],
+        expected: ["h", "a", "n", "n", "a", "H"],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "reverse-hidden-1",
+        args: [["J", "S"]],
+        expected: ["S", "J"],
+      },
+      {
+        id: "reverse-hidden-2",
+        args: [["a"]],
+        expected: ["a"],
+      },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "reverseString",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Linked List Cycle Detection": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "hasCycle",
+        "values, pos",
+        [
+          "if pos == -1:",
+          "    return False",
+          "return 0 <= pos < len(values) and len(values) > 0",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "cycle-visible-1",
+        args: [[3, 2, 0, -4], 1],
+        expected: true,
+      },
+      {
+        id: "cycle-visible-2",
+        args: [[1], -1],
+        expected: false,
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "cycle-hidden-1",
+        args: [[1, 2], 0],
+        expected: true,
+      },
+      {
+        id: "cycle-hidden-2",
+        args: [[], -1],
+        expected: false,
+      },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "hasCycle",
+      ...DEFAULT_LIMITS,
+    },
+  },
   "Roman to Integer": {
     executionMode: "python_function",
     starterCode: {
@@ -754,6 +844,76 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
       comparisonMode: "exact_json",
       timeLimitMs: 4000,
       memoryLimitMb: 256,
+    },
+  },
+  "Combine Two Tables": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "combineTables",
+        "persons, addresses",
+        [
+          "address_by_person = {row['personId']: row for row in addresses}",
+          "result = []",
+          "for person in persons:",
+          "    address = address_by_person.get(person['personId'])",
+          "    result.append({",
+          "        'firstName': person['firstName'],",
+          "        'lastName': person['lastName'],",
+          "        'city': address['city'] if address else None,",
+          "        'state': address['state'] if address else None,",
+          "    })",
+          "return result",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "tables-visible-1",
+        args: [
+          [
+            { personId: 1, firstName: "Allen", lastName: "Wang" },
+            { personId: 2, firstName: "Bob", lastName: "Alice" },
+          ],
+          [{ personId: 2, city: "New York City", state: "New York" }],
+        ],
+        expected: [
+          {
+            firstName: "Allen",
+            lastName: "Wang",
+            city: null,
+            state: null,
+          },
+          {
+            firstName: "Bob",
+            lastName: "Alice",
+            city: "New York City",
+            state: "New York",
+          },
+        ],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "tables-hidden-1",
+        args: [
+          [{ personId: 7, firstName: "Ada", lastName: "Lovelace" }],
+          [{ personId: 7, city: "London", state: "UK" }],
+        ],
+        expected: [
+          {
+            firstName: "Ada",
+            lastName: "Lovelace",
+            city: "London",
+            state: "UK",
+          },
+        ],
+      },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "combineTables",
+      ...DEFAULT_LIMITS,
     },
   },
   "Repeated DNA Sequences": {
@@ -911,6 +1071,50 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
       ...DEFAULT_LIMITS,
     },
   },
+  "Rotate Image": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "rotate",
+        "matrix",
+        [
+          "n = len(matrix)",
+          "for row in range(n):",
+          "    for col in range(row + 1, n):",
+          "        matrix[row][col], matrix[col][row] = matrix[col][row], matrix[row][col]",
+          "for row in matrix:",
+          "    row.reverse()",
+          "return matrix",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "rotate-visible-1",
+        args: [[
+          [1, 2, 3],
+          [4, 5, 6],
+          [7, 8, 9],
+        ]],
+        expected: [[7, 4, 1], [8, 5, 2], [9, 6, 3]],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "rotate-hidden-1",
+        args: [[
+          [5, 1],
+          [2, 4],
+        ]],
+        expected: [[2, 5], [4, 1]],
+      },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "rotate",
+      ...DEFAULT_LIMITS,
+    },
+  },
   "Airplane Seat Assignment Probability": {
     executionMode: "python_function",
     starterCode: {
@@ -983,54 +1187,41 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
       ...DEFAULT_LIMITS,
     },
   },
-  "Reverse a String": {
-    executionMode: "python_function",
-    starterCode: {
-      python: functionTemplate("reverseString", "s", ["return list(reversed(s))"].join("\n")),
-    },
-    visibleTestCases: [
-      { id: "reverse-visible-1", args: [["h", "e", "l", "l", "o"]], expected: ["o", "l", "l", "e", "h"] },
-      { id: "reverse-visible-2", args: [["H", "a", "n", "n", "a", "h"]], expected: ["h", "a", "n", "n", "a", "H"] },
-    ],
-    hiddenTestCases: [{ id: "reverse-hidden-1", args: [["a"]], expected: ["a"] }],
-    judgeConfig: { className: "Solution", methodName: "reverseString", ...DEFAULT_LIMITS },
-  },
-  "Linked List Cycle Detection": {
-    executionMode: "python_function",
-    starterCode: {
-      python: functionTemplate("hasCycle", "values, pos", ["return pos >= 0 and pos < len(values)"].join("\n")),
-    },
-    visibleTestCases: [
-      { id: "cycle-visible-1", args: [[3, 2, 0, -4], 1], expected: true },
-      { id: "cycle-visible-2", args: [[1], -1], expected: false },
-    ],
-    hiddenTestCases: [{ id: "cycle-hidden-1", args: [[1, 2], 0], expected: true }],
-    judgeConfig: { className: "Solution", methodName: "hasCycle", ...DEFAULT_LIMITS },
-  },
-  "Rotate Image": {
-    executionMode: "python_function",
-    starterCode: {
-      python: functionTemplate(
-        "rotate",
-        "matrix",
-        ["n = len(matrix)", "return [[matrix[n - 1 - r][c] for r in range(n)] for c in range(n)]"].join("\n"),
-      ),
-    },
-    visibleTestCases: [{ id: "rotate-visible-1", args: [[[ [1,2,3],[4,5,6],[7,8,9] ][0], [[1,2,3],[4,5,6],[7,8,9]][1], [[1,2,3],[4,5,6],[7,8,9]][2] ]], expected: [[7,4,1],[8,5,2],[9,6,3]] }],
-    hiddenTestCases: [{ id: "rotate-hidden-1", args: [[[ [1,2],[3,4] ][0], [[1,2],[3,4]][1] ]], expected: [[3,1],[4,2]] }],
-    judgeConfig: { className: "Solution", methodName: "rotate", ...DEFAULT_LIMITS },
-  },
   "Validate Binary Search Tree": {
     executionMode: "python_function",
     starterCode: {
-      python: functionTemplate("isValidBST", "values", ["return values == sorted(values) and len(values) == len(set(values))"].join("\n")),
+      python: functionTemplate(
+        "isValidBST",
+        "root",
+        [
+          "def validate(index, lower, upper):",
+          "    if index >= len(root) or root[index] is None:",
+          "        return True",
+          "    value = root[index]",
+          "    if not (lower < value < upper):",
+          "        return False",
+          "    return validate(index * 2 + 1, lower, value) and validate(index * 2 + 2, value, upper)",
+          "return validate(0, float('-inf'), float('inf'))",
+        ].join("\n"),
+      ),
     },
     visibleTestCases: [
-      { id: "bst-visible-1", args: [[1, 2, 3]], expected: true },
-      { id: "bst-visible-2", args: [[5, 1, 4, 3, 6]], expected: false },
+      { id: "bst-visible-1", args: [[2, 1, 3]], expected: true },
+      {
+        id: "bst-visible-2",
+        args: [[5, 1, 4, null, null, 3, 6]],
+        expected: false,
+      },
     ],
-    hiddenTestCases: [{ id: "bst-hidden-1", args: [[2, 2, 3]], expected: false }],
-    judgeConfig: { className: "Solution", methodName: "isValidBST", ...DEFAULT_LIMITS },
+    hiddenTestCases: [
+      { id: "bst-hidden-1", args: [[1]], expected: true },
+      { id: "bst-hidden-2", args: [[2, 2, 2]], expected: false },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "isValidBST",
+      ...DEFAULT_LIMITS,
+    },
   },
   "Serialize and Deserialize a Binary Tree": {
     executionMode: "python_class",
@@ -1529,6 +1720,86 @@ const EXECUTION_METADATA_BY_TITLE: Record<string, SeedExecutionMetadata> = {
     judgeConfig: {
       className: "Solution",
       methodName: "xorGame",
+      ...DEFAULT_LIMITS,
+    },
+  },
+  "Trips and Users": {
+    executionMode: "python_function",
+    starterCode: {
+      python: functionTemplate(
+        "cancellationRate",
+        "trips, users",
+        [
+          "valid_users = {user['users_id'] for user in users if user['banned'] == 'No'}",
+          "totals = {}",
+          "cancelled = {}",
+          "for trip in trips:",
+          "    day = trip['request_at']",
+          "    if day < '2013-10-01' or day > '2013-10-03':",
+          "        continue",
+          "    if trip['client_id'] not in valid_users or trip['driver_id'] not in valid_users:",
+          "        continue",
+          "    totals[day] = totals.get(day, 0) + 1",
+          "    if trip['status'] != 'completed':",
+          "        cancelled[day] = cancelled.get(day, 0) + 1",
+          "result = []",
+          "for day in sorted(totals):",
+          "    rate = round(cancelled.get(day, 0) / totals[day] + 1e-8, 2)",
+          "    result.append({'Day': day, 'Cancellation Rate': rate})",
+          "return result",
+        ].join("\n"),
+      ),
+    },
+    visibleTestCases: [
+      {
+        id: "trips-visible-1",
+        args: [
+          [
+            { id: 1, client_id: 1, driver_id: 10, status: "completed", request_at: "2013-10-01" },
+            { id: 2, client_id: 2, driver_id: 11, status: "cancelled_by_driver", request_at: "2013-10-01" },
+            { id: 3, client_id: 3, driver_id: 12, status: "completed", request_at: "2013-10-01" },
+            { id: 4, client_id: 1, driver_id: 10, status: "cancelled_by_client", request_at: "2013-10-02" },
+            { id: 5, client_id: 2, driver_id: 11, status: "completed", request_at: "2013-10-02" },
+            { id: 6, client_id: 3, driver_id: 12, status: "completed", request_at: "2013-10-03" },
+          ],
+          [
+            { users_id: 1, banned: "No" },
+            { users_id: 2, banned: "Yes" },
+            { users_id: 3, banned: "No" },
+            { users_id: 10, banned: "No" },
+            { users_id: 11, banned: "No" },
+            { users_id: 12, banned: "No" },
+          ],
+        ],
+        expected: [
+          { Day: "2013-10-01", "Cancellation Rate": 0 },
+          { Day: "2013-10-02", "Cancellation Rate": 1 },
+          { Day: "2013-10-03", "Cancellation Rate": 0 },
+        ],
+      },
+    ],
+    hiddenTestCases: [
+      {
+        id: "trips-hidden-1",
+        args: [
+          [
+            { id: 7, client_id: 4, driver_id: 13, status: "cancelled_by_driver", request_at: "2013-10-01" },
+            { id: 8, client_id: 4, driver_id: 13, status: "completed", request_at: "2013-10-02" },
+          ],
+          [
+            { users_id: 4, banned: "No" },
+            { users_id: 13, banned: "No" },
+          ],
+        ],
+        expected: [
+          { Day: "2013-10-01", "Cancellation Rate": 1 },
+          { Day: "2013-10-02", "Cancellation Rate": 0 },
+        ],
+      },
+    ],
+    judgeConfig: {
+      className: "Solution",
+      methodName: "cancellationRate",
       ...DEFAULT_LIMITS,
     },
   },
