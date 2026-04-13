@@ -12,7 +12,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    setupFiles: "./src/test/setup.ts",
+    setupFiles: "./src/tests/setup.ts",
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["e2e/**", "playwright.config.ts", "node_modules/**", "dist/**"],
   },
   server: {
     host: true,

@@ -4,13 +4,13 @@ on:
   push:
     paths:
       - "services/collaboration-service/**"
-      - ".github/workflows/collaboration-service.yml"
+      - ".github/workflows/**"
   pull_request:
     branches:
       - main
     paths:
       - "services/collaboration-service/**"
-      - ".github/workflows/collaboration-service.yml"
+      - ".github/workflows/**"
 
 jobs:
   test:

@@ -4,13 +4,13 @@ on:
   push:
     paths:
       - "services/matching-service/**"
-      - ".github/workflows/matching-service.yml"
+      - ".github/workflows/**"
   pull_request:
     branches:
       - main
     paths:
       - "services/matching-service/**"
-      - ".github/workflows/matching-service.yml"
+      - ".github/workflows/**"
 
 jobs:
   test:

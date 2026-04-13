@@ -1,0 +1,10 @@
+{
+  "generatedAt": "2026-04-11T04:46:21.769Z",
+  "scenario": "user_service_failure_injection",
+  "status": 503,
+  "durationMs": 67.18,
+  "body": {
+    "error": "User Service unavailable during injected failure scenario."
+  },
+  "passed": true
+}

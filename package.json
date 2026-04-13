@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/HpD0QZBI) # CS3219 Project (PeerPrep) - AY2526S2 ## Group: G17",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test:nonfunctional:fixture": "node tests/nonfunctional/fixture-server.mjs",
+    "test:nonfunctional:load": "node tests/nonfunctional/smoke-load.mjs",
+    "test:nonfunctional:failure": "node tests/nonfunctional/failure-injection.mjs"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

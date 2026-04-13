@@ -4,17 +4,17 @@ on:
   push:
     paths:
       - "frontend/**"
-      - ".github/workflows/frontend.yml"
+      - ".github/workflows/**"
   pull_request:
     branches:
       - main
     paths:
       - "frontend/**"
-      - ".github/workflows/frontend.yml"
+      - ".github/workflows/**"
 
 jobs:
   build:
-    name: Build Frontend
+    name: Test and Build Frontend
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +31,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test
+
       - name: Run TypeScript check
         working-directory: frontend
         run: npx tsc -b
@@ -38,6 +42,13 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npx vite build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: frontend/dist
+          if-no-files-found: error
 
   security:
     name: Security Scan

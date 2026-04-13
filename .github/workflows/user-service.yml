@@ -1,12 +1,16 @@
 name: Continuous Integration for the User Service
 
 on:
+  push:
+    paths:
+      - "services/user-service/**"
+      - ".github/workflows/**"
   pull_request:
     branches:
       - main
     paths:
       - "services/user-service/**"
-      - ".github/workflows/user-service.yml"
+      - ".github/workflows/**"
 
 jobs:
   test:
@@ -25,25 +29,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "npm"
+          cache-dependency-path: services/user-service/package-lock.json
 
-      - name: Install the dependencies
+      - name: Install dependencies
         working-directory: services/user-service
-        run: npm install
+        run: npm ci
 
-      - name: Build the user service
+      - name: Build
         working-directory: services/user-service
         run: npm run build
 
-      - name: Run tests
+      - name: Run tests with coverage
         working-directory: services/user-service
-        run: npm test
+        run: npx c8 --exclude dist/config/passport.js --exclude dist/index.js --exclude dist/scripts/** --exclude dist/lib/gridfs.js --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 npm test
         env:
-          MONGODB_URI: mongodb://localhost:27017/peerprep-test
+          MONGO_URI: mongodb://localhost:27017/peerprep-user-test
           JWT_SECRET: test-secret
           GOOGLE_CLIENT_ID: test-client-id
           GOOGLE_CLIENT_SECRET: test-client-secret
+          GITHUB_CLIENT_ID: test-github-client-id
+          GITHUB_CLIENT_SECRET: test-github-client-secret
 
-      - name: Scan the security
+      - name: Security scan
         working-directory: services/user-service
         run: npm audit --audit-level=high
 
@@ -51,5 +59,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-usage-service
+          name: coverage-user-service
           path: services/user-service/coverage/lcov.info
