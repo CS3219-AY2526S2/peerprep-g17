@@ -30,6 +30,10 @@ function findFirstFailingCase(result: ExecutionResult) {
   return result.cases.find((testCase) => testCase.verdict !== "Accepted") || null;
 }
 
+function normalizeAttemptCode(code: string | null | undefined): string {
+  return typeof code === "string" ? code.trim() : "";
+}
+
 function getParticipantIds(session: ICollaborationSession): string[] {
   return Array.from(new Set([session.userAId, session.userBId]));
 }
@@ -297,10 +301,15 @@ export class CollaborationService {
       mode: "submit",
     }).sort({ submittedAt: -1, attemptedAt: -1 });
 
+    const codeMatchesLatestSubmit =
+      latestSubmittedAttempt &&
+      normalizeAttemptCode(latestSubmittedAttempt.code) ===
+        normalizeAttemptCode(code);
+
     const lastSubmit =
-      session.lastExecutionResult?.mode === "submit"
-        ? session.lastExecutionResult
-        : latestSubmittedAttempt?.executionMode && latestSubmittedAttempt.verdict
+      codeMatchesLatestSubmit &&
+      latestSubmittedAttempt?.executionMode &&
+      latestSubmittedAttempt.verdict
           ? {
               mode: "submit" as const,
               executionMode: latestSubmittedAttempt.executionMode,

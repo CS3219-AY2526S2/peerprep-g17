@@ -38,32 +38,24 @@ function hasSavedCode(attempt: AttemptRecord) {
 
 function getAttemptOutcome(
   attempt: AttemptRecord,
-): "accepted" | "not_accepted" | "attempted" | "not_submitted" {
+): "accepted" | "not_accepted" {
   if (attempt.verdict === "Accepted") return "accepted";
   if (attempt.verdict) return "not_accepted";
-  if (attempt.mode === "session_complete" && hasSavedCode(attempt)) return "attempted";
-  return "not_submitted";
+  if (attempt.mode === "session_complete" && hasSavedCode(attempt)) return "not_accepted";
+  return "not_accepted";
 }
 
 function getVerdictLabel(attempt: AttemptRecord) {
   const outcome = getAttemptOutcome(attempt);
   if (outcome === "accepted") return "Accepted";
-  if (outcome === "not_accepted") return attempt.verdict ?? "Not Accepted";
-  if (outcome === "attempted") return "Attempted";
-  return "Not Submitted";
+  return attempt.verdict ?? "Not Accepted";
 }
 
 function getStatusClasses(status: ReturnType<typeof getAttemptOutcome>) {
   if (status === "accepted") {
     return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
   }
-  if (status === "not_accepted") {
-    return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-  }
-  if (status === "attempted") {
-    return "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300";
-  }
-  return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 }
 
 function getPassCountClasses(attempt: AttemptRecord) {
@@ -282,9 +274,6 @@ export default function HistoryPage() {
   const totalNotAccepted = attempts.filter(
     (attempt) => getAttemptOutcome(attempt) === "not_accepted",
   ).length;
-  const totalAttempted = attempts.filter(
-    (attempt) => getAttemptOutcome(attempt) === "attempted",
-  ).length;
 
   async function generateSuggestion(attempt: AttemptRecord) {
     if (!token || suggestionLoadingId) return;
@@ -378,7 +367,6 @@ export default function HistoryPage() {
           <Card className="border-border/60"><CardHeader><CardDescription>Total Recorded Attempts</CardDescription><CardTitle className="text-3xl">{attempts.length}</CardTitle></CardHeader></Card>
           <Card className="border-border/60"><CardHeader><CardDescription>Accepted</CardDescription><CardTitle className="text-3xl">{totalAccepted}</CardTitle></CardHeader></Card>
           <Card className="border-border/60"><CardHeader><CardDescription>Not Accepted</CardDescription><CardTitle className="text-3xl">{totalNotAccepted}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60"><CardHeader><CardDescription>Attempted</CardDescription><CardTitle className="text-3xl">{totalAttempted}</CardTitle></CardHeader></Card>
         </section>
         <section className="mt-6 rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
