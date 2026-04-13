@@ -74,6 +74,56 @@ test("completeSession prefers the submitted code and saves attempts for both par
   assert.equal(attempts[1]?.code, "print('submitted')");
 });
 
+test("completeSession does not reuse an old submit verdict when the final code changed", async () => {
+  await CollaborationSession.create({
+    sessionId: "session-verdict-mismatch",
+    userAId: "user-a",
+    userBId: "user-b",
+    topic: "Arrays",
+    difficulty: "Easy",
+    questionId: "q-1",
+    language: "Python",
+    status: "active",
+  });
+
+  await Attempt.create({
+    userId: "user-a",
+    sessionId: "session-verdict-mismatch",
+    questionId: "q-1",
+    topic: "Arrays",
+    difficulty: "Easy",
+    language: "Python",
+    code: "print('correct')",
+    attemptedAt: new Date("2026-04-13T10:00:00.000Z"),
+    mode: "submit",
+    verdict: "Accepted",
+    passedCount: 4,
+    totalCount: 4,
+    runtimeMs: 12,
+    memoryKb: 64,
+    executionMode: "python_function",
+    firstFailingCase: null,
+    submittedAt: new Date("2026-04-13T10:00:00.000Z"),
+  });
+
+  await collaborationService.completeSession(
+    "session-verdict-mismatch",
+    "user-a",
+    "print('now wrong')",
+  );
+
+  const attempts = await Attempt.find({
+    sessionId: "session-verdict-mismatch",
+    mode: "session_complete",
+  }).sort({ userId: 1 });
+
+  assert.equal(attempts.length, 2);
+  assert.equal(attempts[0]?.code, "print('now wrong')");
+  assert.equal(attempts[0]?.verdict ?? null, null);
+  assert.equal(attempts[1]?.code, "print('now wrong')");
+  assert.equal(attempts[1]?.verdict ?? null, null);
+});
+
 test("completeSession falls back to the in-memory Yjs doc and saves for both users", async () => {
   await CollaborationSession.create({
     sessionId: "session-2",

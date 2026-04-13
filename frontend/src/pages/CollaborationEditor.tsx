@@ -205,7 +205,11 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         ytext.insert(0, formatted);
       },
       getCode() {
-        return ytextRef.current?.toString() ?? "";
+        return (
+          viewRef.current?.state.doc.toString() ??
+          ytextRef.current?.toString() ??
+          ""
+        );
       },
     }));
 
