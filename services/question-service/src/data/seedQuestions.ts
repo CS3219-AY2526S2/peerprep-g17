@@ -1,6 +1,3 @@
-/**
- * Shared seed data - used by both the CLI script and the /seed API endpoint.
- */
 const BASE_SEED_QUESTIONS = [
   {
     title: "Reverse a String",

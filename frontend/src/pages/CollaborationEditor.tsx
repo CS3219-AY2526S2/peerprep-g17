@@ -6,6 +6,11 @@ import { EditorView, basicSetup } from "codemirror";
 import { python } from "@codemirror/lang-python";
 import { EditorState } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
+import {
+  autocompletion,
+  completeFromList,
+  snippetCompletion,
+} from "@codemirror/autocomplete";
 import type { Awareness } from "y-protocols/awareness";
 import { useTheme } from "@/components/ThemeProvider";
 
@@ -27,6 +32,81 @@ export interface CodeEditorHandle {
   getCode: () => string;
   disconnect: () => void;
 }
+
+const pythonSnippetCompletions = [
+  snippetCompletion("for ${item} in ${iterable}:\n    ${pass}", {
+    label: "for",
+    type: "keyword",
+    detail: "Loop template",
+    info: "Insert a Python for-loop block.",
+  }),
+  snippetCompletion("if ${condition}:\n    ${pass}", {
+    label: "if",
+    type: "keyword",
+    detail: "Conditional block",
+    info: "Insert a Python if block.",
+  }),
+  snippetCompletion("elif ${condition}:\n    ${pass}", {
+    label: "elif",
+    type: "keyword",
+    detail: "Else-if block",
+    info: "Insert a Python elif block.",
+  }),
+  snippetCompletion("else:\n    ${pass}", {
+    label: "else",
+    type: "keyword",
+    detail: "Else block",
+    info: "Insert a Python else block.",
+  }),
+  snippetCompletion("while ${condition}:\n    ${pass}", {
+    label: "while",
+    type: "keyword",
+    detail: "While loop",
+    info: "Insert a Python while-loop block.",
+  }),
+  snippetCompletion("def ${function_name}(${args}):\n    ${pass}", {
+    label: "def",
+    type: "keyword",
+    detail: "Function template",
+    info: "Insert a Python function definition.",
+  }),
+  snippetCompletion("class ${ClassName}:\n    def __init__(self${params}):\n        ${pass}", {
+    label: "class",
+    type: "keyword",
+    detail: "Class template",
+    info: "Insert a Python class definition.",
+  }),
+  snippetCompletion("try:\n    ${pass}\nexcept ${Exception} as ${err}:\n    ${handle_error}", {
+    label: "try",
+    type: "keyword",
+    detail: "Try/except block",
+    info: "Insert a Python try/except block.",
+  }),
+  snippetCompletion("with ${expression} as ${value}:\n    ${pass}", {
+    label: "with",
+    type: "keyword",
+    detail: "Context manager",
+    info: "Insert a Python with block.",
+  }),
+  snippetCompletion("from ${module} import ${name}", {
+    label: "from",
+    type: "keyword",
+    detail: "Import statement",
+    info: "Insert a from-import statement.",
+  }),
+  snippetCompletion("import ${module}", {
+    label: "import",
+    type: "keyword",
+    detail: "Import statement",
+    info: "Insert an import statement.",
+  }),
+  snippetCompletion("return ${value}", {
+    label: "return",
+    type: "keyword",
+    detail: "Return statement",
+    info: "Insert a return statement.",
+  }),
+];
 
 const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
   (
@@ -264,6 +344,10 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         extensions: [
           basicSetup,
           python(),
+          autocompletion({
+            override: [completeFromList(pythonSnippetCompletions)],
+            activateOnTyping: true,
+          }),
           ...(theme === "dark" ? [oneDark, darkEditorTheme] : [lightEditorTheme]),
           yCollab(ytext, filteredAwareness),
           activityExtension,

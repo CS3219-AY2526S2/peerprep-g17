@@ -1,3 +1,9 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-04-12
+Scope: Generated and edited test updates for concurrent execution handling and CI race-condition stabilization.
+Author review: I validated the test code and checked manually.
+*/
 import test from "node:test";
 import assert from "node:assert/strict";
 import mongoose from "mongoose";

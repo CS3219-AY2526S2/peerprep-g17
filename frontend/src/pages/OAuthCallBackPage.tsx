@@ -1,3 +1,10 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-03-18
+Scope: Added boilerplate code for Google OAuth.
+Author review: I checked page behavior manually and added Github OAuth. 
+*/
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";

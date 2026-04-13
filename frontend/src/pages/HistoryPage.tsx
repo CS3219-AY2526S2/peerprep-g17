@@ -32,14 +32,25 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
   );
 }
 
-function getAttemptOutcome(attempt: AttemptRecord): "accepted" | "not_accepted" | "recorded" {
+function hasSavedCode(attempt: AttemptRecord) {
+  return attempt.code.trim().length > 0;
+}
+
+function getAttemptOutcome(
+  attempt: AttemptRecord,
+): "accepted" | "not_accepted" | "attempted" | "not_submitted" {
   if (attempt.verdict === "Accepted") return "accepted";
   if (attempt.verdict) return "not_accepted";
-  return "recorded";
+  if (attempt.mode === "session_complete" && hasSavedCode(attempt)) return "attempted";
+  return "not_submitted";
 }
 
 function getVerdictLabel(attempt: AttemptRecord) {
-  return attempt.verdict ?? "Recorded";
+  const outcome = getAttemptOutcome(attempt);
+  if (outcome === "accepted") return "Accepted";
+  if (outcome === "not_accepted") return attempt.verdict ?? "Not Accepted";
+  if (outcome === "attempted") return "Attempted";
+  return "Not Submitted";
 }
 
 function getStatusClasses(status: ReturnType<typeof getAttemptOutcome>) {
@@ -48,6 +59,9 @@ function getStatusClasses(status: ReturnType<typeof getAttemptOutcome>) {
   }
   if (status === "not_accepted") {
     return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+  if (status === "attempted") {
+    return "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300";
   }
   return "border-slate-500/20 bg-slate-500/10 text-slate-600 dark:text-slate-300";
 }
@@ -262,11 +276,15 @@ export default function HistoryPage() {
     filteredAttempts.find((attempt) => attempt._id === selectedAttemptId) ||
     attempts.find((attempt) => attempt._id === selectedAttemptId) ||
     null;
-  const totalAccepted = attempts.filter((attempt) => attempt.verdict === "Accepted").length;
-  const totalNotAccepted = attempts.filter(
-    (attempt) => !!attempt.verdict && attempt.verdict !== "Accepted",
+  const totalAccepted = attempts.filter(
+    (attempt) => getAttemptOutcome(attempt) === "accepted",
   ).length;
-  const attemptsThisMonth = attempts.filter((attempt) => isWithinDateRange(attempt.attemptedAt, "month")).length;
+  const totalNotAccepted = attempts.filter(
+    (attempt) => getAttemptOutcome(attempt) === "not_accepted",
+  ).length;
+  const totalAttempted = attempts.filter(
+    (attempt) => getAttemptOutcome(attempt) === "attempted",
+  ).length;
 
   async function generateSuggestion(attempt: AttemptRecord) {
     if (!token || suggestionLoadingId) return;
@@ -360,7 +378,7 @@ export default function HistoryPage() {
           <Card className="border-border/60"><CardHeader><CardDescription>Total Recorded Attempts</CardDescription><CardTitle className="text-3xl">{attempts.length}</CardTitle></CardHeader></Card>
           <Card className="border-border/60"><CardHeader><CardDescription>Accepted</CardDescription><CardTitle className="text-3xl">{totalAccepted}</CardTitle></CardHeader></Card>
           <Card className="border-border/60"><CardHeader><CardDescription>Not Accepted</CardDescription><CardTitle className="text-3xl">{totalNotAccepted}</CardTitle></CardHeader></Card>
-          <Card className="border-border/60"><CardHeader><CardDescription>Records This Month</CardDescription><CardTitle className="text-3xl">{attemptsThisMonth}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60"><CardHeader><CardDescription>Attempted</CardDescription><CardTitle className="text-3xl">{totalAttempted}</CardTitle></CardHeader></Card>
         </section>
         <section className="mt-6 rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
           <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
@@ -512,7 +530,7 @@ function AttemptDetailsModal({
           <p className="mt-1 text-sm text-muted-foreground">Attempted on {attemptedAt.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })} at {attemptedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Verdict</CardDescription><CardTitle>{attempt.verdict ?? "Not submitted"}</CardTitle></CardHeader></Card>
+          <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Status</CardDescription><CardTitle>{getVerdictLabel(attempt)}</CardTitle></CardHeader></Card>
           <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Test Cases</CardDescription><CardTitle>{typeof attempt.passedCount === "number" && typeof attempt.totalCount === "number" ? `${attempt.passedCount}/${attempt.totalCount} passed` : "N/A"}</CardTitle></CardHeader></Card>
           <Card className="border-border/60" size="sm"><CardHeader><CardDescription>Runtime / Memory</CardDescription><CardTitle>{attempt.runtimeMs ? `${attempt.runtimeMs} ms` : "N/A"} / {attempt.memoryKb ? `${attempt.memoryKb} KB` : "N/A"}</CardTitle></CardHeader></Card>
         </div>

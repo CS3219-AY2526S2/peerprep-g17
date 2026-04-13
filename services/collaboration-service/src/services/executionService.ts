@@ -14,6 +14,24 @@ import type {
 
 const RESULT_START_MARKER = "__PEERPREP_EXECUTION_RESULT_START__";
 const RESULT_END_MARKER = "__PEERPREP_EXECUTION_RESULT_END__";
+const PYTHON_USER_PRELUDE = [
+  "from typing import *",
+  "from collections import *",
+  "from functools import *",
+  "from heapq import *",
+  "from bisect import *",
+  "from itertools import *",
+  "from math import *",
+  "import bisect",
+  "import collections",
+  "import functools",
+  "import heapq",
+  "import itertools",
+  "import math",
+  "import random",
+  "import re",
+  "import string",
+].join("\n");
 
 interface ExecutionRunnerResult {
   stdout: string;
@@ -213,6 +231,7 @@ COMPARE_MODE = ${JSON.stringify(comparisonMode)}
 CLASS_NAME = ${JSON.stringify(className)}
 METHOD_NAME = ${JSON.stringify(methodName)}
 USER_CODE = ${JSON.stringify(sourceCode)}
+USER_CODE_WITH_PRELUDE = ${JSON.stringify(`${PYTHON_USER_PRELUDE}\n`)} + USER_CODE
 TEST_CASES = json.loads(${JSON.stringify(JSON.stringify(testCases))})
 
 class LimitedBuffer(io.StringIO):
@@ -410,7 +429,7 @@ def main():
 
     try:
         with contextlib.redirect_stdout(top_stdout), contextlib.redirect_stderr(top_stderr):
-            compiled = compile(USER_CODE, "<submitted_code>", "exec")
+            compiled = compile(USER_CODE_WITH_PRELUDE, "<submitted_code>", "exec")
             exec(compiled, namespace)
     except SyntaxError:
         report["verdict"] = "Compilation Error"

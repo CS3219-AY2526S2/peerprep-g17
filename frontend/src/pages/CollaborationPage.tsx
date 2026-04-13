@@ -1,3 +1,9 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-04-12
+Scope: Generated and edited collaboration page updates to show partner profile detail. Also used it for creating the boilerplate frontend.
+Author review: I checked page behavior manually.
+*/
 import {
   Fragment,
   useCallback,
@@ -38,6 +44,15 @@ import type { CodeEditorHandle } from "./CollaborationEditor";
 const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
 
 type ResultTab = "testcase" | "result" | "console" | "chat";
+type CustomExecutionPayload =
+  | {
+      args: unknown[];
+    }
+  | {
+      operations: string[];
+      arguments: unknown[][];
+    };
+
 type ChatMessage = {
   messageId?: string;
   fromUserId?: string;
@@ -100,6 +115,14 @@ function toDisplayJson(value: unknown): string {
   }
 }
 
+function toPrettyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
 function verdictStyles(verdict?: string) {
   switch (verdict) {
     case "Accepted":
@@ -115,6 +138,62 @@ function verdictStyles(verdict?: string) {
     default:
       return "border-border/60 bg-muted/20 text-foreground";
   }
+}
+
+function formatRuntime(runtimeMs: number): string {
+  if (runtimeMs < 1000) {
+    return `${runtimeMs} ms`;
+  }
+
+  return `${(runtimeMs / 1000).toFixed(2)} s`;
+}
+
+function formatMemory(memoryKb: number): string {
+  if (memoryKb < 1024) {
+    return `${memoryKb} KB`;
+  }
+
+  return `${(memoryKb / 1024).toFixed(2)} MB`;
+}
+
+function isCustomRunResult(result: ExecutionResult | null): boolean {
+  return Boolean(
+    result &&
+      result.mode === "run" &&
+      result.cases.some((testCase) => testCase.id === "custom-run"),
+  );
+}
+
+function executionHeading(result: ExecutionResult): string {
+  if (isCustomRunResult(result)) {
+    return "Custom Output";
+  }
+
+  return result.mode === "submit" ? "Submission Verdict" : "Run Result";
+}
+
+function executionDisplayVerdict(result: ExecutionResult): string {
+  if (isCustomRunResult(result)) {
+    return result.verdict === "Accepted" ? "Output Ready" : result.verdict;
+  }
+
+  return result.verdict;
+}
+
+function executionSummaryText(result: ExecutionResult): string | null {
+  if (isCustomRunResult(result) && result.verdict === "Accepted") {
+    return "Custom input executed. Inspect the output and details below.";
+  }
+
+  return null;
+}
+
+function executionContainerStyles(result: ExecutionResult): string {
+  if (isCustomRunResult(result) && result.verdict === "Accepted") {
+    return "border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200";
+  }
+
+  return verdictStyles(result.verdict);
 }
 
 function workspaceTabStyles(tab: ResultTab, activeTab: ResultTab) {
@@ -157,6 +236,53 @@ function ValuePreview({
       </div>
       <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-3 text-sm text-slate-800 shadow-inner dark:border-slate-800 dark:bg-slate-950/75 dark:text-slate-100">
         {serialized}
+      </pre>
+    </div>
+  );
+}
+
+function CopyableCodeBlock({
+  label,
+  value,
+  fallback,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  tone?: "default" | "error";
+}) {
+  const [copied, setCopied] = useState(false);
+  const displayValue = value || fallback;
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(displayValue);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="rounded border border-border/60 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-muted-foreground transition hover:bg-muted/50"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre
+        className={`overflow-auto rounded bg-zinc-950 p-2 text-xs ${
+          tone === "error" ? "text-rose-300" : "text-zinc-100"
+        }`}
+      >
+        {displayValue}
       </pre>
     </div>
   );
@@ -529,7 +655,12 @@ export default function CollaborationPage() {
     null,
   );
   const [executionError, setExecutionError] = useState<string | null>(null);
+  const [customTestError, setCustomTestError] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [runningMode, setRunningMode] = useState<"run" | "submit" | null>(null);
+  const [customFunctionArgsText, setCustomFunctionArgsText] = useState("[]");
+  const [customClassOperationsText, setCustomClassOperationsText] = useState("[]");
+  const [customClassArgumentsText, setCustomClassArgumentsText] = useState("[]");
   const [resultTab, setResultTab] = useState<ResultTab>("result");
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explaining, setExplaining] = useState(false);
@@ -596,6 +727,7 @@ export default function CollaborationPage() {
   const isRedirecting = useRef(false);
   const executionStartedAtRef = useRef<string | null>(null);
   const splitPaneRef = useRef<HTMLDivElement | null>(null);
+  const lastInitializedQuestionIdRef = useRef<string | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingIndicatorsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1350,6 +1482,28 @@ export default function CollaborationPage() {
   }
 
   async function execute(mode: "run" | "submit") {
+    await executeWithOptions(mode);
+  }
+
+  async function copyEditorCode() {
+    const code = editorRef.current?.getCode();
+    if (!code?.trim()) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(code);
+      setCodeCopied(true);
+      window.setTimeout(() => setCodeCopied(false), 1200);
+    } catch {
+      setCodeCopied(false);
+    }
+  }
+
+  async function executeWithOptions(
+    mode: "run" | "submit",
+    customTestCase?: CustomExecutionPayload,
+  ) {
     const code = editorRef.current?.getCode();
     if (!code?.trim() || !token || !sessionId) {
       setExecutionError("No code to execute.");
@@ -1370,7 +1524,7 @@ export default function CollaborationPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ code, customTestCase }),
         },
       );
 
@@ -1387,6 +1541,77 @@ export default function CollaborationPage() {
       );
     } finally {
       setRunningMode(null);
+    }
+  }
+
+  function parseCustomFunctionArgs(): CustomExecutionPayload {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(customFunctionArgsText);
+    } catch {
+      throw new Error("Custom arguments must be valid JSON.");
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("Custom arguments must be a JSON array.");
+    }
+
+    return { args: parsed };
+  }
+
+  function parseCustomClassPayload(): CustomExecutionPayload {
+    let parsedOperations: unknown;
+    let parsedArguments: unknown;
+
+    try {
+      parsedOperations = JSON.parse(customClassOperationsText);
+    } catch {
+      throw new Error("Operations must be valid JSON.");
+    }
+
+    try {
+      parsedArguments = JSON.parse(customClassArgumentsText);
+    } catch {
+      throw new Error("Arguments must be valid JSON.");
+    }
+
+    if (!Array.isArray(parsedOperations) || !parsedOperations.every((value) => typeof value === "string")) {
+      throw new Error("Operations must be a JSON array of strings.");
+    }
+
+    if (!Array.isArray(parsedArguments) || !parsedArguments.every((value) => Array.isArray(value))) {
+      throw new Error("Arguments must be a JSON array of arrays.");
+    }
+
+    if (parsedOperations.length !== parsedArguments.length) {
+      throw new Error("Operations and arguments must have the same number of entries.");
+    }
+
+    return {
+      operations: parsedOperations,
+      arguments: parsedArguments as unknown[][],
+    };
+  }
+
+  async function runCustomTest() {
+    if (!question) {
+      return;
+    }
+
+    try {
+      setCustomTestError(null);
+      const payload =
+        question.executionMode === "python_function"
+          ? parseCustomFunctionArgs()
+          : parseCustomClassPayload();
+
+      await executeWithOptions("run", payload);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Custom testcase is invalid.";
+      setCustomTestError(message);
+      setExecutionError(message);
+      setResultTab("testcase");
     }
   }
 
@@ -1444,6 +1669,18 @@ export default function CollaborationPage() {
     if (!executionResult) return "";
     return executionResult.initiatedByUserId === user?.id ? "You" : "Your partner";
   }, [executionResult, user?.id]);
+  const executionDisplayTitle = useMemo(
+    () => (executionResult ? executionHeading(executionResult) : ""),
+    [executionResult],
+  );
+  const executionDisplayStatus = useMemo(
+    () => (executionResult ? executionDisplayVerdict(executionResult) : ""),
+    [executionResult],
+  );
+  const executionSummary = useMemo(
+    () => (executionResult ? executionSummaryText(executionResult) : null),
+    [executionResult],
+  );
 
   const partnerUserId = useMemo(() => {
     if (!session || !user?.id) {
@@ -1457,6 +1694,35 @@ export default function CollaborationPage() {
     token,
     { enabled: Boolean(partnerUserId) },
   );
+
+  useEffect(() => {
+    if (!question || lastInitializedQuestionIdRef.current === question.id) {
+      return;
+    }
+
+    lastInitializedQuestionIdRef.current = question.id;
+    setCustomTestError(null);
+
+    if (question.executionMode === "python_function") {
+      const firstCase = question.visibleTestCases[0];
+      setCustomFunctionArgsText(
+        firstCase && isFunctionCase(firstCase)
+          ? toPrettyJson(firstCase.args)
+          : "[]",
+      );
+      return;
+    }
+
+    const firstCase = question.visibleTestCases[0];
+    if (firstCase && !isFunctionCase(firstCase)) {
+      setCustomClassOperationsText(toPrettyJson(firstCase.operations));
+      setCustomClassArgumentsText(toPrettyJson(firstCase.arguments));
+      return;
+    }
+
+    setCustomClassOperationsText("[]");
+    setCustomClassArgumentsText("[]");
+  }, [question]);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
@@ -1623,6 +1889,84 @@ export default function CollaborationPage() {
                           />
                         ))}
                       </div>
+
+                      <div className="space-y-4 rounded-2xl border border-dashed border-sky-200/80 bg-sky-50/50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              Custom Test
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Run your own input without changing the shared sample testcases. These inputs stay on this page while you work, but are not saved as shared session history.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={runCustomTest}
+                            disabled={runningMode !== null}
+                          >
+                            {runningMode === "run" ? "Running..." : "Run Custom Test"}
+                          </Button>
+                        </div>
+
+                        {question.executionMode === "python_function" ? (
+                          <div className="space-y-2">
+                            <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                              Arguments JSON Array
+                            </label>
+                            <textarea
+                              rows={8}
+                              value={customFunctionArgsText}
+                              onChange={(event) => {
+                                setCustomFunctionArgsText(event.target.value);
+                                setCustomTestError(null);
+                              }}
+                              className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950"
+                              placeholder='[["hello"], 3]'
+                            />
+                          </div>
+                        ) : (
+                          <div className="grid gap-4 xl:grid-cols-2">
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                Operations JSON Array
+                              </label>
+                              <textarea
+                                rows={8}
+                                value={customClassOperationsText}
+                                onChange={(event) => {
+                                  setCustomClassOperationsText(event.target.value);
+                                  setCustomTestError(null);
+                                }}
+                                className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950"
+                                placeholder='["LRUCache", "put", "get"]'
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                Arguments JSON Array
+                              </label>
+                              <textarea
+                                rows={8}
+                                value={customClassArgumentsText}
+                                onChange={(event) => {
+                                  setCustomClassArgumentsText(event.target.value);
+                                  setCustomTestError(null);
+                                }}
+                                className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-3 font-mono text-sm dark:border-slate-800 dark:bg-slate-950"
+                                placeholder='[[2], [1, 1], [1]]'
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {customTestError && (
+                          <div className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+                            {customTestError}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1700,6 +2044,13 @@ export default function CollaborationPage() {
                         </Button>
                         <Button
                           className="min-w-24"
+                          variant="outline"
+                          onClick={copyEditorCode}
+                        >
+                          {codeCopied ? "Copied" : "Copy Code"}
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={explainCode}
                           disabled={explaining}
@@ -1812,20 +2163,23 @@ export default function CollaborationPage() {
                         {executionResult && (
                           <>
                             <div
-                              className={`rounded-xl border px-4 py-3 shadow-sm ${verdictStyles(
-                                executionResult.verdict,
+                              className={`rounded-xl border px-4 py-3 shadow-sm ${executionContainerStyles(
+                                executionResult,
                               )}`}
                             >
                               <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                   <div className="text-xs uppercase tracking-wider opacity-80">
-                                    {executionResult.mode === "submit"
-                                      ? "Submission Verdict"
-                                      : "Run Result"}
+                                    {executionDisplayTitle}
                                   </div>
                                   <div className="text-lg font-semibold">
-                                    {executionResult.verdict}
+                                    {executionDisplayStatus}
                                   </div>
+                                  {executionSummary && (
+                                    <div className="mt-1 text-xs opacity-85">
+                                      {executionSummary}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="text-right text-xs opacity-90">
                                   <div>
@@ -1839,12 +2193,18 @@ export default function CollaborationPage() {
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-4 text-xs">
-                                <span>
-                                  Passed {executionResult.passedCount}/
-                                  {executionResult.totalCount}
+                                {!isCustomRunResult(executionResult) && (
+                                  <span className="rounded-full border border-current/20 px-2.5 py-1">
+                                    Passed {executionResult.passedCount}/
+                                    {executionResult.totalCount}
+                                  </span>
+                                )}
+                                <span className="rounded-full border border-current/20 px-2.5 py-1">
+                                  Runtime {formatRuntime(executionResult.runtimeMs)}
                                 </span>
-                                <span>Runtime {executionResult.runtimeMs} ms</span>
-                                <span>Memory {executionResult.memoryKb} KB</span>
+                                <span className="rounded-full border border-current/20 px-2.5 py-1">
+                                  Memory {formatMemory(executionResult.memoryKb)}
+                                </span>
                               </div>
                             </div>
 
@@ -1857,39 +2217,36 @@ export default function CollaborationPage() {
                                   >
                                     <div className="mb-2 flex items-center justify-between gap-2">
                                       <div className="font-medium">{testCase.id}</div>
-                                      <span
-                                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${verdictStyles(
-                                          testCase.verdict,
-                                        )}`}
-                                      >
-                                        {testCase.verdict}
-                                      </span>
+                                      {isCustomRunResult(executionResult) ? (
+                                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold border border-slate-300/80 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                          Output
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${verdictStyles(
+                                            testCase.verdict,
+                                          )}`}
+                                        >
+                                          {testCase.verdict}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="grid gap-3 md:grid-cols-3">
-                                      <div>
-                                        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                          Input
-                                        </div>
-                                        <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-white p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
-                                          {testCase.inputPreview || "(none)"}
-                                        </pre>
-                                      </div>
-                                      <div>
-                                        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                          Expected
-                                        </div>
-                                        <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-white p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
-                                          {testCase.expectedPreview || "(custom testcase)"}
-                                        </pre>
-                                      </div>
-                                      <div>
-                                        <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                                          Actual
-                                        </div>
-                                        <pre className="overflow-auto rounded-xl border border-slate-200/80 bg-white p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
-                                          {testCase.actualPreview || "(none)"}
-                                        </pre>
-                                      </div>
+                                      <CopyableCodeBlock
+                                        label="Input"
+                                        value={testCase.inputPreview || ""}
+                                        fallback="(none)"
+                                      />
+                                      <CopyableCodeBlock
+                                        label="Expected"
+                                        value={testCase.expectedPreview || ""}
+                                        fallback="(custom testcase)"
+                                      />
+                                      <CopyableCodeBlock
+                                        label="Actual"
+                                        value={testCase.actualPreview || ""}
+                                        fallback="(none)"
+                                      />
                                     </div>
                                     {testCase.errorMessage && (
                                       <p className="mt-3 text-xs text-rose-300">
@@ -1917,22 +2274,30 @@ export default function CollaborationPage() {
 
                     {resultTab === "console" && (
                       <div className="space-y-4">
-                        <div>
-                          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                            Stdout
+                        {executionResult && (
+                          <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-xs text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-950/55 dark:text-slate-200">
+                            <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
+                              Status {executionDisplayStatus}
+                            </span>
+                            <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
+                              Runtime {formatRuntime(executionResult.runtimeMs)}
+                            </span>
+                            <span className="rounded-full border border-slate-300/70 px-2.5 py-1 dark:border-slate-700">
+                              Memory {formatMemory(executionResult.memoryKb)}
+                            </span>
                           </div>
-                          <pre className="max-h-56 overflow-auto rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100">
-                            {executionResult?.stdout || "(no stdout)"}
-                          </pre>
-                        </div>
-                        <div>
-                          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-                            Stderr
-                          </div>
-                          <pre className="max-h-56 overflow-auto rounded-xl border border-rose-200/70 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-950/70 dark:bg-rose-950/30 dark:text-rose-200">
-                            {executionResult?.stderr || "(no stderr)"}
-                          </pre>
-                        </div>
+                        )}
+                        <CopyableCodeBlock
+                          label="Stdout"
+                          value={executionResult?.stdout || ""}
+                          fallback="(no stdout)"
+                        />
+                        <CopyableCodeBlock
+                          label="Stderr"
+                          value={executionResult?.stderr || ""}
+                          fallback="(no stderr)"
+                          tone="error"
+                        />
                       </div>
                     )}
 
@@ -2019,7 +2384,7 @@ export default function CollaborationPage() {
                                       <ChatMessageContent text={message.text} />
                                     </div>
                                     <div className="mt-2 flex max-w-[85%] flex-wrap items-center gap-2">
-                                      {["👍", "✅", "❓"].map((emoji) => {
+                                      {["👍"].map((emoji) => {
                                         const reaction = message.reactions?.find(
                                           (entry) => entry.emoji === emoji,
                                         );

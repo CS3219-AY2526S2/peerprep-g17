@@ -1,3 +1,9 @@
+/*
+AI Assistance Disclosure:
+Tool: ChatGPT, date: 2026-04-11
+Scope: Generated and edited profile page updates, including a link to the public profile view.
+Author review: I validated correctness, edited for project style and checked page behavior manually.
+*/
 import { useRef, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { USER_API_URL } from "@/config";
