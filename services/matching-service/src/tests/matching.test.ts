@@ -483,7 +483,7 @@ test("cancels a queued request and removes it from active state", async () => {
   assert.equal(eventBus.events.at(-1)?.event.status, "cancelled");
 });
 
-test("removes a queued request immediately when the user disconnects", async () => {
+test("keeps a queued request when the user disconnects", async () => {
   await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
     difficulty: "Easy",
@@ -492,8 +492,8 @@ test("removes a queued request immediately when the user disconnects", async () 
   await matchService.markUserDisconnected("user-a");
 
   const state = await matchService.getUserState("user-a");
-  assert.equal(state, null);
-  assert.equal(eventBus.events.at(-1)?.event.status, "cancelled");
+  assert.equal(state?.status, "searching");
+  assert.equal(eventBus.events.at(-1)?.event.status, "searching");
 });
 
 test("rolls both users back to searching when collaboration handoff fails", async () => {
