@@ -16,6 +16,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import {
+  CHAT_WS_URL,
   COLLABORATION_API_URL,
   MATCHING_API_URL,
   QUESTION_API_URL,
@@ -394,9 +395,8 @@ export default function CollaborationPage() {
       return;
     }
 
-    const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
     const ws = new WebSocket(
-      `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${encodeURIComponent(
+      `${CHAT_WS_URL}/${sessionId}?token=${token}&username=${encodeURIComponent(
         user?.username || "Guest",
       )}`,
     );
@@ -632,9 +632,15 @@ export default function CollaborationPage() {
         }
         if (json.data?.messages) setMessages(json.data.messages);
       } else if (res.status === 404 && !isRedirecting.current) {
+        // Session is genuinely gone (deleted, completed, or DB wiped).
+        // Clear the stale auto-resume pointer so the dashboard doesn't
+        // bounce the user straight back here on every login.
+        localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+        isRedirecting.current = true;
         setSession(null);
-        setSessionUnavailable(true);
-        setError("The collaboration session is unavailable right now.");
+        setError("That collaboration session is no longer available.");
+        navigate("/match", { replace: true });
+        return;
       } else {
         setSession(null);
         setSessionUnavailable(true);
@@ -650,6 +656,7 @@ export default function CollaborationPage() {
   }, [
     applyExecutionResult,
     clearSessionRetryTimer,
+    navigate,
     redirectAfterSharedCompletion,
     sessionId,
     token,
