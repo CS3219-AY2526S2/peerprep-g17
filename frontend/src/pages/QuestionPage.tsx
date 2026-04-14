@@ -48,6 +48,10 @@ export default function QuestionPage() {
   // ── Seed ──────────────────────────────────────────
   const [seeding, setSeeding] = useState(false);
 
+  // ── Pagination ────────────────────────────────────
+  const QUESTIONS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+
   // ── Filtering ───────────────────────────────────────
   const [sortField, setSortField] = useState<"title" | "difficulty" | null>(null)
   const [sortDirectory, setSortDirectory] = useState<"asc" | "desc">("asc");
@@ -212,6 +216,7 @@ export default function QuestionPage() {
 
   useEffect(() => {
     fetchQuestions();
+    setCurrentPage(1);
   }, [token, filterDifficulty, filterCategory, filterSearch]);
 
   useEffect(() => {
@@ -227,15 +232,16 @@ export default function QuestionPage() {
     filterSearch
   );
 
-  /* ── Filtering the Title ─────────────────────────────────────── */
+  /* ── Sorting ─────────────────────────────────────── */
 
-   const handleTheSort = (field: "title" | "difficulty") => {
+  const handleTheSort = (field: "title" | "difficulty") => {
     if (sortField == field) {
-        setSortDirectory(sortDirectory === "asc" ? "desc" : "asc");
+      setSortDirectory(sortDirectory === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
       setSortDirectory("asc");
     }
+    setCurrentPage(1);
   };
 
   const sortingTheQuestions = [...questions].sort((a, b) => {
@@ -243,14 +249,27 @@ export default function QuestionPage() {
     if (sortField == "title") {
       return sortDirectory == "asc"
         ? a.title.localeCompare(b.title)
-        : b.title.localeCompare(a.title)
+        : b.title.localeCompare(a.title);
     }
     if (sortField === "difficulty") {
-      const diff = (DIFFICULTY_ORDER[a.difficulty] ?? 0) - (DIFFICULTY_ORDER[b.difficulty] ?? 0);
+      const diff =
+        (DIFFICULTY_ORDER[a.difficulty] ?? 0) -
+        (DIFFICULTY_ORDER[b.difficulty] ?? 0);
       return sortDirectory === "asc" ? diff : -diff;
     }
     return 0;
   });
+
+  /* ── Pagination ─────────────────────────────────── */
+
+  const totalPages = Math.max(1, Math.ceil(sortingTheQuestions.length / QUESTIONS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedQuestions = sortingTheQuestions.slice(
+    (safePage - 1) * QUESTIONS_PER_PAGE,
+    safePage * QUESTIONS_PER_PAGE,
+  );
+  const startIndex = (safePage - 1) * QUESTIONS_PER_PAGE + 1;
+  const endIndex = Math.min(safePage * QUESTIONS_PER_PAGE, sortingTheQuestions.length);
 
 
   /* ═══════════════════════════════════════════════════ */
@@ -420,17 +439,18 @@ export default function QuestionPage() {
             </p>
           </div>
         ) : (
+          <>
           <div className="mt-6 overflow-hidden rounded-xl border border-border/50">
             <table className="w-full text-[1.05rem]">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
                   <th 
-                    className="w-[30%] px-4 py-4 text-left text-base font-medium text-muted-foreground"
+                    className="w-[30%] px-4 py-4 text-left text-base font-medium text-muted-foreground cursor-pointer select-none"
                     onClick={() => handleTheSort("title")}
                   >
                     Title {sortField === "title" ? (sortDirectory == "asc" ? "↑" : "↓") : "↕"}
                   </th>
-                  <th className="w-[10%] px-4 py-4 text-left text-base font-medium text-muted-foreground"
+                  <th className="w-[10%] px-4 py-4 text-left text-base font-medium text-muted-foreground cursor-pointer select-none"
                     onClick={() => handleTheSort("difficulty")}
                   >
                     Difficulty {sortField === "difficulty" ? (sortDirectory === "asc" ? "↑" : "↓") : "↕"}
@@ -446,7 +466,7 @@ export default function QuestionPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortingTheQuestions.map((q) => (
+                {paginatedQuestions.map((q) => (
                   <tr
                     key={q.id}
                     className="border-b border-border/30 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
@@ -514,6 +534,70 @@ export default function QuestionPage() {
               </tbody>
             </table>
           </div>
+
+          {/* ── Pagination ──────────────────────────── */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                Showing {startIndex}–{endIndex} of{" "}
+                {sortingTheQuestions.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setCurrentPage(1)}
+                  className="h-8 px-2.5 text-xs"
+                  aria-label="First page"
+                >
+                  « First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() =>
+                    setCurrentPage((p) => Math.max(1, p - 1))
+                  }
+                  className="h-8 px-2.5 text-xs"
+                  aria-label="Previous page"
+                >
+                  ‹ Prev
+                </Button>
+
+                <span className="px-3 text-sm text-muted-foreground">
+                  Page {safePage} of {totalPages}
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() =>
+                    setCurrentPage((p) =>
+                      Math.min(totalPages, p + 1),
+                    )
+                  }
+                  className="h-8 px-2.5 text-xs"
+                  aria-label="Next page"
+                >
+                  Next ›
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  className="h-8 px-2.5 text-xs"
+                  aria-label="Last page"
+                >
+                  Last »
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </main>
 
