@@ -68,7 +68,7 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-border/40 bg-background/75 backdrop-blur-xl">
-      <div className="relative mx-auto flex h-14 max-w-6xl items-center px-6">
+      <div className="relative mx-auto flex h-14 w-full max-w-[1700px] items-center px-6 lg:px-8">
         {/* ── Logo ──────────────────────────────── */}
         <Link
           to="/"
