@@ -2,14 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { MATCHING_API_URL, MATCHING_WS_URL, QUESTION_API_URL } from "@/config";
@@ -32,6 +24,53 @@ function formatRemainingTime(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+/* ── Status helpers ─────────────────────────────────── */
+
+function statusLabel(status?: string): string {
+  switch (status) {
+    case "searching":
+      return "Searching…";
+    case "matched":
+      return "Matched!";
+    case "timed_out":
+      return "Timed out";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return "Ready";
+  }
+}
+
+function statusStyle(status?: string): string {
+  switch (status) {
+    case "searching":
+      return "border-sky-200/80 bg-sky-50/90 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200";
+    case "matched":
+      return "border-emerald-200/80 bg-emerald-50/90 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200";
+    case "timed_out":
+      return "border-amber-200/80 bg-amber-50/90 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200";
+    case "cancelled":
+      return "border-slate-200/80 bg-slate-50/90 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300";
+    default:
+      return "border-slate-200/80 bg-slate-50/90 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300";
+  }
+}
+
+function statusDot(status?: string): string {
+  switch (status) {
+    case "searching":
+      return "bg-sky-500";
+    case "matched":
+      return "bg-emerald-500";
+    case "timed_out":
+      return "bg-amber-500";
+    default:
+      return "bg-slate-400 dark:bg-slate-500";
+  }
+}
+
+/* ── Component ──────────────────────────────────────── */
+
 export default function MatchPage() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
@@ -45,11 +84,14 @@ export default function MatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [countdownMs, setCountdownMs] = useState<number | null>(null);
-  const { profile: partnerProfile, photoPreview: partnerPhotoPreview } = usePublicProfile(
-    matchState?.partnerUserId,
-    token,
-    { enabled: Boolean(matchState?.partnerUserId) },
-  );
+  const {
+    profile: partnerProfile,
+    photoPreview: partnerPhotoPreview,
+  } = usePublicProfile(matchState?.partnerUserId, token, {
+    enabled: Boolean(matchState?.partnerUserId),
+  });
+
+  /* ── Sync helper ────────────────────────────────────── */
 
   const syncMatchState = useMemo(
     () =>
@@ -89,6 +131,8 @@ export default function MatchPage() {
     [navigate, token],
   );
 
+  /* ── Effects ─────────────────────────────────────────── */
+
   useEffect(() => {
     if (!token) {
       return;
@@ -105,7 +149,7 @@ export default function MatchPage() {
           fetch(
             `${QUESTION_API_URL}?executionModes=python_function,python_class`,
             {
-            headers: { Authorization: `Bearer ${token}` },
+              headers: { Authorization: `Bearer ${token}` },
             },
           ),
           fetch(`${MATCHING_API_URL}/requests/me`, {
@@ -235,9 +279,14 @@ export default function MatchPage() {
   }, [syncMatchState, token]);
 
   const canSubmit = useMemo(
-    () => Boolean(selectedTopic) && !submitting && matchState?.status !== "searching",
+    () =>
+      Boolean(selectedTopic) &&
+      !submitting &&
+      matchState?.status !== "searching",
     [matchState?.status, selectedTopic, submitting],
   );
+
+  /* ── Handlers ───────────────────────────────────────── */
 
   async function createMatchRequest(): Promise<void> {
     if (!token || !selectedTopic) {
@@ -316,120 +365,282 @@ export default function MatchPage() {
     }
   }
 
+  /* ── Derived state ──────────────────────────────────── */
+
+  const isSearching = matchState?.status === "searching";
+  const currentStatus = matchState?.status;
+
+  /* ── Render ─────────────────────────────────────────── */
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      <main className="relative mx-auto flex max-w-6xl flex-col gap-6 px-6 pb-12 pt-24">
-        <div className="pointer-events-none absolute inset-x-6 top-10 -z-10 h-[24rem] rounded-[3rem] bg-gradient-to-br from-sky-100 via-white to-emerald-50/80 blur-3xl dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/60" />
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-sky-50/90 px-3 py-1 text-xs text-sky-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-600 dark:bg-sky-300" />
-            Matchmaking
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <h1 className="text-4xl font-bold tracking-tight text-slate-950 dark:text-slate-100">
-              Find a Peer
-            </h1>
-            <p className="max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300">
-              Choose a topic and difficulty, join the queue, and jump into a
-              collaboration session as soon as a match is ready.
-            </p>
-          </div>
+      <main className="relative px-6 pb-20 pt-28 md:pt-32">
+        {/* Ambient background */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="bg-dot-grid absolute inset-0 opacity-40" />
+          <div className="absolute top-12 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-sky-800/8 blur-[140px] animate-float-slow dark:bg-sky-400/10" />
+          <div className="absolute right-[-6rem] top-28 h-64 w-64 rounded-full bg-violet-900/5 blur-[120px] animate-float-slower dark:bg-violet-400/8" />
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-2xl tracking-tight">Queue Request</CardTitle>
-              <CardDescription>
-                Signed in as {user?.username}. Set your preferences and enter the queue.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="topic" className="text-sm font-medium">Topic</Label>
-                <select
-                  id="topic"
-                  value={selectedTopic}
-                  onChange={(event) => setSelectedTopic(event.target.value)}
-                  className="surface-select h-11 w-full text-base"
-                  disabled={loading || matchState?.status === "searching"}
+        <div className="relative z-10 mx-auto max-w-5xl">
+          {/* ── Page header ──────────────────────────── */}
+          <div className="animate-fade-up mb-10">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-300/70 bg-white/80 px-4 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300">
+              <span className={`h-2 w-2 rounded-full ${socketConnected ? "bg-emerald-500" : "bg-slate-400"}`} />
+              {socketConnected ? "Connected" : "Connecting…"}
+            </div>
+            <h1 className="mt-5 text-4xl font-bold tracking-tight text-slate-950 md:text-5xl dark:text-white">
+              Find a Peer
+            </h1>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-500 dark:text-slate-400">
+              Choose a topic and difficulty, join the queue, and jump into a
+              live collaboration session as soon as a match is found.
+            </p>
+          </div>
+
+          <div className="animate-fade-up delay-100 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            {/* ── Left: Queue form ──────────────────── */}
+            <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-7 shadow-[0_16px_48px_-28px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-950/70">
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                Queue Preferences
+              </h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Signed in as{" "}
+                <span className="font-medium text-slate-700 dark:text-slate-200">
+                  {user?.username}
+                </span>
+              </p>
+
+              <div className="mt-7 space-y-5">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="topic"
+                    className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >
+                    Topic
+                  </Label>
+                  <select
+                    id="topic"
+                    value={selectedTopic}
+                    onChange={(event) =>
+                      setSelectedTopic(event.target.value)
+                    }
+                    className="surface-select h-11 w-full text-base"
+                    disabled={loading || isSearching}
+                  >
+                    {topics.length === 0 && (
+                      <option value="">No topics available</option>
+                    )}
+                    {topics.map((topic) => (
+                      <option key={topic} value={topic}>
+                        {topic}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="difficulty"
+                    className="text-sm font-medium text-slate-700 dark:text-slate-300"
+                  >
+                    Difficulty
+                  </Label>
+                  <select
+                    id="difficulty"
+                    value={difficulty}
+                    onChange={(event) =>
+                      setDifficulty(event.target.value)
+                    }
+                    className="surface-select h-11 w-full text-base"
+                    disabled={loading || isSearching}
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                  </select>
+                </div>
+
+                {error && (
+                  <div className="rounded-xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-7 flex gap-3">
+                <Button
+                  size="lg"
+                  className="min-w-36 bg-slate-950 text-white shadow-sm hover:bg-sky-900 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-sky-200"
+                  onClick={createMatchRequest}
+                  disabled={!canSubmit}
                 >
-                  {topics.length === 0 && (
-                    <option value="">No topics available</option>
+                  {submitting ? (
+                    "Submitting…"
+                  ) : isSearching ? (
+                    "In queue…"
+                  ) : (
+                    <>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-1.5"
+                      >
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                      </svg>
+                      Find match
+                    </>
                   )}
-                  {topics.map((topic) => (
-                    <option key={topic} value={topic}>
-                      {topic}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="difficulty" className="text-sm font-medium">Difficulty</Label>
-                <select
-                  id="difficulty"
-                  value={difficulty}
-                  onChange={(event) => setDifficulty(event.target.value)}
-                  className="surface-select h-11 w-full text-base"
-                  disabled={loading || matchState?.status === "searching"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="min-w-28 border-slate-300 text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 dark:border-slate-700 dark:text-slate-200 dark:hover:border-rose-800 dark:hover:bg-rose-950/30 dark:hover:text-rose-300"
+                  onClick={cancelMatchRequest}
+                  disabled={!isSearching}
                 >
-                  <option value="Easy">Easy</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Hard">Hard</option>
-                </select>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+
+            {/* ── Right: Live status ────────────────── */}
+            <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-7 shadow-[0_16px_48px_-28px_rgba(15,23,42,0.18)] dark:border-slate-800 dark:bg-slate-950/70">
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                Match Status
+              </h2>
+
+              {/* Status badge */}
+              <div className="mt-5">
+                <div
+                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium ${statusStyle(currentStatus)}`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    {isSearching && (
+                      <span
+                        className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${statusDot(currentStatus)}`}
+                      />
+                    )}
+                    <span
+                      className={`relative inline-flex h-2 w-2 rounded-full ${statusDot(currentStatus)}`}
+                    />
+                  </span>
+                  {loading ? "Loading…" : statusLabel(currentStatus)}
+                </div>
               </div>
 
-              {error && (
-                <div className="rounded-2xl border border-rose-200/80 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/30 dark:text-rose-200">
-                  {error}
+              {/* ── Searching animation ──────────────── */}
+              {isSearching && countdownMs !== null && (
+                <div className="mt-6 rounded-xl border border-sky-200/60 bg-sky-50/50 p-5 dark:border-sky-900/50 dark:bg-sky-950/30">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-sky-800 dark:text-sky-200">
+                        Looking for a peer…
+                      </div>
+                      <div className="mt-1 text-xs text-sky-600/80 dark:text-sky-300/60">
+                        You'll be matched automatically
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold tabular-nums tracking-tight text-sky-900 dark:text-sky-100">
+                        {formatRemainingTime(countdownMs)}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-widest text-sky-600/60 dark:text-sky-400/50">
+                        remaining
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  {matchState.remainingMs && (
+                    <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-sky-200/60 dark:bg-sky-900/40">
+                      <div
+                        className="h-full rounded-full bg-sky-500 transition-all duration-1000 ease-linear dark:bg-sky-400"
+                        style={{
+                          width: `${Math.max(0, (countdownMs / matchState.remainingMs) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
-            </CardContent>
-            <CardFooter className="flex gap-3">
-              <Button size="lg" className="min-w-36" onClick={createMatchRequest} disabled={!canSubmit}>
-                {submitting ? "Submitting..." : "Find match"}
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="min-w-32"
-                onClick={cancelMatchRequest}
-                disabled={matchState?.status !== "searching"}
-              >
-                Cancel
-              </Button>
-            </CardFooter>
-          </Card>
 
-          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="text-2xl tracking-tight">Current State</CardTitle>
-              <CardDescription>
-                WebSocket: {socketConnected ? "connected" : "disconnected"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-800">
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  Status
+              {/* ── Idle state ──────────────────────── */}
+              {!isSearching && !partnerProfile && !loading && (
+                <div className="mt-6 rounded-xl border border-dashed border-slate-300/80 bg-slate-50/50 px-5 py-8 text-center dark:border-slate-800 dark:bg-slate-950/30">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-slate-400"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                    No active search
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    Configure your preferences and hit
+                    &ldquo;Find match&rdquo; to start.
+                  </p>
                 </div>
-                <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
-                  {loading ? "Loading..." : matchState?.status || "idle"}
-                </div>
-              </div>
+              )}
 
+              {/* ── Match details ───────────────────── */}
+              {(matchState?.topic || matchState?.difficulty) && (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {matchState.topic && (
+                    <div className="rounded-xl border border-slate-200/60 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                        Topic
+                      </div>
+                      <div className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {matchState.topic}
+                      </div>
+                    </div>
+                  )}
+                  {matchState.difficulty && (
+                    <div className="rounded-xl border border-slate-200/60 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                        Difficulty
+                      </div>
+                      <div className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {matchState.difficulty}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Partner card ──────────────────────── */}
               {partnerProfile && (
-                <div className="rounded-2xl border border-sky-200/80 bg-sky-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/85">
-                  <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                <div className="mt-5 rounded-xl border border-emerald-200/60 bg-emerald-50/50 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/60">
                     Your Match
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white text-lg font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                       {partnerPhotoPreview ? (
                         <img
                           src={partnerPhotoPreview}
@@ -437,86 +648,37 @@ export default function MatchPage() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <span>{partnerProfile.username[0]?.toUpperCase() || "?"}</span>
+                        <span>
+                          {partnerProfile.username[0]?.toUpperCase() ||
+                            "?"}
+                        </span>
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-base font-semibold text-slate-900 dark:text-slate-100">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                         {partnerProfile.username}
                       </div>
-                      <div className="truncate text-sm text-muted-foreground">
-                        {partnerProfile.university || "No university listed"}
+                      <div className="truncate text-xs text-slate-500 dark:text-slate-400">
+                        {partnerProfile.university ||
+                          "No university listed"}
                       </div>
                     </div>
+                    <Link
+                      to={`/users/${partnerProfile.id}`}
+                      className="flex-shrink-0 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                    >
+                      View profile →
+                    </Link>
                   </div>
-                  <p className="mt-3 line-clamp-3 text-sm text-slate-600 dark:text-slate-300">
-                    {partnerProfile.bio || "No bio provided yet."}
-                  </p>
-                  <Link
-                    to={`/users/${partnerProfile.id}`}
-                    className="mt-3 inline-flex text-sm font-medium text-sky-700 underline-offset-4 hover:underline dark:text-sky-300"
-                  >
-                    Open public profile
-                  </Link>
+                  {partnerProfile.bio && (
+                    <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                      {partnerProfile.bio}
+                    </p>
+                  )}
                 </div>
               )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {matchState?.topic && (
-                  <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/85">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Topic
-                    </div>
-                    <div className="mt-1 text-base font-medium text-foreground">
-                      {matchState.topic}
-                    </div>
-                  </div>
-                )}
-                {matchState?.difficulty && (
-                  <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/85">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Difficulty
-                    </div>
-                    <div className="mt-1 text-base font-medium text-foreground">
-                      {matchState.difficulty}
-                    </div>
-                  </div>
-                )}
-                {matchState?.partnerUserId && (
-                  <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/85">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Partner
-                    </div>
-                    <div className="mt-1 text-base font-medium text-foreground break-all">
-                      {partnerProfile?.username || "Matched partner"}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground break-all">
-                      {matchState.partnerUserId}
-                    </div>
-                  </div>
-                )}
-                {matchState?.questionId && (
-                  <div className="rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/85">
-                    <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                      Question
-                    </div>
-                    <div className="mt-1 text-base font-medium text-foreground break-all">
-                      {matchState.questionId}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {matchState?.status === "searching" && countdownMs !== null && (
-                <div className="rounded-2xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-200">
-                  Time remaining:{" "}
-                  <span className="font-semibold text-foreground dark:text-amber-100">
-                    {formatRemainingTime(countdownMs)}
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </main>
     </div>
