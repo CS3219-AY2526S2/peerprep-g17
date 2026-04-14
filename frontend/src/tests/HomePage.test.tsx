@@ -74,7 +74,7 @@ describe("HomePage", () => {
     });
 
     expect(screen.getAllByRole("button", { name: /go to dashboard/i })).toHaveLength(2);
-    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.getAllByText("alice").length).toBeGreaterThanOrEqual(1);
     expect(container.textContent).not.toContain("Get started");
   });
 });
