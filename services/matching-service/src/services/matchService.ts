@@ -30,6 +30,13 @@ import { CollaborationClient } from "./collaborationClient";
 import { RedisMatchEventBus } from "./redisEventBus";
 
 const ACTIVE_SESSION_STATUSES = ["pending_handoff", "active"] as const;
+const CLAIM_DUE_IDS_SCRIPT = `
+local ids = redis.call("zrangebyscore", KEYS[1], 0, ARGV[1], "LIMIT", 0, ARGV[2])
+if #ids > 0 then
+  redis.call("zrem", KEYS[1], unpack(ids))
+end
+return ids
+`;
 
 const DIFFICULTY_RANK: Record<Difficulty, number> = {
   Easy: 0,
@@ -346,14 +353,7 @@ export class MatchService {
   }
 
   async processDueTimeouts(now = Date.now()): Promise<number> {
-    const requestIds = await this.redis.zrangebyscore(
-      timeoutZsetKey,
-      0,
-      now,
-      "LIMIT",
-      0,
-      100,
-    );
+    const requestIds = await this.claimDueRequestIds(timeoutZsetKey, now, 100);
 
     let processed = 0;
 
@@ -365,6 +365,11 @@ export class MatchService {
       }
 
       if (request.status !== "searching" || request.timeoutAt > now) {
+        await this.redis.zadd(
+          timeoutZsetKey,
+          String(request.timeoutAt),
+          request.id,
+        );
         continue;
       }
 
@@ -413,23 +418,11 @@ export class MatchService {
     zsetKey: string,
     now: number,
   ): Promise<number> {
-    const requestIds = await this.redis.zrangebyscore(
-      zsetKey,
-      0,
-      now,
-      "LIMIT",
-      0,
-      50,
-    );
+    const requestIds = await this.claimDueRequestIds(zsetKey, now, 50);
 
     let matched = 0;
 
     for (const requestId of requestIds) {
-      const removed = await this.redis.zrem(zsetKey, requestId);
-      if (!removed) {
-        continue;
-      }
-
       const request = await this.getRequest(requestId);
       if (!request || request.status !== "searching") {
         continue;
@@ -466,6 +459,21 @@ export class MatchService {
     }
 
     return matched;
+  }
+
+  private async claimDueRequestIds(
+    zsetKey: string,
+    now: number,
+    limit: number,
+  ): Promise<string[]> {
+    const ids = (await this.redis.eval(
+      CLAIM_DUE_IDS_SCRIPT,
+      1,
+      zsetKey,
+      String(now),
+      String(limit),
+    )) as string[];
+    return Array.isArray(ids) ? ids : [];
   }
 
   async markUserDisconnected(userId: string): Promise<void> {
