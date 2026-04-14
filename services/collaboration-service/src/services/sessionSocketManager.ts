@@ -85,7 +85,9 @@ export class SessionSocketManager {
       room.users.has(`chat:${baseUserId}`);
 
     room.users.set(userId, { ws, userId, username });
-    room.lastActivityAt = Date.now();
+    if (!wasAlreadyConnected) {
+      room.lastActivityAt = Date.now();
+    }
     if (room.emptyRoomCleanupTimer) {
       clearTimeout(room.emptyRoomCleanupTimer);
       room.emptyRoomCleanupTimer = undefined;
@@ -209,16 +211,24 @@ export class SessionSocketManager {
       }
 
       const idleMs = Date.now() - currentRoom.lastActivityAt;
-      if (idleMs > 25 * 60 * 1000 && !currentRoom.warningActive) {
+      if (
+        idleMs > config.inactivityWarningThresholdMs &&
+        !currentRoom.warningActive
+      ) {
         currentRoom.warningActive = true;
         this.broadcastToSession(sessionId, {
           type: "session_warning",
-          payload: { countdownSeconds: 300, cancelled: false },
+          payload: {
+            countdownSeconds: Math.ceil(
+              config.inactivityTerminationCountdownMs / 1000,
+            ),
+            cancelled: false,
+          },
           timestamp: new Date().toISOString(),
         });
         currentRoom.terminationTimer = setTimeout(
           () => this.terminateSession(sessionId),
-          5 * 60 * 1000,
+          config.inactivityTerminationCountdownMs,
         );
         currentRoom.terminationTimer.unref?.();
       }

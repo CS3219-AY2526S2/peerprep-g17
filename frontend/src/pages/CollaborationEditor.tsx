@@ -13,6 +13,7 @@ import {
 } from "@codemirror/autocomplete";
 import type { Awareness } from "y-protocols/awareness";
 import { useTheme } from "@/components/ThemeProvider";
+import { COLLABORATION_WS_URL } from "@/config";
 
 interface EditorProps {
   sessionId: string;
@@ -216,7 +217,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     useEffect(() => {
       if (!editorRef.current || !token) return;
 
-      const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
       const ydoc = new Y.Doc();
 
       if (sharedYjsState) {
@@ -267,7 +267,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       };
 
       const provider = new WebsocketProvider(
-        `${wsUrl}/ws/sessions/`,
+        `${COLLABORATION_WS_URL}/`,
         sessionId,
         ydoc,
         {
