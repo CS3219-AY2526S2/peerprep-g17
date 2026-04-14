@@ -28,7 +28,7 @@ export default function OAuthCallbackPage() {
     }
 
     loginWithToken(token)
-      .then(() => navigate("/dashboard"))
+      .then(() => navigate("/"))
       .catch(() => {
         setError("Google login failed. Please try again.");
         setTimeout(() => navigate("/login"), 2000);

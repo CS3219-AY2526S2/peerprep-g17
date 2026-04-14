@@ -6,6 +6,7 @@ import * as decoding from "lib0/decoding";
 import { WebSocket } from "ws";
 import CollaborationSession from "../models/CollaborationSession";
 import { sessionSocketManager } from "./sessionSocketManager";
+import { config } from "../config";
 
 const messageSync = 0;
 const messageAwareness = 1;
@@ -110,6 +111,9 @@ export async function setupYjsConnection(
   ws: WebSocket,
   sessionId: string,
 ): Promise<void> {
+  console.log(
+    `[Yjs] Instance ${config.instanceId} accepted session ${sessionId}`,
+  );
   const doc = await getOrCreateDoc(sessionId);
   const awareness = awarenesses.get(sessionId)!;
   const room = connections.get(sessionId)!;

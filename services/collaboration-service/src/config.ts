@@ -1,5 +1,6 @@
 export const config = {
   port: Number(process.env.PORT) || 8083,
+  instanceId: process.env.INSTANCE_ID || `collab-${process.pid}`,
 
   mongoUri:
     process.env.MONGO_URI || "mongodb://localhost:27017/collaboration-service",
