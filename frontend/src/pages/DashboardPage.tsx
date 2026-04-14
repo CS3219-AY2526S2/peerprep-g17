@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import Navbar from "@/components/Navbar";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { COLLABORATION_API_URL, QUESTION_API_URL } from "@/config";
 
@@ -140,8 +140,18 @@ function roleBadgeStyles(role?: string): string {
 
 /* ── Component ──────────────────────────────────────── */
 
+const ACTIVE_SESSION_STORAGE_KEY = "active_collaboration_session";
+
 export default function DashboardPage() {
   const { user, token } = useAuth();
+  const activeSessionId =
+    typeof window !== "undefined"
+      ? localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY)
+      : null;
+
+  if (activeSessionId) {
+    return <Navigate to={`/collaboration/${activeSessionId}`} replace />;
+  }
   const [recentAttempts, setRecentAttempts] = useState<AttemptRecord[]>([]);
   const [questionMeta, setQuestionMeta] = useState<QuestionMeta | null>(null);
   const [loadingAttempts, setLoadingAttempts] = useState(true);

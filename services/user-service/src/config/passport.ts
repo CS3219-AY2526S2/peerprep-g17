@@ -2,9 +2,11 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as GitHubStrategy } from "passport-github2";
 import User from "../models/User";
+import { config } from "../config";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const serviceBaseUrl = config.baseUrl.replace(/\/$/, "");
 
 if (googleClientId && googleClientSecret) {
   passport.use(
@@ -12,7 +14,7 @@ if (googleClientId && googleClientSecret) {
       {
         clientID: googleClientId,
         clientSecret: googleClientSecret,
-        callbackURL: "http://localhost/api/users/auth/google/callback",
+        callbackURL: `${serviceBaseUrl}/api/users/auth/google/callback`,
       },
       async (_accessToken, _refreshToken, profile, done) => {
         try {
@@ -61,7 +63,7 @@ if (githubClientId && githubClientSecret) {
       {
         clientID: githubClientId,
         clientSecret: githubClientSecret,
-        callbackURL: "http://localhost/api/users/auth/github/callback",
+        callbackURL: `${serviceBaseUrl}/api/users/auth/github/callback`,
         scope: ["user:email"],
       },
       async (_accessToken: string, _refreshToken: string, profile: any, done: any) => {
