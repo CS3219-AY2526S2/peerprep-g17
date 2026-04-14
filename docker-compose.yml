@@ -10,6 +10,7 @@ services:
       - user-service
       - matching-service
       - collaboration-service
+      - collaboration-service-2
     restart: unless-stopped
 
   mongo:
@@ -69,6 +70,7 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
+      USER_SERVICE_BASE_URL: ${USER_SERVICE_BASE_URL}
     depends_on:
       mongo:
         condition: service_healthy
@@ -90,6 +92,29 @@ services:
     build: ./services/collaboration-service
     restart: unless-stopped
     environment:
+      INSTANCE_ID: collab-1
+      PORT: 8083
+      MONGO_URI: mongodb://mongo:27017/collaboration-service
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      USER_SERVICE_URL: http://user-service:8081
+      QUESTION_SERVICE_URL: http://question-service:8080
+      MATCHING_SERVICE_URL: http://matching-service:8082
+      INTERNAL_SERVICE_TOKEN: dev-internal-service-token
+      JWT_SECRET: dev-secret-change-me
+      PISTON_URL: http://piston:2000
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      question-service:
+        condition: service_started
+
+  collaboration-service-2:
+    build: ./services/collaboration-service
+    restart: unless-stopped
+    environment:
+      INSTANCE_ID: collab-2
       PORT: 8083
       MONGO_URI: mongodb://mongo:27017/collaboration-service
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
