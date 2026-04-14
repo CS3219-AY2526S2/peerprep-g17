@@ -17,11 +17,12 @@ export default function OAuthCallbackPage() {
   const navigate = useNavigate();
   const { loginWithToken } = useAuth();
   const [error, setError] = useState("");
+  const params = new URLSearchParams(window.location.search);
+  const provider = params.get("provider") || "Google";
+  const capitalizedProvider = provider.charAt(0).toUpperCase() + provider.slice(1);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
-
     if (!token) {
       navigate("/login");
       return;
@@ -30,7 +31,7 @@ export default function OAuthCallbackPage() {
     loginWithToken(token)
       .then(() => navigate("/"))
       .catch(() => {
-        setError("Google login failed. Please try again.");
+        setError(`${capitalizedProvider} login failed. Please try again.`);
         setTimeout(() => navigate("/login"), 2000);
       });
   }, [loginWithToken, navigate]);
@@ -44,7 +45,7 @@ export default function OAuthCallbackPage() {
           <>
             <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <p className="text-sm text-muted-foreground">
-              Signing you in with Google…
+              Signing you in with {capitalizedProvider}...
             </p>
           </>
         )}

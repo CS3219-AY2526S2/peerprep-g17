@@ -6,7 +6,7 @@ import { config } from "../config";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-const serviceBaseUrl = config.baseUrl.replace(/\/$/, "");
+const serviceBaseUrl = (process.env.SERVICE_BASE_URL || config.baseUrl).replace(/\/$/, "");
 
 if (googleClientId && googleClientSecret) {
   passport.use(

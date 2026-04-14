@@ -11,6 +11,7 @@ services:
       - matching-service
       - collaboration-service
       - collaboration-service-2
+      - question-service
     restart: unless-stopped
 
   mongo:

@@ -96,7 +96,7 @@ router.get(
     const token = jwt.sign({ id: user._id }, config.jwtSecret, {
       expiresIn: "48h",
     });
-    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&provider=github`);
   },
 );
 
@@ -119,7 +119,7 @@ router.get(
     const token = jwt.sign({ id: user._id }, config.jwtSecret, {
       expiresIn: "48h",
     });
-    res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
+    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&provider=github`);
   },
 );
 
