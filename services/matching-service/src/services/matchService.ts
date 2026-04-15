@@ -499,14 +499,9 @@ export class MatchService {
         return;
       }
 
-      await this.removeRequestFromQueue(request);
-      await this.cleanupRequest(request.id, request.userId);
-      await this.publishStatus(request.userId, {
-        status: "cancelled",
-        requestId: request.id,
-        topic: request.topic,
-        difficulty: request.difficulty,
-      });
+      // Keep the request in its original queue position if the user disconnects.
+      // This preserves FIFO behavior for accidental disconnects.
+      await this.enqueueRequest(request);
     } finally {
       await this.lockService.release(userLock);
     }

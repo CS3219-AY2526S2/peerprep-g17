@@ -102,6 +102,7 @@ export class WebSocketGateway {
       sockets.delete(ws);
       if (sockets.size === 0) {
         this.clients.delete(userId);
+        void this.matchService.markUserDisconnected(userId);
       }
     });
   }
