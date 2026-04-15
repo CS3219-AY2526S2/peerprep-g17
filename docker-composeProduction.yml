@@ -13,6 +13,7 @@ services:
       - matching-service
       - collaboration-service
       - collaboration-service-2
+      - collaboration-service-3
       - question-service
     restart: unless-stopped
 
@@ -125,6 +126,28 @@ services:
       MATCHING_SERVICE_URL: http://matching-service:8082
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
       JWT_SECRET: ${JWT_SECRET}
+      PISTON_URL: http://piston:2000
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      question-service:
+        condition: service_started
+
+  collaboration-service-3:
+    build: ./services/collaboration-service
+    restart: unless-stopped
+    environment:
+      INSTANCE_ID: collab-3
+      PORT: 8083
+      MONGO_URI: mongodb://mongo:27017/collaboration-service
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      USER_SERVICE_URL: http://user-service:8081
+      QUESTION_SERVICE_URL: http://question-service:8080
+      MATCHING_SERVICE_URL: http://matching-service:8082
+      INTERNAL_SERVICE_TOKEN: dev-internal-service-token
+      JWT_SECRET: dev-secret-change-me
       PISTON_URL: http://piston:2000
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
