@@ -26,5 +26,9 @@ export const config = {
     Number(process.env.EXECUTION_SOURCE_SIZE_LIMIT_BYTES) || 100_000,
   executionOutputLimitBytes:
     Number(process.env.EXECUTION_OUTPUT_LIMIT_BYTES) || 65_536,
+  inactivityWarningThresholdMs:
+    Number(process.env.INACTIVITY_WARNING_THRESHOLD_MS) || 25 * 60 * 1000,
+  inactivityTerminationCountdownMs:
+    Number(process.env.INACTIVITY_TERMINATION_COUNTDOWN_MS) || 5 * 60 * 1000,
 
 } as const;

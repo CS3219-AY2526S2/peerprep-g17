@@ -20,7 +20,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
+        <Route path="/auth/callback" element={<OAuthCallbackPage />} />
         <Route
           path="/dashboard"
           element={

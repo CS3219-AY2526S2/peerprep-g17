@@ -483,7 +483,7 @@ test("cancels a queued request and removes it from active state", async () => {
   assert.equal(eventBus.events.at(-1)?.event.status, "cancelled");
 });
 
-test("removes a queued request immediately when the user disconnects", async () => {
+test("keeps a queued request when the user disconnects", async () => {
   await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
     difficulty: "Easy",
@@ -492,8 +492,8 @@ test("removes a queued request immediately when the user disconnects", async () 
   await matchService.markUserDisconnected("user-a");
 
   const state = await matchService.getUserState("user-a");
-  assert.equal(state, null);
-  assert.equal(eventBus.events.at(-1)?.event.status, "cancelled");
+  assert.equal(state?.status, "searching");
+  assert.equal(eventBus.events.at(-1)?.event.status, "searching");
 });
 
 test("rolls both users back to searching when collaboration handoff fails", async () => {
@@ -609,6 +609,30 @@ test("ignores timeout records for requests that are no longer searching", async 
   const session = await Session.findOne({ sessionId: result.state.sessionId });
   assert.ok(session);
   assert.equal(session.status, "active");
+});
+
+test("requeues timeout entries for non-searching requests", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  const requestId = await redis.get("match:user-request:user-a");
+  assert.ok(requestId);
+  await redis.hset(
+    `match:request:${requestId}`,
+    "status",
+    "matching",
+    "timeoutAt",
+    String(Date.now() - 1),
+  );
+  await redis.zadd("match:timeouts", String(Date.now() - 1), requestId);
+
+  const processed = await matchService.processDueTimeouts(Date.now());
+  assert.equal(processed, 0);
+
+  const score = await redis.zscore("match:timeouts", requestId);
+  assert.ok(score);
 });
 
 test("session completion releases the user for a new request", async () => {
