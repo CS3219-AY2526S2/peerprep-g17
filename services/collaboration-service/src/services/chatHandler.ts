@@ -244,6 +244,33 @@ export async function handleChatConnection(
         });
       }
 
+      const VOICE_SIGNAL_TYPES = new Set([
+        "voice_call_request",
+        "voice_call_accept",
+        "voice_call_reject",
+        "voice_call_end",
+        "voice_offer",
+        "voice_answer",
+        "voice_ice_candidate",
+      ]);
+
+      if (VOICE_SIGNAL_TYPES.has(parsed.type)) {
+        const outgoing = JSON.stringify({
+          type: parsed.type,
+          payload: {
+            ...(parsed.payload || {}),
+            fromUserId: userId,
+            fromUsername: username,
+          },
+        });
+
+        room.forEach((_, client) => {
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(outgoing);
+          }
+        });
+      }
+
       if (parsed.type === "keep_alive") {
         sessionSocketManager.acknowledgeWarning(sessionId);
       }

@@ -130,6 +130,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     const providerRef = useRef<WebsocketProvider | null>(null);
     const onActivityRef = useRef(onActivity);
     const initialCodeRef = useRef(initialCode);
+    const initialSharedCodeRef = useRef(sharedCode);
+    const initialSharedYjsStateRef = useRef(sharedYjsState);
 
     useEffect(() => {
       onActivityRef.current = onActivity;
@@ -219,9 +221,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const ydoc = new Y.Doc();
 
-      if (sharedYjsState) {
+      if (initialSharedYjsStateRef.current) {
         try {
-          const binaryString = atob(sharedYjsState);
+          const binaryString = atob(initialSharedYjsStateRef.current);
           const update = Uint8Array.from(binaryString, (char) =>
             char.charCodeAt(0),
           );
@@ -278,19 +280,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         },
       );
 
-      const setupWsFilter = () => {
-        if (provider.ws) {
-          const socket = provider.ws;
-          const originalOnMessage = socket.onmessage;
-          socket.onmessage = (event) => {
-            if (typeof event.data === "string" && event.data.startsWith("{")) {
-              return;
-            }
-            originalOnMessage?.call(socket, event);
-          };
-        }
-      };
-
       const handleProviderStatus = (event: {
         status: "connected" | "disconnected" | "connecting";
       }) => {
@@ -304,9 +293,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       };
 
       onConnectionStatusChange?.("connecting");
-      setupWsFilter();
       provider.on("sync", handleSync);
-      provider.on("status", setupWsFilter);
       provider.on("status", handleProviderStatus);
       providerRef.current = provider;
 
@@ -344,7 +331,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       });
 
       const state = EditorState.create({
-        doc: ytext.toString() || sharedCode || "",
+        doc: ytext.toString() || initialSharedCodeRef.current || "",
         extensions: [
           basicSetup,
           python(),
@@ -363,7 +350,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       return () => {
         provider.off("sync", handleSync);
-        provider.off("status", setupWsFilter);
         provider.off("status", handleProviderStatus);
         onConnectionStatusChange?.("disconnected");
         provider.disconnect();
@@ -373,11 +359,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         ydoc.destroy();
       };
     }, [
-      initialCode,
       onConnectionStatusChange,
       sessionId,
-      sharedCode,
-      sharedYjsState,
       token,
       theme,
       username,

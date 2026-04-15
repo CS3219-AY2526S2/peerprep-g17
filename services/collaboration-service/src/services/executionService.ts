@@ -192,7 +192,10 @@ function extractHarnessResult(
   }
 
   const parsed = JSON.parse(payload) as HarnessResult;
-  parsed.stdout = truncateText(normalizeRunnerText(parsed.stdout), config.executionOutputLimitBytes);
+  parsed.stdout = truncateText(
+    normalizeRunnerText(parsed.stdout),
+    config.executionOutputLimitBytes,
+  );
   parsed.stderr = truncateText(
     [normalizeRunnerText(parsed.stderr), normalizeRunnerText(stderr)]
       .filter(Boolean)
@@ -411,6 +414,20 @@ def finalize_report(report):
     print(json.dumps(report))
     print(RESULT_END)
 
+def merge_output_chunks(top_value, chunks):
+    filtered = [(case_id, text) for case_id, text in chunks if text]
+    if not filtered:
+        return top_value
+    unique_texts = {text for _, text in filtered}
+    if not top_value and len(unique_texts) == 1:
+        return filtered[0][1]
+    parts = []
+    if top_value:
+        parts.append(top_value)
+    for case_id, text in filtered:
+        parts.append("[case " + str(case_id) + "]\\n" + text)
+    return clip_text("\\n".join(parts))
+
 def main():
     namespace = {}
     report = {
@@ -444,10 +461,10 @@ def main():
         finalize_report(report)
         return
 
-    report["stdout"] = top_stdout.get_clipped_value()
-    report["stderr"] = top_stderr.get_clipped_value()
     highest_memory = 0
     total_runtime = 0
+    case_stdout_chunks = []
+    case_stderr_chunks = []
 
     for case in TEST_CASES:
         if EXECUTION_MODE == "python_function":
@@ -457,6 +474,8 @@ def main():
 
         total_runtime += int(case_result.pop("_runtimeMs", 0) or 0)
         highest_memory = max(highest_memory, int(case_result.pop("_memoryKb", 0) or 0))
+        case_stdout_chunks.append((case_result.get("id", "case"), case_result.get("stdout", "")))
+        case_stderr_chunks.append((case_result.get("id", "case"), case_result.get("stderr", "")))
         report["cases"].append(case_result)
 
         if case_result["verdict"] == "Accepted":
@@ -470,6 +489,8 @@ def main():
     if report["verdict"] == "Accepted" and report["passedCount"] != report["totalCount"]:
         report["verdict"] = "Wrong Answer"
 
+    report["stdout"] = merge_output_chunks(top_stdout.get_clipped_value(), case_stdout_chunks)
+    report["stderr"] = merge_output_chunks(top_stderr.get_clipped_value(), case_stderr_chunks)
     report["runtimeMs"] = total_runtime
     report["memoryKb"] = highest_memory
     finalize_report(report)
@@ -528,16 +549,16 @@ class PistonExecutionRunner implements ExecutionRunner {
       stdout: normalizeRunnerText(json.run?.stdout),
       stderr: normalizeRunnerText(json.run?.stderr),
       output: normalizeRunnerText(json.run?.output),
-      exitCode:
-        typeof json.run?.code === "number" ? json.run.code : null,
-      signal:
-        typeof json.run?.signal === "string" ? json.run.signal : null,
+      exitCode: typeof json.run?.code === "number" ? json.run.code : null,
+      signal: typeof json.run?.signal === "string" ? json.run.signal : null,
     };
   }
 }
 
 export class ExecutionService {
-  constructor(private readonly runner: ExecutionRunner = new PistonExecutionRunner()) {}
+  constructor(
+    private readonly runner: ExecutionRunner = new PistonExecutionRunner(),
+  ) {}
 
   async execute(
     question: JudgeQuestion,
@@ -546,7 +567,10 @@ export class ExecutionService {
     initiatedByUserId: string,
     customTestCase?: ExecutionRequestBody["customTestCase"],
   ): Promise<ExecutionResult> {
-    if (question.executionMode !== "python_function" && question.executionMode !== "python_class") {
+    if (
+      question.executionMode !== "python_function" &&
+      question.executionMode !== "python_class"
+    ) {
       throw new Error("This question is not supported by the v1 judge.");
     }
 
@@ -605,8 +629,14 @@ export class ExecutionService {
         executionMode: question.executionMode,
         verdict: parsed.verdict,
         status: "finished",
-        stdout: truncateText(parsed.stdout || "", config.executionOutputLimitBytes),
-        stderr: truncateText(parsed.stderr || "", config.executionOutputLimitBytes),
+        stdout: truncateText(
+          parsed.stdout || "",
+          config.executionOutputLimitBytes,
+        ),
+        stderr: truncateText(
+          parsed.stderr || "",
+          config.executionOutputLimitBytes,
+        ),
         runtimeMs: parsed.runtimeMs || 0,
         memoryKb: parsed.memoryKb || 0,
         passedCount: parsed.passedCount || 0,
