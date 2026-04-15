@@ -54,6 +54,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LeftWorkspaceTabs } from "@/components/collaboration/LeftWorkspaceTabs";
+import { ChatPanel } from "@/components/collaboration/ChatPanel";
 import { ResultsWorkspace } from "@/components/collaboration/ResultsWorkspace";
 import { SessionHeader } from "@/components/collaboration/SessionHeader";
 import { SharedEditorCard } from "@/components/collaboration/SharedEditorCard";
@@ -83,6 +84,7 @@ export default function CollaborationPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [chatStatus, setChatStatus] = useState<ChatStatus>(
     typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "connecting",
@@ -423,7 +425,7 @@ export default function CollaborationPage() {
           if (
             data.payload?.fromUserId &&
             data.payload.fromUserId !== user?.id &&
-            resultTab !== "chat"
+            !chatOpen
           ) {
             setUnreadChatCount((current) => current + 1);
           }
@@ -559,6 +561,7 @@ export default function CollaborationPage() {
   }, [
     applyExecutionResult,
     cancelCountdown,
+    chatOpen,
     clearReconnectTimer,
     navigate,
     redirectAfterSharedCompletion,
@@ -566,7 +569,6 @@ export default function CollaborationPage() {
     startCountdown,
     syncQuestionChange,
     token,
-    resultTab,
     user?.id,
     user?.username,
   ]);
@@ -774,8 +776,8 @@ export default function CollaborationPage() {
   }, [terminated]);
 
   useEffect(() => {
-    if (resultTab === "chat") setUnreadChatCount(0);
-  }, [resultTab]);
+    if (chatOpen) setUnreadChatCount(0);
+  }, [chatOpen]);
 
   useEffect(() => {
     return () => {
@@ -1278,25 +1280,10 @@ export default function CollaborationPage() {
               <ResultsWorkspace
                 resultTab={resultTab}
                 onResultTabChange={setResultTab}
-                unreadChatCount={unreadChatCount}
                 runningMode={runningMode}
                 executionError={executionError}
                 executionResult={executionResult}
                 latestExecutionLabel={latestExecutionLabel}
-                messages={messages}
-                chatInput={chatInput}
-                chatStatus={chatStatus}
-                peerOnline={peerOnline}
-                terminated={terminated}
-                currentUserId={user?.id}
-                currentUsername={user?.username}
-                typingUsers={typingUsers}
-                quickReplies={quickReplies}
-                onChatInputChange={handleChatInputChange}
-                onSendMessage={sendMessage}
-                onSendQuickReply={sendQuickReply}
-                onToggleReaction={toggleReaction}
-                onInsertCodeSnippet={insertCodeSnippetTemplate}
               />
             </div>
 
@@ -1413,11 +1400,14 @@ export default function CollaborationPage() {
           voiceIncomingFromUsername={voiceIncomingFromUsername}
           voiceCallDurationSeconds={voiceCallDurationSeconds}
           voiceCooldownActive={voiceCooldownActive}
+          chatOpen={chatOpen}
+          unreadChatCount={unreadChatCount}
           onStartVoiceCall={startVoiceCall}
           onAcceptVoiceCall={acceptVoiceCall}
           onRejectVoiceCall={rejectVoiceCall}
           onEndVoiceCall={endVoiceCall}
           onToggleVoiceMic={toggleVoiceMic}
+          onOpenChat={() => setChatOpen((current) => !current)}
         />
 
         {loading && !terminated && !session && (
@@ -1428,6 +1418,25 @@ export default function CollaborationPage() {
         {error && <p className="text-xs text-destructive">{error}</p>}
 
         {renderWorkspace()}
+
+        <ChatPanel
+          open={chatOpen}
+          messages={messages}
+          chatInput={chatInput}
+          chatStatus={chatStatus}
+          peerOnline={peerOnline}
+          terminated={terminated}
+          currentUserId={user?.id}
+          currentUsername={user?.username}
+          typingUsers={typingUsers}
+          quickReplies={quickReplies}
+          onClose={() => setChatOpen(false)}
+          onChatInputChange={handleChatInputChange}
+          onSendMessage={sendMessage}
+          onSendQuickReply={sendQuickReply}
+          onToggleReaction={toggleReaction}
+          onInsertCodeSnippet={insertCodeSnippetTemplate}
+        />
 
         <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
       </main>

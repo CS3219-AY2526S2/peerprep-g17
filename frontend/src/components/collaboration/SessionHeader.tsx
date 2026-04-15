@@ -23,11 +23,14 @@ interface SessionHeaderProps {
   voiceIncomingFromUsername: string | null;
   voiceCallDurationSeconds: number;
   voiceCooldownActive: boolean;
+  chatOpen: boolean;
+  unreadChatCount: number;
   onStartVoiceCall: () => void;
   onAcceptVoiceCall: () => void;
   onRejectVoiceCall: () => void;
   onEndVoiceCall: () => void;
   onToggleVoiceMic: () => void;
+  onOpenChat: () => void;
 }
 
 export function SessionHeader({
@@ -46,11 +49,14 @@ export function SessionHeader({
   voiceIncomingFromUsername,
   voiceCallDurationSeconds,
   voiceCooldownActive,
+  chatOpen,
+  unreadChatCount,
   onStartVoiceCall,
   onAcceptVoiceCall,
   onRejectVoiceCall,
   onEndVoiceCall,
   onToggleVoiceMic,
+  onOpenChat,
 }: SessionHeaderProps) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80">
@@ -99,6 +105,25 @@ export function SessionHeader({
           onEndCall={onEndVoiceCall}
           onToggleMic={onToggleVoiceMic}
         />
+        <Button
+          variant={chatOpen ? "default" : "outline"}
+          size="sm"
+          onClick={onOpenChat}
+          className="gap-2"
+        >
+          <span
+            aria-hidden="true"
+            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-current/20 text-[11px] font-semibold"
+          >
+            C
+          </span>
+          Chat
+          {unreadChatCount > 0 && (
+            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {unreadChatCount}
+            </span>
+          )}
+        </Button>
         <div className="mx-1 hidden h-6 w-px bg-slate-300/70 dark:bg-slate-700 sm:block" />
         <Button
           variant="ghost"
