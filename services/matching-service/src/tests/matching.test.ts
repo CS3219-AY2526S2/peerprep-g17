@@ -611,6 +611,30 @@ test("ignores timeout records for requests that are no longer searching", async 
   assert.equal(session.status, "active");
 });
 
+test("requeues timeout entries for non-searching requests", async () => {
+  await matchService.createRequest("user-a", "Bearer token-a", {
+    topic: "Arrays",
+    difficulty: "Easy",
+  });
+
+  const requestId = await redis.get("match:user-request:user-a");
+  assert.ok(requestId);
+  await redis.hset(
+    `match:request:${requestId}`,
+    "status",
+    "matching",
+    "timeoutAt",
+    String(Date.now() - 1),
+  );
+  await redis.zadd("match:timeouts", String(Date.now() - 1), requestId);
+
+  const processed = await matchService.processDueTimeouts(Date.now());
+  assert.equal(processed, 0);
+
+  const score = await redis.zscore("match:timeouts", requestId);
+  assert.ok(score);
+});
+
 test("session completion releases the user for a new request", async () => {
   await matchService.createRequest("user-a", "Bearer token-a", {
     topic: "Arrays",
