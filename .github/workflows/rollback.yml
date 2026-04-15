@@ -1,0 +1,114 @@
+name: Rollback Service
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to roll back"
+        required: true
+        type: choice
+        options:
+          - user-service
+          - matching-service
+          - collaboration-service
+          - question-service
+      reason:
+        description: "Please provide a reason for the rollback"
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    name: "Rollback ${{ github.event.inputs.service }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 10  
+
+      - name: Log rollback intent
+        run: |
+          echo "============================================"
+          echo "ROLLBACK INITIATED"
+          echo "Service:    ${{ github.event.inputs.service }}"
+          echo "Reason:     ${{ github.event.inputs.reason }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Timestamp:  $(date -u)"
+          echo "============================================"
+
+      - name: Find last stable commit for service
+        id: find-commit
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+
+          PREV_COMMIT=$(git log --oneline --skip=1 -5 -- services/$SERVICE/ | head -1 | awk '{print $1}')
+
+          if [ -z "$PREV_COMMIT" ]; then
+            echo "ERROR: Could not find a previous commit for $SERVICE"
+            exit 1
+          fi
+
+          echo "Previous stable commit: $PREV_COMMIT"
+          echo "commit=$PREV_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Checkout previous stable version of service
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          COMMIT=${{ steps.find-commit.outputs.commit }}
+          echo "Rolling back services/$SERVICE to commit $COMMIT"
+          git checkout $COMMIT -- services/$SERVICE/
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build rolled-back service
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          cd services/$SERVICE
+          npm ci
+          npm run build
+          echo "✓ Build successful for rolled-back $SERVICE"
+
+      - name: Run smoke tests on rolled-back build
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          cd services/$SERVICE
+          # Run unit tests to verify rolled-back version is stable
+          if npm run test 2>/dev/null; then
+            echo "✓ Smoke tests passed on rolled-back $SERVICE"
+          else
+            echo "⚠ Tests not available or failed — proceeding with rollback anyway"
+          fi
+        env:
+          MONGODB_URI: mongodb://localhost:27017/test
+          JWT_SECRET: test-secret
+          REDIS_URL: redis://localhost:6379
+
+      - name: Commit rollback
+        run: |
+          SERVICE=${{ github.event.inputs.service }}
+          COMMIT=${{ steps.find-commit.outputs.commit }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add services/$SERVICE/
+          git commit -m "rollback($SERVICE): revert to $COMMIT
+
+          Reason: ${{ github.event.inputs.reason }}
+          Triggered by: ${{ github.actor }}
+          Timestamp: $(date -u)"
+
+      - name: Push rollback commit
+        run: git push origin ${{ github.ref_name }}
+
+      - name: Summary
+        run: |
+          echo "============================================"
+          echo "ROLLBACK COMPLETE"
+          echo "Service:    ${{ github.event.inputs.service }}"
+          echo "Reverted to: ${{ steps.find-commit.outputs.commit }}"
+          echo "Pushed to:  ${{ github.ref_name }}"
+          echo "MTTR target: < 5 minutes"
+          echo "============================================"

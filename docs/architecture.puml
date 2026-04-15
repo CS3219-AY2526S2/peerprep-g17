@@ -1,0 +1,64 @@
+@startuml name
+title PeerPrep High-Level Architecture
+
+' --- Layout Optimization ---
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 150
+skinparam ranksep 100
+
+' --- Layers ---
+package "Client Layer" {
+  [Frontend (React + Vite)] as FE #E1F5FE
+}
+
+package "Gateway Layer" {
+  [nginx Gateway] as GW #E0F2F1
+}
+
+package "Microservices" {
+  [User Service] as US #F3E5F5
+  [Question Service] as QS #F3E5F5
+  [Matching Service] as MS #F3E5F5
+  [Collaboration Service (x3)] as CS #F3E5F5
+}
+
+package "Infrastructure / External" {
+  database "MongoDB" as DB #FAFAFA
+  node "Redis" as RD #FAFAFA
+  [Piston Engine] as PT #FAFAFA
+  cloud "OpenAI API" as AI #FFF9C4
+}
+
+' --- Clear Flow ---
+
+FE -d-> GW : " HTTP/WSS"
+
+' Gateway Routes
+GW -d-> US : " /users"
+GW -d-> QS : " /questions"
+GW -d-> MS : " /matches"
+GW -d-> CS : " /collab"
+
+' Horizontal Dependencies (Forced Spacing)
+MS -r-> RD : " Queue"
+CS -r-> PT : " Exec"
+CS -d-> AI : " AI-Prompt"
+
+' Vertical Dependencies
+US -d-> DB
+QS -d-> DB
+MS -d-> DB
+CS -d-> DB
+
+' Cross-Service Logic (Using colors to assist labels)
+QS -[#888888]u-> US : " Auth"
+MS -[#888888]u-> US : " Auth"
+
+MS -[#D32F2F]l-> QS : " Catalog"
+MS -[#D32F2F]d-> CS : " Handoff"
+
+CS -[#2E7D32]u-> MS : " Complete Session"
+CS -[#2E7D32]l-> QS : " Metadata"
+@enduml

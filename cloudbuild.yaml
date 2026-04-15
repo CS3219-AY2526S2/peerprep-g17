@@ -1,0 +1,18 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud compute ssh poxman100@instance-20260413-152138 \
+          --zone asia-southeast1-c \
+          --quiet \
+          --ssh-flag="-o StrictHostKeyChecking=no" \
+          --command "
+            cd ~/peerprep-g17 &&
+            git pull origin main &&
+            docker compose -f docker-composeProduction.yml up --build -d
+          "

@@ -1,0 +1,60 @@
+name: Continuous Integration for the Question Service
+
+on:
+  push:
+    paths:
+      - "services/question-service/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "services/question-service/**"
+      - ".github/workflows/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: services/question-service/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/question-service
+        run: npm ci
+
+      - name: Build
+        working-directory: services/question-service
+        run: npm run build
+
+      - name: Run tests with coverage
+        working-directory: services/question-service
+        run: npx c8 --exclude dist/index.js --exclude dist/scripts/** --reporter=lcov --reporter=text --lines 80 --branches 80 --functions 80 npm test
+        env:
+          MONGO_URI: mongodb://localhost:27017/peerprep-question-test
+          USER_SERVICE_URL: http://mock-user-service
+          INTERNAL_SERVICE_TOKEN: dev-internal-service-token
+
+      - name: Security scan
+        working-directory: services/question-service
+        run: npm audit --audit-level=high
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-question-service
+          path: services/question-service/coverage/lcov.info
