@@ -147,8 +147,8 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       QUESTION_SERVICE_URL: http://question-service:8080
       MATCHING_SERVICE_URL: http://matching-service:8082
-      INTERNAL_SERVICE_TOKEN: dev-internal-service-token
-      JWT_SECRET: dev-secret-change-me
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
       PISTON_URL: http://piston:2000
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-mini}
