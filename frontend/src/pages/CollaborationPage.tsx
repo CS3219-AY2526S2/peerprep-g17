@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import {
   COLLABORATION_API_URL,
+  CHAT_WS_URL,
   MATCHING_API_URL,
   QUESTION_API_URL,
 } from "@/config";
@@ -1060,9 +1061,8 @@ export default function CollaborationPage() {
       return;
     }
 
-    const wsUrl = import.meta.env.VITE_COLLAB_WS_URL ?? "ws://localhost:8083";
     const ws = new WebSocket(
-      `${wsUrl}/ws/chat/${sessionId}?token=${token}&username=${encodeURIComponent(
+      `${CHAT_WS_URL}/${sessionId}?token=${token}&username=${encodeURIComponent(
         user?.username || "Guest",
       )}`,
     );

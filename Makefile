@@ -4,7 +4,7 @@ start:
 	docker compose up --build
 
 scale:
-	docker compose up -d --scale collaboration-service=3
+	docker compose up -d --scale collaboration-service=3 --no-recreate	
 	
 stop:
 	docker compose down
