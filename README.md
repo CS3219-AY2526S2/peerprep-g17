@@ -66,32 +66,35 @@ The collaboration backend lives in `services/collaboration-service`.
 
 ## Declaration of Use of AI Tools
 
-This project made use of AI-assisted tooling during development.
+AI Use Summary
 
-Tools used:
-- ChatGPT
+Tools: ChatGPT
 
-Modes used:
-- Generate
-- Refactor
-- Debug
-- Explain
+Prohibited phases avoided:
+- Requirements elicitation and prioritization were not outsourced to artificial intelligence.
+- Architecture and design decisions were made by the team.
+- Decision rationales and trade-off justifications were written by the authors.
 
 Allowed uses:
-- Generated boilerplate for Google OAuth integration, frontend login UI, collaboration chat UI components, profile image selection support, and chat feature enhancements such as snippet display and code-copy interactions.
-- Suggested refactoring and styling improvements for frontend pages such as `HistoryPage.tsx`, with outputs adapted to the existing codebase and design.
-- Assisted with debugging intermittently failing collaboration-service CI test cases and race conditions in async collaboration tests.
-- Helped explain failing CI behavior and async test issues before code-level fixes were applied.
+- Generate: Boilerplate for Google OAuth integration, frontend login UI, collaboration chat UI components, profile image selection support and chat feature enhancements such as snippet display and code-copy interactions.
+- Refactor: Styling and UI revisions for frontend pages such as `HistoryPage.tsx`, with generated suggestions adapted to the existing codebase and design.
+- Debug: Assistance with intermittently failing collaboration-service CI test cases and race conditions in async collaboration tests.
+- Explain: Used to understand failing CI behavior and test race conditions before applying code-level fixes.
+
+How Each Tool Was Used
+
+| Tool | Mode | Scope |
+| --- | --- | --- |
+| ChatGPT | Generate, Refactor, Debug, Explain | Used for frontend boilerplate, UI improvements, profile image support, collaboration chat enhancements, CI test debugging and explanation of failing async test behavior. All outputs were reviewed and edited by the authors before usage. |
 
 What AI was not used for:
-- Requirements elicitation and prioritization.
-- Architecture and design decisions.
-- Decision rationales and trade-off justifications.
-- Core algorithm design for matching and collaboration behavior.
+- Architecture/design decisions: System design choices, service boundaries, collaboration design and infrastructure trade-offs were decided by the team.
+- Core algorithm design: Matching behavior, collaboration session behavior and other core logic decisions were implemented and validated by all team members.
+- Requirements elicitation: Feature requirements were derived from the project brief and team discussions.
 
 Verification:
-- All AI-assisted outputs were reviewed, edited, and tested by the authors before acceptance.
-- No AI-generated output was used without validation against the project's existing architecture, code patterns, and testing workflow.
+- All AI-assisted outputs were reviewed, edited and tested by the authors before acceptance.
+- No AI-generated output was relied upon without author validation against the project's existing architecture, code patterns and testing workflow.
 
 Prompts and key exchanges:
-- See [ai/usage-log.md](ai/usage-log.md) for the full timestamped log of AI interactions, prompts, output summaries, actions taken, and author notes.
+- Please feel free to see [ai/usage-log.md](ai/usage-log.md) for the full timestamped log of AI interactions, prompts, output summaries, actions taken and author notes.
