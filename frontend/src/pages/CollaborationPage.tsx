@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import {
   CHAT_WS_URL,
   COLLABORATION_API_URL,
-  CHAT_WS_URL,
   MATCHING_API_URL,
   QUESTION_API_URL,
 } from "@/config";

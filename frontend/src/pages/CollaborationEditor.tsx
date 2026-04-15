@@ -130,6 +130,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
     const providerRef = useRef<WebsocketProvider | null>(null);
     const onActivityRef = useRef(onActivity);
     const initialCodeRef = useRef(initialCode);
+    const initialSharedCodeRef = useRef(sharedCode);
+    const initialSharedYjsStateRef = useRef(sharedYjsState);
 
     useEffect(() => {
       onActivityRef.current = onActivity;
@@ -219,9 +221,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       const ydoc = new Y.Doc();
 
-      if (sharedYjsState) {
+      if (initialSharedYjsStateRef.current) {
         try {
-          const binaryString = atob(sharedYjsState);
+          const binaryString = atob(initialSharedYjsStateRef.current);
           const update = Uint8Array.from(binaryString, (char) =>
             char.charCodeAt(0),
           );
@@ -329,7 +331,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       });
 
       const state = EditorState.create({
-        doc: ytext.toString() || sharedCode || "",
+        doc: ytext.toString() || initialSharedCodeRef.current || "",
         extensions: [
           basicSetup,
           python(),
@@ -357,11 +359,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         ydoc.destroy();
       };
     }, [
-      initialCode,
       onConnectionStatusChange,
       sessionId,
-      sharedCode,
-      sharedYjsState,
       token,
       theme,
       username,
