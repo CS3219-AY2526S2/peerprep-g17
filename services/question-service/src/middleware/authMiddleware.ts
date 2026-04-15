@@ -6,6 +6,7 @@ import { config } from "../config";
 enum Role {
   USER = "user",
   ADMIN = "admin",
+  SUPERADMIN = "superadmin",
 }
 
 /**
@@ -77,7 +78,7 @@ export function verifyAdmin(
   res: Response,
   next: NextFunction,
 ): void {
-  if (req.role !== Role.ADMIN) {
+  if (req.role !== Role.ADMIN && req.role !== Role.SUPERADMIN) {
     res
       .status(403)
       .json({ error: "Access denied. Admin privileges required." });
