@@ -21,8 +21,6 @@ PeerPrep is a technical interview preparation platform that matches students in 
 
 PlantUML source: [docs/architecture.puml](docs/architecture.puml)
 
-Four independent microservices sit behind an nginx gateway on port 80. Services communicate over REST and are isolated � each owns its own models and persistence boundary.
-
 | Service                   | Port  | Responsibility                                                       |
 | ------------------------- | ----- | -------------------------------------------------------------------- |
 | frontend                  | 5173  | React 19 + Vite SPA                                                  |
@@ -181,6 +179,3 @@ Verification:
 Prompts and key exchanges:
 
 - Please feel free to see [ai/usage-log.md](ai/usage-log.md) for the full timestamped log of AI interactions, prompts, output summaries, actions taken and author notes.
-
-
-
