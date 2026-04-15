@@ -17,7 +17,9 @@ PeerPrep is a technical interview preparation platform that matches students in 
 
 ## Architecture
 
-Four independent microservices sit behind an nginx gateway on port 80. Services communicate over REST and are isolated — each owns its own models and persistence boundary.
+![PeerPrep architecture](docs/architecture.svg)
+
+PlantUML source: [docs/architecture.puml](docs/architecture.puml)
 
 | Service                   | Port  | Responsibility                                                       |
 | ------------------------- | ----- | -------------------------------------------------------------------- |
