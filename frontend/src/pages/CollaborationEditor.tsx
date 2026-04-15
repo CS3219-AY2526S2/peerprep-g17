@@ -278,19 +278,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
         },
       );
 
-      const setupWsFilter = () => {
-        if (provider.ws) {
-          const socket = provider.ws;
-          const originalOnMessage = socket.onmessage;
-          socket.onmessage = (event) => {
-            if (typeof event.data === "string" && event.data.startsWith("{")) {
-              return;
-            }
-            originalOnMessage?.call(socket, event);
-          };
-        }
-      };
-
       const handleProviderStatus = (event: {
         status: "connected" | "disconnected" | "connecting";
       }) => {
@@ -304,9 +291,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
       };
 
       onConnectionStatusChange?.("connecting");
-      setupWsFilter();
       provider.on("sync", handleSync);
-      provider.on("status", setupWsFilter);
       provider.on("status", handleProviderStatus);
       providerRef.current = provider;
 
@@ -363,7 +348,6 @@ const CodeEditor = forwardRef<CodeEditorHandle, EditorProps>(
 
       return () => {
         provider.off("sync", handleSync);
-        provider.off("status", setupWsFilter);
         provider.off("status", handleProviderStatus);
         onConnectionStatusChange?.("disconnected");
         provider.disconnect();
